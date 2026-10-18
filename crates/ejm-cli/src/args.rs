@@ -22,6 +22,16 @@ pub enum Appearance {
     Dark,
 }
 
+impl From<Appearance> for crate::ejm_tui::Appearance {
+    fn from(value: Appearance) -> Self {
+        match value {
+            Appearance::Auto => Self::Auto,
+            Appearance::Light => Self::Light,
+            Appearance::Dark => Self::Dark,
+        }
+    }
+}
+
 #[expect(
     clippy::struct_excessive_bools,
     reason = "CLI switches represent independent grants, provider selection and presentation settings."
@@ -161,6 +171,13 @@ pub struct Args {
         help = "Use a monochrome TUI (also honors NO_COLOR)"
     )]
     pub no_color: bool,
+
+    #[arg(
+        long,
+        global = true,
+        help = "Use ASCII symbols and borders (also used when the locale is not UTF-8)"
+    )]
+    pub plain: bool,
 
     #[arg(
         long,

@@ -2,6 +2,25 @@ mod app;
 mod args;
 mod auth;
 mod browser;
+// Copied from the ejmlabs design kit (design-kit/ui/rust). Never edit these two files; copy new versions in.
+#[rustfmt::skip]
+#[allow(
+    dead_code,
+    clippy::all,
+    clippy::pedantic,
+    reason = "Vendored design kit file, kept byte for byte so updates are a plain copy."
+)]
+mod ejm_theme;
+#[rustfmt::skip]
+#[allow(
+    dead_code,
+    clippy::all,
+    clippy::pedantic,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    reason = "Vendored design kit file, kept byte for byte so updates are a plain copy."
+)]
+mod ejm_tui;
 mod extensions;
 mod packages;
 mod render;

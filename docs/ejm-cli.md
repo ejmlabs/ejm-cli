@@ -127,8 +127,8 @@ The TUI draws only when content changes, with a 32 ms maximum refresh cadence. T
 
 Visible transcript memory is capped at 256 KiB and 256 blocks. Individual tool output previews keep their most recent 24 KiB; complete output remains in the ejm-harness event store and executor artifacts. The composer accepts up to 64 KiB and retains the last 100 sent messages. Escape sequences and terminal control characters are removed from displayed provider and tool output.
 
-Terminal raw mode, mouse tracking, bracketed paste and the alternate screen are restored on return, errors and Rust panics. The TUI requires a terminal. Use `run` in pipes and automation. `--no-color` or `NO_COLOR` selects a monochrome TUI.
+Terminal raw mode, mouse tracking, bracketed paste and the alternate screen are restored on return, errors and Rust panics. The TUI requires a terminal. Use `run` in pipes and automation. `--no-color` or `NO_COLOR` selects a monochrome TUI. `--plain`, or a locale that is not UTF-8, switches to ASCII symbols and borders.
 
-The TUI uses the ejmlabs brand palette in light and dark variants and never paints a background, so it sits on your terminal's own. `--appearance auto|light|dark` (or `EJM_CLI_APPEARANCE`) picks the variant. Auto reads `COLORFGBG` and assumes dark when it is absent. Brand colors need a terminal that sets `COLORTERM=truecolor` or `24bit`; others get named ANSI colors. A package theme from `--theme` overrides all of this.
+The TUI uses the ejmlabs design kit palette (`ejm_theme.rs`) in light and dark variants and never paints a background, so it sits on your terminal's own. `--appearance auto|light|dark` (or `EJM_CLI_APPEARANCE`) picks the variant. Auto reads `COLORFGBG` and assumes dark when it is absent. Brand colors need a terminal that sets `COLORTERM=truecolor` or `24bit`; others get named ANSI colors. A package theme from `--theme` overrides all of this.
 
 These bounds and refresh intervals describe implementation choices, not old-laptop performance claims. The 4-core, 8 GB and 100-session goal requires separate benchmark evidence.

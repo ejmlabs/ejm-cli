@@ -1,108 +1,37 @@
 use ratatui::{
     Frame,
     layout::{Constraint, Layout, Rect},
-    style::{Color, Modifier, Style},
-    text::{Line, Span},
-    widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph},
+    style::{Modifier, Style},
+    text::Line,
+    widgets::{Clear, List, ListItem, ListState, Padding, Paragraph},
 };
-use unicode_width::UnicodeWidthChar;
 
 use crate::{
-    app::{App, BlockKind, Overlay, RunState},
-    args::{Appearance, Args},
+    app::{App, Overlay, RunState},
+    args::Args,
+    ejm_theme::Glyphs,
+    ejm_tui::{
+        self, Header, Theme, composer_block, composer_layout, composer_rows, empty_state,
+        header_lines, hints, is_ascii, kv_line, list_row, popup, short_id, status_line,
+        titled_block, too_small_lines, transcript_block,
+    },
+    extensions::Palette,
 };
 
-#[derive(Clone, Copy)]
-struct Theme {
-    accent: Style,
-    dim: Style,
-    warning: Style,
-    error: Style,
-    positive: Style,
-}
-
-/// ejmlabs brand colors for text on a terminal background we do not paint.
-/// Light uses Forest and darkened tints for contrast on Paper. Dark uses Sage
-/// and lightened tints. Warning and error are not brand colors; they are
-/// chosen to keep at least 4.5:1 on Paper (light) and on Ink (dark).
-const LIGHT: crate::extensions::Palette = crate::extensions::Palette {
-    accent: Color::Rgb(0x29, 0x44, 0x3B),
-    dim: Color::Rgb(0x5B, 0x68, 0x56),
-    warning: Color::Rgb(0x8A, 0x5A, 0x12),
-    error: Color::Rgb(0xA3, 0x3A, 0x2E),
-    positive: Color::Rgb(0x2F, 0x6B, 0x3A),
-};
-const DARK: crate::extensions::Palette = crate::extensions::Palette {
-    accent: Color::Rgb(0xB7, 0xC6, 0xA8),
-    dim: Color::Rgb(0x8A, 0x9A, 0x7B),
-    warning: Color::Rgb(0xE0, 0xB5, 0x65),
-    error: Color::Rgb(0xE5, 0x82, 0x6F),
-    positive: Color::Rgb(0xA8, 0xC9, 0x9A),
-};
-
-fn is_light(appearance: Appearance, colorfgbg: Option<&str>) -> bool {
-    match appearance {
-        Appearance::Light => true,
-        Appearance::Dark => false,
-        // "fg;bg" with ANSI indexes. Backgrounds 7 and 9 to 15 are light.
-        Appearance::Auto => colorfgbg
-            .and_then(|value| value.rsplit(';').next())
-            .and_then(|bg| bg.parse::<u8>().ok())
-            .is_some_and(|bg| bg == 7 || (9..=15).contains(&bg)),
-    }
-}
-
-fn truecolor(colorterm: Option<&str>) -> bool {
-    colorterm.is_some_and(|value| value.contains("truecolor") || value.contains("24bit"))
-}
-
-impl Theme {
-    fn from_palette(palette: crate::extensions::Palette) -> Self {
-        Self {
-            accent: Style::default().fg(palette.accent),
-            dim: Style::default().fg(palette.dim),
-            warning: Style::default().fg(palette.warning),
-            error: Style::default().fg(palette.error),
-            positive: Style::default().fg(palette.positive),
-        }
-    }
-
-    fn new(
-        no_color: bool,
-        palette: Option<crate::extensions::Palette>,
-        light: bool,
-        truecolor: bool,
-    ) -> Self {
-        if no_color {
-            Self {
-                accent: Style::default().add_modifier(Modifier::BOLD),
-                dim: Style::default(),
-                warning: Style::default().add_modifier(Modifier::BOLD),
-                error: Style::default().add_modifier(Modifier::BOLD),
-                positive: Style::default(),
-            }
-        } else if let Some(palette) = palette {
-            Self::from_palette(palette)
-        } else if truecolor {
-            Self::from_palette(if light { LIGHT } else { DARK })
-        } else if light {
-            // Named colors keep working on 16 and 256 color terminals.
-            Self::from_palette(crate::extensions::Palette {
-                accent: Color::Blue,
-                dim: Color::DarkGray,
-                warning: Color::Magenta,
-                error: Color::Red,
-                positive: Color::Green,
-            })
-        } else {
-            Self::from_palette(crate::extensions::Palette {
-                accent: Color::Cyan,
-                dim: Color::DarkGray,
-                warning: Color::Yellow,
-                error: Color::Red,
-                positive: Color::Green,
-            })
-        }
+/// A package theme (`--theme`) replaces the kit colors for the five text roles it names.
+fn themed(palette: Palette) -> Theme {
+    let fg = |color| Style::default().fg(color);
+    let accent = fg(palette.accent);
+    Theme {
+        accent,
+        dim: fg(palette.dim),
+        warning: fg(palette.warning),
+        error: fg(palette.error),
+        success: fg(palette.positive),
+        plain: Style::default(),
+        bold: Style::default().add_modifier(Modifier::BOLD),
+        selected: accent.add_modifier(Modifier::REVERSED),
+        special: fg(palette.dim),
     }
 }
 
@@ -112,27 +41,45 @@ pub fn draw(
     args: &Args,
     snapshot: &ejm_harness::HarnessSnapshot,
 ) {
-    let area = frame.area();
-    let theme = Theme::new(
-        args.no_color || std::env::var_os("NO_COLOR").is_some(),
-        app.palette,
-        is_light(args.appearance, std::env::var("COLORFGBG").ok().as_deref()),
-        truecolor(std::env::var("COLORTERM").ok().as_deref()),
+    let no_color = args.no_color || std::env::var_os("NO_COLOR").is_some();
+    let theme = match app.palette {
+        Some(palette) if !no_color => themed(palette),
+        _ => Theme::from_env(args.no_color, args.appearance.into()),
+    };
+    draw_screen(
+        frame,
+        app,
+        args,
+        snapshot,
+        &theme,
+        ejm_tui::glyphs_from_env(args.plain),
     );
-    if area.width < 20 || area.height < 8 {
+}
+
+fn draw_screen(
+    frame: &mut Frame<'_>,
+    app: &mut App,
+    args: &Args,
+    snapshot: &ejm_harness::HarnessSnapshot,
+    theme: &Theme,
+    glyphs: &Glyphs,
+) {
+    let area = frame.area();
+    if ejm_tui::too_small(area) {
         frame.render_widget(
-            Paragraph::new("Enlarge the terminal\nto use ejm-cli."),
+            Paragraph::new(too_small_lines("ejm-cli", usize::from(area.width))),
             area,
         );
         return;
     }
-    let composer_width = area.width.saturating_sub(4).max(1) as usize;
+    // Box border and pad take 4 columns and the prompt takes 2 more.
+    let composer_width = usize::from(area.width.saturating_sub(6).max(1));
     let composer = composer_layout(&app.composer.text, app.composer.cursor, composer_width);
     let input_height = u16::try_from(composer.0.len())
         .unwrap_or(u16::MAX)
         .clamp(1, 6)
         + 2;
-    let [header, transcript, status, widgets, input, hints] = Layout::vertical([
+    let [header, transcript, status, widgets, input, hint_area] = Layout::vertical([
         Constraint::Length(2),
         Constraint::Min(1),
         Constraint::Length(1),
@@ -141,117 +88,82 @@ pub fn draw(
         Constraint::Length(1),
     ])
     .areas(area);
-    draw_header(frame, app, args, theme, header);
+    draw_header(frame, app, args, theme, glyphs, header);
     draw_transcript(frame, app, theme, transcript);
-    draw_status(frame, app, theme, status, snapshot);
+    draw_status(frame, app, theme, glyphs, status, snapshot);
     frame.render_widget(
         Paragraph::new(app.widget_lines.join("\n")).style(theme.dim),
         widgets,
     );
-    draw_composer(frame, app, theme, input, composer);
-    let hint_text = if area.width >= 85 {
-        " Enter send · Alt+Enter newline · Ctrl+K steer · Ctrl+S sessions · Ctrl+C stop/quit"
-    } else {
-        " Enter send · Ctrl+C stop/quit · /help"
-    };
-    frame.render_widget(Paragraph::new(hint_text).style(theme.dim), hints);
-
-    draw_overlay(frame, app, theme);
-}
-
-fn draw_header(frame: &mut Frame<'_>, app: &App, args: &Args, theme: Theme, header: Rect) {
+    draw_composer(frame, app, theme, glyphs, input, composer);
     frame.render_widget(
-        Paragraph::new(vec![
-            Line::from(vec![
-                Span::styled(" ejm-cli ", theme.accent.add_modifier(Modifier::BOLD)),
-                Span::raw(safe_text(args.provider_label())),
-                Span::styled(format!("  ·  {}", safe_text(&app.session.title)), theme.dim),
-            ]),
-            Line::from(vec![
-                Span::styled(
-                    format!(" grants: {}", args.grants()),
-                    if args.allow_shell || args.allow_write {
-                        theme.warning
-                    } else {
-                        theme.dim
-                    },
-                ),
-                Span::styled(
-                    format!("  ·  {}", safe_text(&app.session.cwd.display().to_string())),
-                    theme.dim,
-                ),
-                Span::styled(format!("  ·  {}", short_id(&app.session.id)), theme.dim),
-            ]),
-        ]),
-        header,
+        Paragraph::new(hints(
+            theme,
+            glyphs,
+            &[
+                ("Enter", "send"),
+                ("Ctrl+C", "stop/quit"),
+                ("Alt+Enter", "new line"),
+                ("Ctrl+K", "steer"),
+                ("Ctrl+S", "sessions"),
+                ("/help", "commands"),
+            ],
+            usize::from(area.width),
+        )),
+        hint_area,
     );
+
+    draw_overlay(frame, app, theme, glyphs);
 }
 
-fn draw_transcript(frame: &mut Frame<'_>, app: &mut App, theme: Theme, transcript: Rect) {
-    let width = transcript.width.saturating_sub(2).max(1) as usize;
+fn draw_header(
+    frame: &mut Frame<'_>,
+    app: &App,
+    args: &Args,
+    theme: &Theme,
+    glyphs: &Glyphs,
+    header: Rect,
+) {
+    let lines = header_lines(
+        theme,
+        glyphs,
+        &Header {
+            app: "ejm-cli",
+            provider: &safe_text(args.provider_label()),
+            title: &safe_text(&app.session.title),
+            grants: &args.grants(),
+            elevated: args.allow_shell || args.allow_write,
+            cwd: &safe_text(&app.session.cwd.display().to_string()),
+            session_id: &app.session.id,
+        },
+        usize::from(header.width),
+    );
+    frame.render_widget(Paragraph::new(lines.to_vec()), header);
+}
+
+fn draw_transcript(frame: &mut Frame<'_>, app: &mut App, theme: &Theme, transcript: Rect) {
+    let width = usize::from(transcript.width.saturating_sub(2).max(1));
     let mut lines = Vec::new();
     if app.blocks.is_empty() {
-        lines.extend([
-            Line::raw(""),
-            Line::styled(
-                "  What shall we build?",
-                theme.accent.add_modifier(Modifier::BOLD),
-            ),
-            Line::raw(""),
-        ]);
-        for text in [
-            "Ask about this repository, investigate a bug, or describe a change.",
-            "Read tools are ready. Write and shell access require explicit flags.",
-            "Use /help for commands. Sessions are saved locally.",
-        ] {
-            lines.extend(wrap_line(text, width, theme.dim));
-            lines.push(Line::raw(""));
-        }
+        lines.extend(empty_state(
+            theme,
+            "What shall we build?",
+            &[
+                "Ask about this repository, investigate a bug, or describe a change.",
+                "Read tools are ready. Write and shell access require explicit flags.",
+                "Use /help for commands. Sessions are saved locally.",
+            ],
+            width,
+        ));
     }
     for block in &app.blocks {
-        let style = match block.kind {
-            BlockKind::User => theme.accent,
-            BlockKind::Assistant => Style::default().add_modifier(Modifier::BOLD),
-            BlockKind::Tool => theme.dim,
-            BlockKind::Error => theme.error,
-            BlockKind::Notice => theme.warning,
-        };
-        lines.extend(wrap_line(&block.title, width, style));
-        let mut fenced = false;
-        let mut fenced_diff = false;
-        let contains_diff = block
-            .text
-            .lines()
-            .any(|line| line.starts_with("@@ ") || line.starts_with("diff --git "));
-        for text in block.text.lines() {
-            let line_style = if text.trim_start().starts_with("```") {
-                fenced = !fenced;
-                fenced_diff = fenced
-                    && (text.trim_start().starts_with("```diff")
-                        || text.trim_start().starts_with("```patch"));
-                theme.dim
-            } else if (fenced_diff || contains_diff)
-                && text.starts_with('+')
-                && !text.starts_with("+++")
-            {
-                theme.positive
-            } else if (fenced_diff || contains_diff)
-                && text.starts_with('-')
-                && !text.starts_with("---")
-            {
-                theme.error
-            } else if text.starts_with('#') {
-                theme.accent.add_modifier(Modifier::BOLD)
-            } else if fenced || block.kind == BlockKind::Tool {
-                theme.dim
-            } else if block.kind == BlockKind::Error {
-                theme.error
-            } else {
-                Style::default()
-            };
-            lines.extend(wrap_line(text, width, line_style));
-        }
-        lines.push(Line::raw(""));
+        lines.extend(transcript_block(
+            theme,
+            block.kind,
+            &block.title,
+            &block.text,
+            width,
+        ));
     }
     let available = transcript.height as usize;
     app.scroll_from_bottom = app
@@ -262,7 +174,7 @@ fn draw_transcript(frame: &mut Frame<'_>, app: &mut App, theme: Theme, transcrip
     let visible = lines.drain(start..end).collect::<Vec<_>>();
     frame.render_widget(
         Paragraph::new(visible)
-            .block(Block::default().padding(ratatui::widgets::Padding::horizontal(1))),
+            .block(ratatui::widgets::Block::default().padding(Padding::horizontal(1))),
         transcript,
     );
 }
@@ -270,41 +182,40 @@ fn draw_transcript(frame: &mut Frame<'_>, app: &mut App, theme: Theme, transcrip
 fn draw_status(
     frame: &mut Frame<'_>,
     app: &App,
-    theme: Theme,
+    theme: &Theme,
+    glyphs: &Glyphs,
     status: Rect,
     snapshot: &ejm_harness::HarnessSnapshot,
 ) {
-    let run_status = if app.scroll_from_bottom > 0 {
+    let counts = [
+        format!("{} agents", snapshot.active_agents),
         format!(
-            " ↑ {} lines above latest · End to follow",
-            app.scroll_from_bottom
-        )
+            "models {}+{}q",
+            snapshot.model_requests, snapshot.waiting_model_requests
+        ),
+        format!(
+            "tools {}+{}q",
+            snapshot.tools.running, snapshot.tools.queued
+        ),
+    ];
+    let state = if app.scroll_from_bottom > 0 {
+        ejm_tui::RunState::ScrolledUp(app.scroll_from_bottom)
     } else {
-        format!(
-            " {}{}",
-            if app.is_running() { "● " } else { "" },
-            if app.run_state == RunState::Stopping {
-                "Stopping…".into()
-            } else {
-                safe_text(&app.status)
-            }
-        )
+        match app.run_state {
+            RunState::Idle => ejm_tui::RunState::Idle,
+            RunState::Running => ejm_tui::RunState::Running,
+            RunState::Stopping => ejm_tui::RunState::Stopping,
+        }
     };
-    let status_text = format!(
-        " {} agents · models {}+{}q · tools {}+{}q ·{}",
-        snapshot.active_agents,
-        snapshot.model_requests,
-        snapshot.waiting_model_requests,
-        snapshot.tools.running,
-        snapshot.tools.queued,
-        run_status,
-    );
     frame.render_widget(
-        Paragraph::new(status_text).style(if app.is_running() {
-            theme.accent
-        } else {
-            theme.dim
-        }),
+        Paragraph::new(status_line(
+            theme,
+            glyphs,
+            &counts,
+            state,
+            &safe_text(&app.status),
+            usize::from(status.width),
+        )),
         status,
     );
 }
@@ -312,50 +223,41 @@ fn draw_status(
 fn draw_composer(
     frame: &mut Frame<'_>,
     app: &App,
-    theme: Theme,
+    theme: &Theme,
+    glyphs: &Glyphs,
     input: Rect,
     composer: (Vec<String>, usize, usize),
 ) {
     let (composer_lines, cursor_row, cursor_col) = composer;
-    let composer_width = usize::from(input.width.saturating_sub(4).max(1));
+    let composer_width = usize::from(input.width.saturating_sub(6).max(1));
     let visible_input_rows = input.height.saturating_sub(2).max(1) as usize;
     let first_input_row = cursor_row.saturating_sub(visible_input_rows - 1);
-    let visible_input = composer_lines
+    let mut visible_input = composer_lines
         .into_iter()
         .skip(first_input_row)
         .take(visible_input_rows)
-        .map(Line::raw)
         .collect::<Vec<_>>();
-    let placeholder = app.composer.text.is_empty();
+    // `composer_rows` shows the placeholder when every row is empty. A draft of only
+    // newlines is not empty, so keep its rows with a blank cell.
+    if !app.composer.text.is_empty() && visible_input.iter().all(String::is_empty) {
+        for row in &mut visible_input {
+            *row = " ".into();
+        }
+    }
     frame.render_widget(
-        Paragraph::new(if placeholder {
-            vec![Line::styled(
-                if app.is_running() {
-                    "Queue a follow-up, or Ctrl+K to steer…"
-                } else {
-                    "Describe a task…"
-                },
-                theme.dim,
-            )]
-        } else {
-            visible_input
-        })
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_style(theme.accent)
-                .title(if app.is_running() {
-                    " message · Enter queues "
-                } else {
-                    " message "
-                })
-                .padding(ratatui::widgets::Padding::horizontal(1)),
-        ),
+        Paragraph::new(composer_rows(
+            theme,
+            glyphs,
+            &visible_input,
+            app.is_running(),
+        ))
+        .block(composer_block(theme, glyphs, app.is_running())),
         input,
     );
     if app.overlay.is_none() {
+        // Border, pad and the two-cell prompt sit left of the text.
         let x = input.x
-            + 2
+            + 4
             + u16::try_from(cursor_col.min(composer_width.saturating_sub(1))).unwrap_or(0);
         let y =
             input.y + 1 + u16::try_from(cursor_row.saturating_sub(first_input_row)).unwrap_or(0);
@@ -365,147 +267,97 @@ fn draw_composer(
     }
 }
 
-fn draw_overlay(frame: &mut Frame<'_>, app: &App, theme: Theme) {
+fn draw_overlay(frame: &mut Frame<'_>, app: &App, theme: &Theme, glyphs: &Glyphs) {
     let area = frame.area();
     match &app.overlay {
-        Some(Overlay::Help) => draw_help(frame, theme),
+        Some(Overlay::Help) => draw_help(frame, theme, glyphs),
         Some(Overlay::Sessions { sessions, selected }) => {
             let popup = popup(area, 86, 20);
             frame.render_widget(Clear, popup);
+            let (arrows, dot) = (
+                if is_ascii(glyphs) {
+                    "Up/Down"
+                } else {
+                    "\u{2191}/\u{2193}"
+                },
+                glyphs.separator,
+            );
+            let block = titled_block(
+                glyphs,
+                &format!("sessions {dot} {arrows} choose {dot} Enter open {dot} Esc close"),
+                theme.plain,
+            );
+            let width = usize::from(block.inner(popup).width);
             let items = sessions
                 .iter()
-                .map(|session| {
+                .enumerate()
+                .map(|(index, session)| {
                     let status = match session.status {
                         ejm_harness::SessionStatus::Idle => "idle",
                         ejm_harness::SessionStatus::Running => "running",
                         ejm_harness::SessionStatus::Interrupted => "interrupted",
                     };
-                    ListItem::new(format!(
-                        "{}  [{status}]  {}",
+                    ListItem::new(list_row(
+                        theme,
+                        glyphs,
                         short_id(&session.id),
-                        safe_text(&session.title)
+                        &format!("[{status}]  {}", safe_text(&session.title)),
+                        index == *selected,
+                        width,
                     ))
                 })
                 .collect::<Vec<_>>();
             let mut state = ListState::default().with_selected(Some(*selected));
-            frame.render_stateful_widget(
-                List::new(items)
-                    .block(
-                        Block::default()
-                            .borders(Borders::ALL)
-                            .title(" sessions · ↑/↓ choose · Enter open · Esc close "),
-                    )
-                    .highlight_style(theme.accent.add_modifier(Modifier::REVERSED)),
-                popup,
-                &mut state,
-            );
+            frame.render_stateful_widget(List::new(items).block(block), popup, &mut state);
         }
         None => {}
     }
 }
 
-fn draw_help(frame: &mut Frame<'_>, theme: Theme) {
+fn draw_help(frame: &mut Frame<'_>, theme: &Theme, glyphs: &Glyphs) {
     let popup = popup(frame.area(), 78, 24);
     frame.render_widget(Clear, popup);
+    let block = titled_block(
+        glyphs,
+        &format!("ejm-cli {} help", glyphs.separator),
+        theme.plain,
+    );
+    let width = usize::from(block.inner(popup).width);
+    let recall = if is_ascii(glyphs) {
+        "Up / Down"
+    } else {
+        "\u{2191} / \u{2193}"
+    };
+    let row = |key: &str, text: &str| kv_line(theme, glyphs, key, text, 16, width);
     frame.render_widget(
         Paragraph::new(vec![
             Line::styled("Conversation", theme.accent),
-            Line::raw("Enter            Send, or queue while a run is active"),
-            Line::raw("Alt+Enter        Insert a newline (Ctrl+J also works)"),
-            Line::raw("Ctrl+K           Steer the active run with your draft"),
-            Line::raw("Ctrl+C           Stop an active run; otherwise exit"),
-            Line::raw("Ctrl+D           Exit if the composer is empty"),
-            Line::raw("↑ / ↓            Recall sent messages"),
-            Line::raw("PageUp/PageDown  Scroll transcript; End follows output"),
+            row("Enter", "Send, or queue while a run is active"),
+            row("Alt+Enter", "Insert a newline (Ctrl+J also works)"),
+            row("Ctrl+K", "Steer the active run with your draft"),
+            row("Ctrl+C", "Stop an active run; otherwise exit"),
+            row("Ctrl+D", "Exit if the composer is empty"),
+            row(recall, "Recall sent messages"),
+            row("PageUp/PageDown", "Scroll transcript; End follows output"),
             Line::raw(""),
             Line::styled("Commands", theme.accent),
-            Line::raw("/new [title]     Create a session in this workspace"),
-            Line::raw("/sessions        Choose a saved session (Ctrl+S)"),
-            Line::raw("/resume ID       Open a saved session"),
-            Line::raw("/queue MESSAGE   Queue a follow-up turn"),
-            Line::raw("/steer MESSAGE   Send direction to the active run"),
-            Line::raw("/stop            Cancel the current run"),
-            Line::raw("/help            Show this reference"),
-            Line::raw("/quit            Stop runs and exit"),
+            row("/new [title]", "Create a session in this workspace"),
+            row("/sessions", "Choose a saved session (Ctrl+S)"),
+            row("/resume ID", "Open a saved session"),
+            row("/queue MESSAGE", "Queue a follow-up turn"),
+            row("/steer MESSAGE", "Send direction to the active run"),
+            row("/stop", "Cancel the current run"),
+            row("/help", "Show this reference"),
+            row("/quit", "Stop runs and exit"),
             Line::raw(""),
             Line::styled(
                 "Grants are fixed at launch. Esc closes this panel.",
                 theme.dim,
             ),
         ])
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(" ejm-cli · help ")
-                .padding(ratatui::widgets::Padding::horizontal(1)),
-        ),
+        .block(block),
         popup,
     );
-}
-
-fn popup(area: Rect, width: u16, height: u16) -> Rect {
-    let width = width.min(area.width.saturating_sub(2));
-    let height = height.min(area.height.saturating_sub(2));
-    Rect::new(
-        area.x + (area.width - width) / 2,
-        area.y + (area.height - height) / 2,
-        width,
-        height,
-    )
-}
-
-fn short_id(id: &str) -> &str {
-    id.get(..8).unwrap_or(id)
-}
-
-fn wrap_line(text: &str, width: usize, style: Style) -> Vec<Line<'static>> {
-    let mut lines = Vec::new();
-    let mut current = String::new();
-    let mut columns = 0;
-    for character in text.chars() {
-        let character_width = character.width().unwrap_or(0);
-        if columns + character_width > width && !current.is_empty() {
-            lines.push(Line::styled(std::mem::take(&mut current), style));
-            columns = 0;
-        }
-        current.push(character);
-        columns += character_width;
-    }
-    lines.push(Line::styled(current, style));
-    lines
-}
-
-pub fn composer_layout(text: &str, cursor: usize, width: usize) -> (Vec<String>, usize, usize) {
-    let width = width.max(1);
-    let mut rows = vec![String::new()];
-    let mut columns = 0;
-    let mut cursor_position = (0, 0);
-    for (index, character) in text.char_indices() {
-        let character_width = character.width().unwrap_or(0);
-        if character != '\n' && columns + character_width > width {
-            rows.push(String::new());
-            columns = 0;
-        }
-        if index == cursor {
-            cursor_position = (rows.len() - 1, columns);
-        }
-        if character == '\n' {
-            rows.push(String::new());
-            columns = 0;
-        } else {
-            let last = rows.len() - 1;
-            rows[last].push(character);
-            columns += character_width;
-        }
-    }
-    if cursor == text.len() {
-        if columns >= width {
-            rows.push(String::new());
-            columns = 0;
-        }
-        cursor_position = (rows.len() - 1, columns);
-    }
-    (rows, cursor_position.0, cursor_position.1)
 }
 
 // Provider and tool output must never become terminal escape sequences.
@@ -542,9 +394,9 @@ impl vte::Perform for PlainText {
 )]
 mod tests {
     use super::*;
+    use crate::{ejm_theme::UNICODE, ejm_tui::Appearance};
     use clap::Parser;
-    use ratatui::{Terminal, backend::TestBackend};
-    use unicode_width::UnicodeWidthStr;
+    use ratatui::{Terminal, backend::TestBackend, style::Color};
 
     #[test]
     fn strips_terminal_control_sequences_and_preserves_readable_text() {
@@ -564,32 +416,55 @@ mod tests {
     }
 
     #[test]
-    fn appearance_follows_flag_then_colorfgbg() {
-        assert!(is_light(Appearance::Light, None));
-        assert!(!is_light(Appearance::Dark, Some("0;15")));
-        assert!(is_light(Appearance::Auto, Some("0;15")));
-        assert!(is_light(Appearance::Auto, Some("0;default;15")));
-        assert!(is_light(Appearance::Auto, Some("0;7")));
-        assert!(!is_light(Appearance::Auto, Some("15;0")));
-        assert!(!is_light(Appearance::Auto, Some("15;default")));
-        assert!(!is_light(Appearance::Auto, None));
+    fn appearance_flag_maps_onto_kit_appearance() {
+        assert_eq!(
+            Appearance::from(crate::args::Appearance::Light),
+            Appearance::Light
+        );
+        assert_eq!(
+            Appearance::from(crate::args::Appearance::Dark),
+            Appearance::Dark
+        );
+        assert_eq!(
+            Appearance::from(crate::args::Appearance::Auto),
+            Appearance::Auto
+        );
     }
 
     #[test]
-    fn brand_palette_needs_truecolor() {
-        assert!(truecolor(Some("truecolor")));
-        assert!(truecolor(Some("24bit")));
-        assert!(!truecolor(Some("")));
-        assert!(!truecolor(None));
-        let light = Theme::new(false, None, true, true);
-        let dark = Theme::new(false, None, false, true);
+    fn kit_palette_needs_truecolor() {
+        let light = Theme::detect(false, Appearance::Light, None, Some("truecolor"));
+        let dark = Theme::detect(false, Appearance::Dark, None, Some("24bit"));
         assert_eq!(light.accent.fg, Some(Color::Rgb(0x29, 0x44, 0x3B)));
-        assert_eq!(dark.accent.fg, Some(Color::Rgb(0xB7, 0xC6, 0xA8)));
+        assert_eq!(dark.accent.fg, Some(Color::Rgb(0xB8, 0xC6, 0xAA)));
+        assert_eq!(dark.dim.fg, Some(Color::Rgb(0x84, 0x96, 0x82)));
+        assert_eq!(light.error.fg, Some(Color::Rgb(0xA6, 0x3A, 0x3A)));
         assert_eq!(
-            Theme::new(false, None, false, false).accent.fg,
+            Theme::detect(false, Appearance::Dark, None, None).accent.fg,
             Some(Color::Cyan)
         );
-        assert_eq!(Theme::new(true, None, true, true).accent.fg, None);
+        assert_eq!(
+            Theme::detect(false, Appearance::Light, None, None)
+                .accent
+                .fg,
+            Some(Color::Blue)
+        );
+        assert_eq!(Theme::no_color().accent.fg, None);
+    }
+
+    #[test]
+    fn package_theme_replaces_the_five_text_roles() {
+        let red = Color::Rgb(255, 0, 0);
+        let theme = themed(Palette {
+            accent: red,
+            dim: red,
+            warning: red,
+            error: red,
+            positive: Color::Green,
+        });
+        assert_eq!(theme.accent.fg, Some(red));
+        assert_eq!(theme.success.fg, Some(Color::Green));
+        assert!(theme.selected.add_modifier.contains(Modifier::REVERSED));
     }
 
     #[test]
@@ -597,12 +472,9 @@ mod tests {
         let (rows, row, col) = composer_layout("a界b🦀", "a界b🦀".len(), 4);
         assert_eq!(rows, ["a界b", "🦀"]);
         assert_eq!((row, col), (1, 2));
-        assert_eq!("界".width(), 2);
     }
 
-    #[test]
-    fn renderer_handles_small_screens_and_shows_grants() {
-        let args = Args::try_parse_from(["ejm-cli", "--replay", "--allow-write"]).unwrap();
+    fn screen(args: &Args, glyphs: &Glyphs, width: u16, height: u16) -> String {
         let session = serde_json::from_value(serde_json::json!({
             "id": "123456789", "title": "test", "cwd": "/tmp", "created_at_ms": 0,
             "status": "idle"
@@ -617,23 +489,43 @@ mod tests {
             waiting_model_requests: 3,
             tools: governor.snapshot(),
         };
+        let theme = Theme::no_color();
+        let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+        terminal
+            .draw(|frame| draw_screen(frame, &mut app, args, &snapshot, &theme, glyphs))
+            .unwrap();
+        terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(ratatui::buffer::Cell::symbol)
+            .collect::<String>()
+    }
+
+    #[test]
+    fn renderer_handles_small_screens_and_shows_grants() {
+        let args = Args::try_parse_from(["ejm-cli", "--replay", "--allow-write"]).unwrap();
         for (width, height) in [(10, 5), (40, 10), (100, 30)] {
-            let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
-            terminal
-                .draw(|frame| draw(frame, &mut app, &args, &snapshot))
-                .unwrap();
-            let text = terminal
-                .backend()
-                .buffer()
-                .content()
-                .iter()
-                .map(ratatui::buffer::Cell::symbol)
-                .collect::<String>();
+            let text = screen(&args, &UNICODE, width, height);
             if width == 100 {
                 assert!(text.contains("grants: read + write"));
                 assert!(text.contains("What shall we build?"));
-                assert!(text.contains("12 agents · models 2+3q · tools 0+0q"));
+                assert!(text.contains("12 agents · models 2+3q · tools 0+0q · Ready"));
+                assert!(text.contains("› Describe a task…"));
+                assert!(text.contains("╭ message"));
+                assert!(text.contains("Enter send · Ctrl+C stop/quit · Alt+Enter new line"));
             }
         }
+        assert!(screen(&args, &UNICODE, 19, 8).contains("Enlarge the"));
+    }
+
+    #[test]
+    fn plain_mode_draws_only_ascii() {
+        let args = Args::try_parse_from(["ejm-cli", "--replay", "--plain"]).unwrap();
+        let text = screen(&args, ejm_tui::glyphs_from_env(args.plain), 100, 30);
+        assert!(text.is_ascii(), "{text}");
+        assert!(text.contains("> Describe a task..."));
+        assert!(text.contains("+ message"));
     }
 }

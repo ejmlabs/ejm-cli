@@ -2,20 +2,12 @@ use std::{collections::VecDeque, fmt::Write};
 
 use ejm_harness::{Event, EventKind, Session, ToolOutput};
 
+pub use crate::ejm_tui::BlockKind;
 use crate::render::safe_text;
 
 const MAX_BLOCKS: usize = 256;
 const MAX_DISPLAY_BYTES: usize = 256 * 1024;
 const MAX_COMPOSER_BYTES: usize = 64 * 1024;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum BlockKind {
-    User,
-    Assistant,
-    Tool,
-    Error,
-    Notice,
-}
 
 pub struct TranscriptBlock {
     pub kind: BlockKind,
