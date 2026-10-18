@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#F6F5EF" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#202721" media="(prefers-color-scheme: dark)">
+    <title>cli by ejmlabs | A light coding agent for your terminal</title>
+    <meta name="description" content="cli is a Rust coding agent for the terminal from ejmlabs. One native binary, read only until you grant more, built to run many sessions without flooding your machine.">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="cli by ejmlabs">
+    <meta property="og:description" content="A light coding agent for your terminal. One native binary, read only until you grant more.">
+    <meta property="og:url" content="https://cli.ejmlabs.com/">
+    <meta property="og:image" content="https://cli.ejmlabs.com/assets/social-card.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta name="twitter:card" content="summary_large_image">
+    <link rel="canonical" href="https://cli.ejmlabs.com/">
+    <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+    <link rel="icon" sizes="32x32" type="image/png" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+    <link rel="preload" href="/fonts/Manrope-Variable.ttf" as="font" type="font/ttf" crossorigin>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+
+    <header class="top wrap">
+      <a class="brand" href="/" aria-label="cli by ejmlabs, home">
+        <picture>
+          <source media="(prefers-color-scheme: dark)" srcset="/assets/ejmlabs-paper.svg">
+          <img src="/assets/ejmlabs-primary.svg" alt="" width="164" height="28">
+        </picture>
+        <span class="suffix">cli</span>
+      </a>
+      <nav aria-label="Main">
+        <a href="#how">How it works</a>
+        <a class="nav-cta" href="#get">Get cli</a>
+      </nav>
+    </header>
+
+    <main id="main">
+      <section class="hero wrap" aria-labelledby="title">
+        <img class="hero-mark" src="/assets/symbol-sage.svg" alt="" width="418" height="381">
+        <p class="eyebrow">cli by ejmlabs</p>
+        <h1 id="title">A coding agent that lives in your terminal and stays light.</h1>
+        <p class="lede">One native Rust binary. Read only until you grant more. Built to run a hundred sessions without flooding the machine it runs on.</p>
+        <div class="actions">
+          <a class="button" href="#get">Build from source</a>
+          <span class="status">v0.1.0 source release, not yet packaged</span>
+        </div>
+      </section>
+
+      <figure class="term wrap" aria-label="Example terminal session">
+        <div class="term-bar" aria-hidden="true"><span></span><span></span><span></span><b>~/project</b></div>
+<pre><code><span class="p">$</span> ejm-cli --replay run "Explain the parser"
+Demo: Explain the parser
+
+<span class="p">$</span> ejm-cli doctor
+ejm-cli 0.1.0
+Model: gpt-4.1-mini
+Grants: <span class="ok">read</span>
+Resources: max_jobs 4, max_heavy_jobs 1, max_processes 32
+Executor capabilities: admission <span class="ok">enforced</span></code></pre>
+        <figcaption>Condensed from a real session. <code>--replay</code> is an offline demo provider, so you can try it with no account and no network.</figcaption>
+      </figure>
+
+      <section class="section wrap" id="how" aria-labelledby="how-title">
+        <h2 id="how-title">Built for the terminal you already use</h2>
+        <ul class="grid">
+          <li><h3>A real composer</h3><p>Unicode, multiline input, bracketed paste and message history. Paste a stack trace without sending it by accident.</p></li>
+          <li><h3>Readable streaming</h3><p>Code, Markdown and diffs are styled as they arrive. Control sequences in model and tool output are stripped, never run. Light and dark palettes use the ejmlabs brand colors, and <code>--appearance</code> picks one.</p></li>
+          <li><h3>Steer mid-run</h3><p>Queue the next turn, redirect the current one, or stop it. Every run state stays visible.</p></li>
+          <li><h3>Saved sessions</h3><p>Pick up any session by ID or prefix. Durable history lives in the harness, not in your scrollback.</p></li>
+          <li><h3>Pipes and scripts</h3><p><code>ejm-cli run</code> streams plain text, or one JSON event per line with <code>--json</code>. Failures exit nonzero.</p></li>
+          <li><h3>Clean exits</h3><p>Raw mode, mouse tracking and the alternate screen are restored after errors, signals and panics.</p></li>
+        </ul>
+        <dl class="keys" aria-label="Main keys">
+          <div><dt><kbd>Enter</kbd></dt><dd>Send or queue</dd></div>
+          <div><dt><kbd>Ctrl</kbd><kbd>K</kbd></dt><dd>Steer the run</dd></div>
+          <div><dt><kbd>Ctrl</kbd><kbd>C</kbd></dt><dd>Stop</dd></div>
+          <div><dt><kbd>Ctrl</kbd><kbd>S</kbd></dt><dd>Sessions</dd></div>
+        </dl>
+      </section>
+
+      <section class="section split wrap" aria-labelledby="grants-title">
+        <div>
+          <h2 id="grants-title">You grant every permission</h2>
+          <p>File tools start read only. Writing and shell access are flags you pass on purpose, and the grants stay visible in the header for the life of the process.</p>
+          <p>Keys come from environment variables and are never accepted as arguments. Native execution runs as you and is not a sandbox, so <code>ejm-cli doctor</code> reports exactly what is enforced.</p>
+        </div>
+<pre class="snippet"><code><span class="c"># read only</span>
+ejm-cli
+
+<span class="c"># let it edit files</span>
+ejm-cli --allow-write
+
+<span class="c"># and run commands</span>
+ejm-cli --allow-write --allow-shell</code></pre>
+      </section>
+
+      <section class="band" aria-labelledby="light-title">
+        <div class="wrap">
+          <h2 id="light-title">Light by design</h2>
+          <p class="band-lede">No Node or Python runtime. Agents share one resource governor instead of opening a shell each, and rendering memory has a hard ceiling.</p>
+          <ul class="stats">
+            <li><strong>100</strong><span>managed sessions by default</span></li>
+            <li><strong>8 / 4 / 1</strong><span>model requests, local jobs and heavy jobs at once</span></li>
+            <li><strong>256 KiB</strong><span>cap on visible transcript memory</span></li>
+            <li><strong>24 ms</strong><span>first composer paint, fresh state</span></li>
+          </ul>
+          <p class="note">Paint time measured on 18 October 2026 on a Mac16,8 with a replay provider, from process start to first paint in a real PTY. Warm p95 was 41 ms across 20 samples. A modern Mac does not prove the old-laptop target, and no comparison with other agents has run yet.</p>
+        </div>
+      </section>
+
+      <section class="section wrap" aria-labelledby="models-title">
+        <h2 id="models-title">Bring your own model</h2>
+        <ul class="providers">
+          <li><h3>OpenAI compatible</h3><p>Any Chat Completions endpoint. Set <code>EJM_CLI_BASE_URL</code> and <code>EJM_CLI_MODEL</code>.</p></li>
+          <li><h3>OpenAI Responses</h3><p>Native Responses access with your API key.</p></li>
+          <li><h3>ChatGPT</h3><p><code>ejm-cli login chatgpt</code> signs in through your browser. Tokens never touch arguments, logs or the screen.</p></li>
+          <li><h3>Anthropic</h3><p>Native Anthropic API access with an explicit model.</p></li>
+        </ul>
+      </section>
+
+      <section class="section get wrap" id="get" aria-labelledby="get-title">
+        <h2 id="get-title">Get cli</h2>
+        <p>cli is a source release and has not been published or packaged yet. It builds against ejm-harness, the open engine it runs on, checked out as a sibling directory.</p>
+<pre class="snippet"><code>cargo build --release --locked
+./target/release/ejm-cli --replay</code></pre>
+        <p class="small">MIT licensed. Rust only. Run <code>ejm-cli --help</code> for every command and flag.</p>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <div class="wrap foot-inner">
+        <a href="https://ejmlabs.com/"><img src="/assets/ejmlabs-paper.svg" alt="ejmlabs" width="140" height="24"></a>
+        <p>Small experiments. Useful things.</p>
+      </div>
+    </footer>
+  </body>
+</html>

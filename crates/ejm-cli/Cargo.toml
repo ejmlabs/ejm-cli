@@ -1,0 +1,40 @@
+[package]
+name = "ejm-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "ejm-cli: fast reference coding agent and terminal interface"
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "ejm-cli"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+serde_json.workspace = true
+ejm-harness.workspace = true
+ejm-harness-coding.workspace = true
+ejm-harness-exec.workspace = true
+ejm-harness-auth.workspace = true
+ejm-harness-packages.workspace = true
+ejm-harness-package-spec.workspace = true
+serde.workspace = true
+clap = { version = "4.5", features = ["derive", "env"] }
+ratatui = { version = "0.30.2", default-features = false, features = ["crossterm_0_29", "layout-cache"] }
+crossterm = "0.29"
+unicode-width = "0.2"
+url = "2"
+open = { version = "5.4.4", default-features = false }
+hyper = { version = "1", features = ["http1", "server"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+http-body-util = "0.1"
+vte = { version = "0.15", default-features = false }
+
+[dev-dependencies]
+tempfile.workspace = true

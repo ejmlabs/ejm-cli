@@ -1,0 +1,62 @@
+name: ejm-cli quality
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ejm-cli-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    runs-on: ${{ matrix.os }}
+    env:
+      CARGO_BUILD_JOBS: "2"
+      EJM_HARNESS_REPOSITORY: ${{ vars.EJM_HARNESS_REPOSITORY }}
+      EJM_HARNESS_REVISION: ${{ vars.EJM_HARNESS_REVISION }}
+    steps:
+      - name: Check out ejm-cli
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          path: ejm-cli
+          persist-credentials: false
+      - name: Validate the pinned harness pairing
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          repository = os.environ.get("EJM_HARNESS_REPOSITORY", "")
+          revision = os.environ.get("EJM_HARNESS_REVISION", "")
+          if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
+              raise SystemExit("Set EJM_HARNESS_REPOSITORY to the public owner/repository.")
+          if not re.fullmatch(r"[0-9a-f]{40}", revision):
+              raise SystemExit("Set EJM_HARNESS_REVISION to an immutable full commit SHA.")
+          PY
+      - name: Check out the public harness dependency
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: ${{ env.EJM_HARNESS_REPOSITORY }}
+          ref: ${{ env.EJM_HARNESS_REVISION }}
+          path: ejm-harness
+          persist-credentials: false
+      - name: Install pinned Rust and quality tools
+        shell: bash
+        run: |
+          rustup toolchain install 1.99.1 --profile minimal --component clippy,rustfmt
+          rustup default 1.99.1
+          cargo install --locked --version 0.20.2 cargo-deny
+          cargo install --locked --version 0.9.2 cargo-machete
+      - name: Run the same local quality gate
+        working-directory: ejm-cli
+        shell: bash
+        run: ./scripts/check

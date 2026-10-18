@@ -1,0 +1,44 @@
+[advisories]
+version = 2
+
+[licenses]
+version = 2
+confidence-threshold = 0.93
+allow = [
+    "MIT", "MIT-0", "Apache-2.0", "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause", "BSD-3-Clause", "ISC", "Unicode-3.0",
+    "Zlib", "CC0-1.0", "Unlicense",
+    # Mozilla root certificate data used by rustls-platform-verifier.
+    "CDLA-Permissive-2.0",
+]
+
+[bans]
+multiple-versions = "deny"
+wildcards = "deny"
+highlight = "all"
+skip = [
+    # jsonschema0.33 and reqwest0.13 require different incompatible base64 series.
+    { name = "base64", version = "=0.22.1" },
+    # SQLite's WASM VFS requires hashbrown0.16; native hashlink uses0.17.
+    { name = "hashbrown", version = "=0.16.1" },
+    # jsonschema's ahash and uuid1.28 require incompatible getrandom versions.
+    { name = "getrandom", version = "=0.3.4" },
+    # jsonwebtoken11 and oauth2 5 use getrandom0.2; uuid/tempfile use0.4.
+    { name = "getrandom", version = "=0.2.17" },
+    # Those getrandom versions require incompatible UEFI bindings.
+    { name = "r-efi", version = "=5.3.0" },
+    # Ratatui's strum/derive_more use syn2; current Tokio/Serde derives use syn3.
+    { name = "syn", version = "=2.0.119" },
+    # oauth2 5 requires thiserror1; current transport and terminal crates use2.
+    { name = "thiserror", version = "=1.0.69" },
+    { name = "thiserror-impl", version = "=1.0.69" },
+    # aws-lc-rs1.18 requires untrusted0.7; rustls-webpki0.103 uses0.9.
+    { name = "untrusted", version = "=0.7.1" },
+    # cap-primitives3.4 and current Tokio require incompatible Windows bindings.
+    { name = "windows-sys", version = "=0.59.0" },
+]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

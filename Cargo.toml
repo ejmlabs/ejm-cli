@@ -1,0 +1,47 @@
+[workspace]
+members = ["crates/ejm-cli"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+rust-version = "1.89"
+
+[workspace.dependencies]
+anyhow = "1"
+tokio = { version = "1.53", features = ["rt-multi-thread", "macros", "sync", "time", "signal", "net", "io-util", "process"] }
+tokio-util = { version = "0.7", features = ["rt"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tempfile = "3"
+ejm-harness = { version = "0.1.0", path = "../ejm-harness/crates/ejm-harness" }
+ejm-harness-coding = { version = "0.1.0", path = "../ejm-harness/crates/ejm-harness-coding" }
+ejm-harness-exec = { version = "0.1.0", path = "../ejm-harness/crates/ejm-harness-exec" }
+ejm-harness-auth = { version = "0.1.0", path = "../ejm-harness/crates/ejm-harness-auth" }
+ejm-harness-packages = { version = "0.1.0", path = "../ejm-harness/crates/ejm-harness-packages" }
+ejm-harness-package-spec = { version = "0.1.0", path = "../ejm-harness/crates/ejm-harness-package-spec" }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+warnings = "deny"
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+unreachable = "deny"
+dbg_macro = "deny"
+exit = "deny"
+mem_forget = "deny"
+allow_attributes_without_reason = "deny"
+

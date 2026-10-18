@@ -1,0 +1,7 @@
+{
+  "name": "ejmlabs-cli",
+  "account_id": "478a0db3a110d8503c16abbc1db27af4",
+  "compatibility_date": "2026-10-18",
+  "assets": { "directory": "./dist" },
+  "routes": [{ "pattern": "cli.ejmlabs.com", "custom_domain": true }]
+}
