@@ -20,7 +20,7 @@ The complete gate validates architecture and skill routing, checks format, runs 
 
 The hook installer changes only this repository's `core.hooksPath`. It does not install a global hook. The quality gate runs on Linux and macOS. The trusted `.github/workflows/pr.yml` and `.github/workflows/release.yml` entry points read the reviewed full 40-character sibling harness commit from `.github/harness-revision`.
 
-The workflows reject a missing or mutable harness revision. The installed selector reads the pin from the exact admitted CLI commit and verifies that it equals or precedes protected main in the fixed official harness repository. Preparation binds the checked-out commit, tree and source archive digest into the admitted context. The [readable dependency review prerequisite](ci-bootstrap.md#readable-dependency-review-prerequisite) updates the shared callers and source context while keeping the working harness pin and lock unchanged. This change also prepares an isolated Linux CI Secret Service for the existing persistent-account fixtures, without changing the product vault or skipping tests. Its own run uses the installed caller; fresh Linux, installed-selector and reviewer-source acceptance remain separate checks.
+The workflows reject a missing or mutable harness revision. The installed selector reads the pin from the exact admitted CLI commit and verifies that it equals or precedes protected main in the fixed official harness repository. Preparation binds the checked-out commit, tree and source archive digest into the admitted context. The [readable dependency review prerequisite](ci-bootstrap.md#readable-dependency-review-prerequisite) records protected PR #9's 40d callers and source context. Its Linux Secret Service setup and unchanged baseline gate passed on Linux and macOS with the working 4a harness. That run used installed b2; it does not prove the later native vault gate or installed 40d readable harness extraction. Keep those exact-source checks separate.
 
 A private harness checkout needs a scoped read credential; public source does not. See [CONTRIBUTING.md](../CONTRIBUTING.md) for human admission and approval, and [RELEASING.md](../RELEASING.md) for remote checks and publication gates. The PTY gate checks interaction and terminal restoration on its host. Local macOS results do not prove Linux behavior. Windows terminal behavior requires separate evidence.
 
@@ -39,6 +39,7 @@ For the prepared CI action, source scope, and protected adoption order, see [CI 
 | `terminal_input` | Owned bounded input parser, event adaptation and reset |
 | `render` | Drawing and text layout |
 | `main` | Process composition and plain/JSON entry points |
+| `remote` | Native account transport, Noise pairing, bounded protocol, shared session authority and vault adapter |
 | Sibling ejm-harness | Shared authentication and credential storage, providers, run policy, context, tools, persistence and resource admission |
 
 Keep each piece responsible for one coherent job. Extend real variable seams through the public harness traits. A provider or tool implementation must honor its contract, including cancellation, budgets and error reporting. Prefer small capability interfaces over a large “service” object. Compose the concrete app in `main`; pass the harness into the UI. Do not introduce a dependency injection container, factory hierarchy or trait for a single fixed renderer.
@@ -62,6 +63,42 @@ The dependency checker denies unknown registries, unknown Git sources, wildcard 
 Use replay or local HTTP fixtures. No paid provider calls belong in tests. Prove a changed user action or failure condition with a focused test before running the complete gate. Preserve failed drafts, durable event order, explicit grants, Unicode boundaries, bounded scrollback and prompt cancellation. Run the PTY check after terminal changes; a render snapshot alone cannot prove raw-mode restoration.
 
 Record measured latency and memory with hardware, compiler profile and workload. The target is 100 managed agents with hosted models on four cores and 8 GB RAM. Do not claim that target from a single current-machine fixture.
+
+## Native remote publication
+
+The [native remote candidate](native-remote-publication.md) adds the reviewed
+native source and public harness requirements on actual protected PR #9 merge
+`c8e2239392f71df82cbef6166b1827c8e5f5f1c5`. It preserves the caller's
+40d source context, Linux setup and PR #6's consolidated publication guide.
+The selected harness pin is actual protected completion API merge
+`42e4f9cf33bd3525aec344cfdffabc251271f782`: 358 tracked files from tree
+`826e02310f1097e13806ca5ca1bf5cc00d71e966`, with the exact native lock.
+Run the unchanged full gate before hosted review and protected native adoption. Earlier native
+passes remain historical.
+
+The prepared queue correction consumes the harness owner's exact current-run
+completion subscription. It keeps one completion receiver for the revocable
+remote target, waits outside host authority, discards an atomically reported
+local-successor handoff and rechecks the share and current
+run before admitting a prompt. This reuses the existing watch result, without a
+new task, channel, queue engine or dependency. The backend contract covers a real
+internal queued target, two remote successors and revocation during completion.
+The shared text limit is 16 KiB of UTF-8 bytes, checked before acknowledgement.
+Focused backend and recovery checks are recorded separately. The API prerequisite
+is protected; corrected SIGTERM and the final combined full/hosted gates remain pending;
+see the [correction record](native-remote-publication.md#prepared-completion-and-prompt-corrections).
+
+The normal gate drives the native private-terminal fixture through
+`scripts/check_terminal.py`; all eight fixture cases and the real-command
+SIGTERM case must pass before claiming native terminal acceptance. The gate
+selects the exact unit-test executable from
+compiler-artifact JSON emitted by that same locked Cargo test invocation,
+including cache hits. Missing or ambiguous artifacts fail; timestamps in a
+shared directory do not select a binary. `check_terminal.py --native-fixture
+CARGO_TEST_MESSAGES_JSONL` exposes the same validated path to other supervisors.
+The supervisor never builds or calls a model provider. Worker/browser source
+and Workerd/native round-trip fixtures belong to the following publication layer.
+This native slice adds no unconditional Node, browser or Worker gate.
 
 ## Project skills
 

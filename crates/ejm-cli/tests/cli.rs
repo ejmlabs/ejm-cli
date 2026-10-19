@@ -181,3 +181,36 @@ fn native_model_discovery_rejects_endpoint_overrides_before_accessing_credential
         assert!(!state.path().join("auth").exists());
     }
 }
+
+#[test]
+fn relay_metadata_and_rejected_controller_do_not_initialize_provider_or_journal() {
+    let state = tempfile::tempdir().unwrap();
+    let missing_replay = state.path().join("provider-must-not-be-opened.json");
+    let command = || {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_ejm-cli"));
+        command
+            .arg("--state-dir")
+            .arg(state.path())
+            .arg("--replay-file")
+            .arg(&missing_replay)
+            .env_remove("EJM_CLI_API_KEY")
+            .env_remove("OPENAI_API_KEY")
+            .env_remove("EJM_CLI_PROVIDER")
+            .stdin(std::process::Stdio::null());
+        command
+    };
+    let accounts = command().args(["remote", "accounts"]).output().unwrap();
+    assert!(
+        accounts.status.success(),
+        "{}",
+        String::from_utf8_lossy(&accounts.stderr)
+    );
+    assert!(String::from_utf8_lossy(&accounts.stdout).contains("No saved relay account."));
+    let connect = command()
+        .args(["--relay", "https://relay.example", "remote", "connect"])
+        .output()
+        .unwrap();
+    assert!(!connect.status.success());
+    assert!(String::from_utf8_lossy(&connect.stderr).contains("terminal"));
+    assert_eq!(std::fs::read_dir(state.path()).unwrap().count(), 0);
+}
