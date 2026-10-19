@@ -117,10 +117,23 @@ the separate site migration out of these source changes.
 
 ## Verification and publication record
 
-Caller preparation checks canonical pins, the exact retained central validator,
-actionlint, OpenSpec, documentation links and whitespace. No Cargo, npm install,
-PTY, hosted caller run or public-site result is established by this preparation.
-The normal commit hook and exact-source protected hosted checks remain required
-before adoption. Earlier product or central results do not verify this caller
-head. The relay source change owns its public setup and recovery docs, which
-must be built and published through the existing site process.
+The initial caller preparation checked canonical pins, the exact retained
+central validator, actionlint, OpenSpec, documentation links and whitespace.
+The normal commit hook then passed for CLI head
+`92e423b67243b15e97a43c5ba4776057172d242c`. Its two admitted AI reports
+explicitly said review was incomplete because the old and new external workflow
+implementations were absent. Successful wrapper jobs and zero findings did not
+complete that review or establish acceptance.
+
+The [shared workflow source evidence](ci/shared-workflow-review/README.md)
+supplies deduplicated exact plaintext copies of both implementations and their
+readable source, with full revisions, original paths, Git blob IDs and SHA-256
+receipts. These files are review data and add no execution authority. The
+caller pins, runtime, tools, locks and working harness pin stay unchanged.
+
+This correction requires the normal hook and fresh admitted Linux/macOS quality
+checks and complete reviews for its new head. It establishes no new full-gate,
+PTY, hosted acceptance or public-site result by itself. Exact-head human approval
+and protected adoption remain required. This contributor CI guidance changes no
+product behavior; the relay source layer owns its public setup and recovery
+docs and their separate site publication.

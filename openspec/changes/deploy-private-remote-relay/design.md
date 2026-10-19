@@ -105,3 +105,21 @@ Static candidate checks do not prove a hosted caller run or task completion. Kee
 scope and expiry requirements. After caller adoption supplies Linux native
 prerequisites, adopt the reviewed new API pin separately, then publish native
 and Worker consumers. See [CI setup](../../../docs/ci-bootstrap.md).
+
+## Caller review source evidence
+
+At CLI head `92e423b67243b15e97a43c5ba4776057172d242c`, both admitted AI
+reports explicitly called the external-workflow comparison incomplete because
+the previous and proposed central implementations were missing. Wrapper success
+with no findings is not completed review. Keep the caller adoption tasks open.
+
+Include [exact plaintext source evidence](../../../docs/ci/shared-workflow-review/README.md)
+for both called workflows and their generator inputs in the ordinary committed
+consumer archive. Deduplicate only byte-identical Git blobs and retain their
+original paths, full revisions, content digests and MIT notice. Text suffixes
+and ordinary data modes keep the evidence outside executable workflow and
+product paths. It changes no caller, runtime, lock, gate or harness pin.
+
+Pass the normal hook and obtain fresh exact-head admission, hosted quality,
+two complete reviews and explicit approval before protected adoption. The
+central merge and retention receipt does not replace consumer acceptance.
