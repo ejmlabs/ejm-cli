@@ -387,6 +387,39 @@ mod tests {
     }
 
     #[test]
+    fn package_grants_do_not_shadow_global_provider_or_widget_options() {
+        let args = Args::try_parse_from([
+            "ejm-cli",
+            "--provider",
+            "responses",
+            "--widget",
+            "@example/host:status",
+            "package",
+            "enable",
+            "@example/workflow",
+            "--trust",
+            "--grant-provider",
+            "offline",
+            "--grant-widget",
+            "status",
+        ])
+        .unwrap();
+        assert_eq!(args.provider, ProviderKind::Responses);
+        assert_eq!(args.widget, ["@example/host:status"]);
+        assert!(matches!(
+            args.command,
+            Some(Command::Package {
+                command: crate::packages::PackageCommand::Enable {
+                    trust: true, grant_provider, grant_widget, ..
+                }
+            }) if grant_provider == ["offline"] && grant_widget == ["status"]
+        ));
+        assert!(
+            Args::try_parse_from(["ejm-cli", "package", "enable", "@example/workflow"]).is_err()
+        );
+    }
+
+    #[test]
     fn chatgpt_login_and_account_selection_do_not_accept_credentials() {
         let args = Args::try_parse_from([
             "ejm-cli",

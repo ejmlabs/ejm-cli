@@ -65,13 +65,19 @@ Read the matching project skill under `.agents/skills` before starting. Read onl
 | README, docs, help text, any claim | `ejm-cli-docs` |
 | The cli.ejmlabs.com page and its deploy | `ejm-cli-site` |
 | Repository, tags, CI variables, first public release | `ejm-cli-release` |
+| Explore a feature or bugfix before planning | `openspec-explore` |
+| Propose a change and its plan | `openspec-propose` |
+| Revise an existing change plan | `openspec-update-change` |
+| Implement planned tasks | `openspec-apply-change` |
+| Sync completed requirements to the main specs | `openspec-sync-specs` |
+| Archive a verified, completed change | `openspec-archive-change` |
 
 - Run `./scripts/check` before reporting a change complete. Local, pre-commit and CI use this command.
 - Rust warnings and Clippy all/pedantic are denied. Unsafe code is forbidden. Production unwrap/expect, explicit panic, unfinished markers, debug macros, manual process exit and forgotten allocations are denied.
 - Fix lint causes. Exceptions require a narrowly scoped expectation with a concrete reason. Do not weaken a workspace rule to pass a check.
 - Use ownership, enums, small modules and explicit `Result` paths. Traits belong at real variable seams. Do not add a dependency injection container or factories for a single implementation.
 - Keep Cargo.lock and tool pins current. New dependencies require boundary and license review.
-- If an `openspec/` directory is added by the user, follow its workflow for all feature and bugfix changes. Do not initialize OpenSpec without a request.
+- This project has an `openspec/` directory. Follow its workflow for all feature and bugfix changes: explore, propose, apply, update the plan as needed, sync specs and archive verified work.
 
 ## Working here with other agents
 
