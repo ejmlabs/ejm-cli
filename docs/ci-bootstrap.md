@@ -1,6 +1,6 @@
 # Relay publication prelude and CI setup
 
-## Published prelude and prepared caller adoption
+## Adopted setup hook and proposed completion guard
 
 The combined CI bootstrap, terminal input boundary and command foundation
 merged through CLI PR #2 as protected main commit
@@ -10,13 +10,19 @@ merged through CLI PR #2 as protected main commit
 needed by the next central hook. This is not an available relay or a claim of
 measured CI savings.
 
-This bounded prerequisite prepares both canonical caller `uses` pins and the
-release `standards-ref` together for reviewed central PR #11 implementation
-`ae903129564926a14287f75d2012610c59cccb65`. It preserves protected central
-main `d8b31f1debf095b104f6de76193bf531ec4ddd2c`, including its concurrent
-docs change. It keeps the CLI hook and adds fixed Linux D-Bus build setup for
-the harness quality profile. The earlier `5309137` and `0adffdf5` targets are
-obsolete history.
+CLI PR #3 then adopted the scoped shared setup hook as protected main
+`189170a37b3efab4e842266cb09d8aeeeb4d5d1b`, with tree
+`08da201dcc40a3911ace424948246010342d6876`. Its PR caller, release caller,
+and release `standards-ref` pin
+`ae903129564926a14287f75d2012610c59cccb65`.
+
+This follow-up changes those three references together to combined shared
+implementation `c4f2873ef0eef5bc3c7d75cf71fa3489a911d134`. Shared PR #14 adopted
+that retained implementation as protected main
+`d00d8bbc7231485eb918008c562d835f394e82ea`. It preserves the CLI setup hook
+and Linux harness prerequisites, and rejects an incomplete AI result even with
+no findings. Each pass must return JSON boolean `complete: true`. The earlier
+`5309137` and `0adffdf5` targets remain obsolete history.
 
 Central PR #11 passed its required checks and exact-head human approval, then
 merged through protected `main` as
@@ -25,8 +31,9 @@ tree `91b7f5c0990e27f2e0fdfcce26aac18afdcf6b81`. The exact reviewed
 implementation is retained at
 `refs/heads/workflow-pins/ae903129564926a14287f75d2012610c59cccb65` under
 active update/delete rule `25369476`, with no bypass actors. Protected main
-rules are unchanged. This completes the central prerequisite, not CLI caller
-adoption or its hosted checks. The previous caller revision is `5fae851502c2e3c31d4df9a44f8d56c2cb49e098`. Keep the
+rules were unchanged in that receipt. CLI PR #3 completed that caller adoption;
+it does not establish execution of the proposed completion guard. The earlier
+caller revision was `5fae851502c2e3c31d4df9a44f8d56c2cb49e098`. Keep the
 working harness pin unchanged at
 `4a751c6a3f24d7d143140f79ff53517fb93e3531`.
 
@@ -52,10 +59,12 @@ and the locked Playwright command `npm exec --no -- playwright install
 one step is skipped. A relay manifest without its lockfile fails installation.
 Tool installation needs network access and the hosted runner's package manager.
 
-The prior `5fae851502c2e3c31d4df9a44f8d56c2cb49e098` caller does not invoke
-this action. The retained `ae903129564926a14287f75d2012610c59cccb65` caller
+The prior `5fae851502c2e3c31d4df9a44f8d56c2cb49e098` caller did not invoke
+this action. The installed `ae903129564926a14287f75d2012610c59cccb65` caller
 adds its exact local-action step only for the admitted `ejm-cli` profile in the
 credential-free quality job, after Rust setup and before `./scripts/check`.
+The proposed `c4f2873ef0eef5bc3c7d75cf71fa3489a911d134` implementation retains
+that exact hook.
 The source release continues to use the same central release workflow, with
 its `uses` and `standards-ref` pointing to the same revision. Product permissions,
 triggers, secret forwarding and human controls are unchanged.
@@ -75,15 +84,16 @@ review a fresh clean-checkout gate for each proposed source snapshot.
 1. Confirm the reviewed local action is on trusted CLI `main`. The prelude
    receipt above records its protected merge; retain its exact action, working
    harness pin and lock through this prerequisite.
-2. Verify the central receipt above against the reviewed implementation at
-   all three pin sites. Its protected merge and immutable retention are
-   complete; keep the exact retained `ae903129` implementation. If a later
-   reviewed head changes, refresh all three CLI pin sites together and repeat
-   the required checks and retention review.
-3. Publish, admit, review and merge the paired PR/release caller update, with
-   the release `standards-ref` at the same revision and the working harness pin
-   unchanged. Obtain exact-source admitted Linux and macOS quality results
-   before claiming the setup hook works for the CLI.
+2. Check both exact retained implementations in the
+   [source evidence](ci/shared-workflow-review/README.md): installed
+   `ae903129564926a14287f75d2012610c59cccb65` and proposed
+   `c4f2873ef0eef5bc3c7d75cf71fa3489a911d134`. Verify canonical source identity
+   and retention protection. Keep all three proposed caller references equal.
+3. After ownership review, admit, review and merge the paired guard update
+   through normal protection, with the working harness pin unchanged. Obtain
+   fresh exact-source Linux and macOS quality results and inspect both actual
+   AI reports for completed scope. The adoption run uses the old validator;
+   test the installed completion guard through a later fresh admitted PR.
 4. Complete protected review of the required new private harness APIs. After the
    hook provides their Linux native prerequisites, adopt the full reviewed API
    commit in `.github/harness-revision` through its own protected change. Retain
@@ -127,13 +137,19 @@ complete that review or establish acceptance.
 
 The [shared workflow source evidence](ci/shared-workflow-review/README.md)
 supplies deduplicated exact plaintext copies of both implementations and their
-readable source, with full revisions, original paths, Git blob IDs and SHA-256
-receipts. These files are review data and add no execution authority. The
-caller pins, runtime, tools, locks and working harness pin stay unchanged.
+readable source, now rotating the installed `ae903129...` and proposed
+`c4f2873e...` pair in place. The manifest includes full revisions, trees,
+original paths and modes, Git blob IDs, and SHA-256 receipts. These files are
+review data and add no execution authority. This follow-up changes the three
+caller references; runtime, tools, locks and the working harness pin remain
+unchanged.
 
-This correction requires the normal hook and fresh admitted Linux/macOS quality
-checks and complete reviews for its new head. It establishes no new full-gate,
-PTY, hosted acceptance or public-site result by itself. Exact-head human approval
-and protected adoption remain required. This contributor CI guidance changes no
-product behavior; the relay source layer owns its public setup and recovery
-docs and their separate site publication.
+This local preparation checks exact source context, canonical standards and
+callers, actionlint, strict OpenSpec, affected documentation links, whitespace,
+and the full patch limits. It does not run the native, site or full product
+gate, make model calls, or start hosted workflows. Fresh admitted Linux/macOS
+quality checks, two complete actual reviews, exact-head human approval and
+protected adoption remain required. Source publication and first releases keep
+their separate gates. This contributor CI guidance changes no product behavior;
+the relay source layer owns its public setup and recovery docs and their separate
+site publication.
