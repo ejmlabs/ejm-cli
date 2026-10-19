@@ -64,4 +64,4 @@ Record measured latency and memory with hardware, compiler profile and workload.
 
 ## Project skills
 
-The skills in `.agents/skills` route implementation, review, terminal work, performance work and dependency/quality changes. Their frontmatter and references are checked by the gate. Keep them concise and specific to this project. Read only the skill that matches the task, and update the owning reference when a convention changes.
+The skills in `.agents/skills` route implementation, review, terminal and theme work, sign-in, packages, performance, testing, dependencies, the sibling harness, docs and claims, the marketing site, and releases. `AGENTS.md` lists which skill fits which task. The gate checks each skill's frontmatter and references, that the set matches `scripts/check_architecture.py`, and that `AGENTS.md` routes to every skill. Keep them concise and specific to this project. Read only the skill that matches the task, and update the owning reference when a convention changes. When you add a skill, add it to the check script and to the table in `AGENTS.md`.

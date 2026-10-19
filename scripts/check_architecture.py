@@ -20,7 +20,11 @@ ALLOWED_DEPENDENCIES = {
     # Reusable package installation/runtime ports and validated, portable manifests.
     "ejm-harness-packages", "ejm-harness-package-spec", "serde",
 }
-REQUIRED_SKILLS = {"ejm-cli-change", "ejm-cli-review", "ejm-cli-terminal", "ejm-cli-performance", "ejm-cli-dependencies"}
+REQUIRED_SKILLS = {
+    "ejm-cli-change", "ejm-cli-review", "ejm-cli-terminal", "ejm-cli-theme", "ejm-cli-auth",
+    "ejm-cli-packages", "ejm-cli-performance", "ejm-cli-testing", "ejm-cli-dependencies",
+    "ejm-cli-harness", "ejm-cli-docs", "ejm-cli-site", "ejm-cli-release",
+}
 
 
 def require(condition: bool, message: str) -> None:
@@ -79,7 +83,9 @@ def check_skills() -> None:
     skill_root = ROOT / ".agents/skills"
     skills = {path.parent.name for path in skill_root.glob("*/SKILL.md")}
     require(skills == REQUIRED_SKILLS, "Keep the skill routing inventory in sync with .agents/skills.")
+    routing = (ROOT / "AGENTS.md").read_text()
     for name in sorted(skills):
+        require(f"`{name}`" in routing, f"AGENTS.md must route to the {name} skill.")
         path = skill_root / name / "SKILL.md"
         text = path.read_text()
         require(text.startswith("---\n"), f"{path}: missing frontmatter")
