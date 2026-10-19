@@ -7,6 +7,7 @@ The relay and browser controller pass local checks but have no hosted CI result 
 ## What Changes
 
 - Publish reviewable CLI and dependency revisions through existing protected workflows, repair the scoped shared CI prerequisite hook, and record hosted results for exact revisions. Combine the bounded bootstrap, terminal and command foundations in one prelude that retains the current reviewed harness pin and callers; adopt the hook before the new harness API pin and its native consumers.
+- Prepare the reviewed native layer on actual protected CLI merge `61aa4b4b137180ba6d76210b2cb5321cdc59658c`, preserve the merged publication-guide consolidation, and bind its public API dependency to actual protected harness merge `220305fe4be7fecd33c3cf04b24f7a1b4b50503d`. Keep the earlier native local pass distinct from this revision's pending local, hosted and protected product acceptance.
 - Configure one Cloudflare Worker for the relay and protected browser UI, a dedicated D1 database, SQLite Durable Objects, the exact HTTPS origin, and safe production assets.
 - Keep payments and commercial collection disabled. Keep account admission closed until dedicated OAuth credentials and reviewed operational notices are configured, then start with two accounts.
 - Bound scheduled database work to the provider's free per-invocation limits and retain retryable work across scheduled invocations.

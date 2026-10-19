@@ -23,56 +23,67 @@ use crate::{
     args::Args,
     commands,
     extensions::Extensions,
+    remote::{backend::LocalBackend, host_ui::HostUi},
     render,
     terminal::{Modes, accepts_key},
 };
 
 pub async fn run(harness: Harness, args: &Args, extensions: &Extensions) -> Result<()> {
+    let harness = LocalBackend::new(harness);
+    let mut remote = HostUi::prepare(args).await?;
     let mut events = harness.subscribe();
-    let session = if let Some(id) = &args.session {
-        find_session(&harness, id).await?
-    } else {
-        let cwd = args.cwd()?;
-        let title = workspace_title(&cwd);
-        harness
-            .create_session(SessionOptions { cwd, title })
-            .await?
-    };
-    let mut app = load_session(&harness, session).await?;
-    app.palette = extensions.palette;
-    app.commands = commands::catalog(&extensions.commands());
-    if extensions.count() > 0 {
-        app.notice(format!(
-            "{} trusted native packages enabled. /extensions shows grants.",
-            extensions.count()
-        ));
-    }
+    let mut app = initial_app(&harness, args, extensions).await?;
     let mut extension_tasks = ExtensionTasks::default();
     let mut widget_tick = tokio::time::interval(Duration::from_secs(1));
     widget_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut terminal = TerminalGuard::enter()?;
+    if let Some(role) = crate::remote::host_role(args) {
+        remote.share(&harness, args, &app.session.id, role).await?;
+        if remote.has_panel() {
+            terminal.reset_input()?;
+        }
+    }
     let mut tick = tokio::time::interval(Duration::from_millis(32));
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut last_status_draw = Instant::now();
     let shutdown = termination_signal();
     tokio::pin!(shutdown);
-    loop {
+    'events: loop {
         tokio::select! {
-            () = &mut shutdown => return Ok(()),
+            () = &mut shutdown => break,
             _ = tick.tick() => {
+                let private_panel = remote.has_panel();
+                remote.poll(&mut app, &harness, crate::remote::now_ms()?).await;
+                if private_panel != remote.has_panel() { terminal.reset_input()?; }
+                harness.settle(crate::remote::now_ms()?).await?;
                 for _ in 0..64 {
                     if !terminal.poll_input()? { break; }
                     let input = terminal.read_input()?;
+                    if remote.handle_panel(&input) {
+                        app.dirty = true;
+                        if !remote.has_panel() { terminal.reset_input()?; break; }
+                        continue;
+                    }
+                    if HostUi::is_command(&input, &app) {
+                        match remote.command(&app.composer.text, &harness, args, &app.session.id).await {
+                            Ok(message) => { app.composer.take(); if let Some(message) = message { app.notice(message); } }
+                            Err(error) => app.error(format!("{error:#}")),
+                        }
+                        if remote.has_panel() { terminal.reset_input()?; break; }
+                        continue;
+                    }
                     match handle_input(input, &mut app, &harness, args, extensions, &mut extension_tasks).await {
-                        Ok(true) => return Ok(()),
+                        Ok(true) => break 'events,
                         Ok(false) => {},
                         Err(error) => app.error(format!("{error:#}")),
                     }
+                    if remote.session_changed(&app.session.id) {
+                        remote.stop(&harness).await;
+                        app.notice("Sharing ended because the selected session changed.");
+                    }
                 }
                 if app.dirty || (app.is_running() && last_status_draw.elapsed() >= Duration::from_millis(250)) {
-                    let snapshot = harness.status().await;
-                    terminal.terminal.draw(|frame| render::draw(frame, &mut app, args, &snapshot))?;
-                    app.dirty = false;
+                    draw_app(&mut terminal, &mut app, args, &remote, &harness).await?;
                     last_status_draw = Instant::now();
                 }
             }
@@ -81,7 +92,7 @@ pub async fn run(harness: Harness, args: &Args, extensions: &Extensions) -> Resu
                 Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
                     recover_events(&harness, &mut app).await?;
                 }
-                Err(tokio::sync::broadcast::error::RecvError::Closed) => return Ok(()),
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
             },
             _ = widget_tick.tick(), if extensions.has_widgets() && !extension_tasks.widget_active && !extension_tasks.widgets_paused => {
                 extension_tasks.widget_active = true;
@@ -90,28 +101,57 @@ pub async fn run(harness: Harness, args: &Args, extensions: &Extensions) -> Resu
                 extension_tasks.jobs.spawn(async move { ExtensionReply::Widgets(extensions.widgets(context).await) });
             }
             reply = extension_tasks.jobs.join_next(), if !extension_tasks.jobs.is_empty() => {
-                match reply {
-                    Some(Ok(ExtensionReply::Widgets(result))) => {
-                        extension_tasks.widget_active = false;
-                        match result { Ok(lines) => app.widget_lines = lines, Err(error) => { extension_tasks.widgets_paused = true; app.widget_lines = vec![format!("Widget paused: {}. /widgets resume to retry.", render::safe_text(&error.to_string()))]; } }
-                    }
-                    Some(Ok(ExtensionReply::Command(result))) => {
-                        extension_tasks.command_active = false;
-                        match result { Ok(text) => app.notice(text), Err(error) => app.error(format!("{error:#}")) }
-                    }
-                    Some(Err(error)) => { extension_tasks.widget_active = false; extension_tasks.command_active = false; app.error(format!("Extension task failed: {error}")); }
-                    None => {}
-                }
+                apply_extension_reply(reply, &mut extension_tasks, &mut app);
                 app.dirty = true;
             }
         }
     }
+    remote.stop(&harness).await;
+    Ok(())
+}
+
+async fn initial_app(harness: &LocalBackend, args: &Args, extensions: &Extensions) -> Result<App> {
+    let session = if let Some(id) = &args.session {
+        find_session(harness, id).await?
+    } else {
+        let cwd = args.cwd()?;
+        let title = workspace_title(&cwd);
+        harness
+            .create_session(SessionOptions { cwd, title })
+            .await?
+    };
+    let mut app = load_session(harness, session).await?;
+    app.palette = extensions.palette;
+    app.commands = commands::catalog(&extensions.commands());
+    if extensions.count() > 0 {
+        app.notice(format!(
+            "{} trusted native packages enabled. /extensions shows grants.",
+            extensions.count()
+        ));
+    }
+    Ok(app)
+}
+
+async fn draw_app(
+    terminal: &mut TerminalGuard,
+    app: &mut App,
+    args: &Args,
+    remote: &HostUi,
+    harness: &LocalBackend,
+) -> Result<()> {
+    let snapshot = harness.status().await;
+    terminal.terminal.draw(|frame| {
+        render::draw(frame, app, args, &snapshot);
+        remote.draw(frame);
+    })?;
+    app.dirty = false;
+    Ok(())
 }
 
 async fn handle_input(
     input: InputEvent,
     app: &mut App,
-    harness: &Harness,
+    harness: &LocalBackend,
     args: &Args,
     extensions: &Extensions,
     extension_tasks: &mut ExtensionTasks,
@@ -263,7 +303,7 @@ pub(crate) fn edit_composer(key: KeyEvent, app: &mut App) {
     }
 }
 
-async fn handle_overlay_key(key: KeyEvent, app: &mut App, harness: &Harness) -> Result<bool> {
+async fn handle_overlay_key(key: KeyEvent, app: &mut App, harness: &LocalBackend) -> Result<bool> {
     match key.code {
         KeyCode::Esc => app.overlay = None,
         KeyCode::Up | KeyCode::Down | KeyCode::PageUp | KeyCode::PageDown => {
@@ -313,7 +353,7 @@ async fn handle_overlay_key(key: KeyEvent, app: &mut App, harness: &Harness) -> 
 async fn submit(
     text: String,
     app: &mut App,
-    harness: &Harness,
+    harness: &LocalBackend,
     args: &Args,
     extensions: &Extensions,
     extension_tasks: &mut ExtensionTasks,
@@ -324,6 +364,7 @@ async fn submit(
         let value = command.value;
         match name {
             "help" => app.overlay = Some(Overlay::Help { selected: 0 }),
+            "status" => show_status(app, harness, args).await,
             "quit" | "exit" => return Ok(true),
             "sessions" | "agents" => open_sessions(app, harness).await?,
             "new" => {
@@ -378,6 +419,17 @@ async fn submit(
     Ok(false)
 }
 
+async fn show_status(app: &mut App, harness: &LocalBackend, args: &Args) {
+    let status = harness.status().await;
+    app.notice(format!(
+        "Connection: {}\nModel: {}\nAccount: {}\nSession: {}\nGrants: {}\nAgents: {} active\nModels: {} active, {} queued\nTools: {} active, {} queued",
+        if app.connection_ready { "ready" } else { "not connected" },
+        args.provider_label(), args.account.as_deref().unwrap_or("environment or none"),
+        app.session.id, args.grants(), status.active_agents, status.model_requests,
+        status.waiting_model_requests, status.tools.running, status.tools.queued,
+    ));
+}
+
 #[derive(Default)]
 struct ExtensionTasks {
     jobs: JoinSet<ExtensionReply>,
@@ -391,11 +443,46 @@ enum ExtensionReply {
     Widgets(Result<Vec<String>>),
 }
 
+fn apply_extension_reply(
+    reply: Option<Result<ExtensionReply, tokio::task::JoinError>>,
+    extension_tasks: &mut ExtensionTasks,
+    app: &mut App,
+) {
+    match reply {
+        Some(Ok(ExtensionReply::Widgets(result))) => {
+            extension_tasks.widget_active = false;
+            match result {
+                Ok(lines) => app.widget_lines = lines,
+                Err(error) => {
+                    extension_tasks.widgets_paused = true;
+                    app.widget_lines = vec![format!(
+                        "Widget paused: {}. /widgets resume to retry.",
+                        render::safe_text(&error.to_string())
+                    )];
+                }
+            }
+        }
+        Some(Ok(ExtensionReply::Command(result))) => {
+            extension_tasks.command_active = false;
+            match result {
+                Ok(text) => app.notice(text),
+                Err(error) => app.error(format!("{error:#}")),
+            }
+        }
+        Some(Err(error)) => {
+            extension_tasks.widget_active = false;
+            extension_tasks.command_active = false;
+            app.error(format!("Extension task failed: {error}"));
+        }
+        None => {}
+    }
+}
+
 async fn extension_command(
     name: &str,
     value: &str,
     app: &mut App,
-    harness: &Harness,
+    harness: &LocalBackend,
     extensions: &Extensions,
     tasks: &mut ExtensionTasks,
 ) -> Result<()> {
@@ -484,7 +571,7 @@ async fn extension_command(
     Ok(())
 }
 
-async fn open_sessions(app: &mut App, harness: &Harness) -> Result<()> {
+async fn open_sessions(app: &mut App, harness: &LocalBackend) -> Result<()> {
     let sessions = harness.list_sessions().await?;
     let selected = sessions
         .iter()
@@ -494,7 +581,7 @@ async fn open_sessions(app: &mut App, harness: &Harness) -> Result<()> {
     Ok(())
 }
 
-async fn find_session(harness: &Harness, id: &str) -> Result<Session> {
+async fn find_session(harness: &LocalBackend, id: &str) -> Result<Session> {
     let sessions = harness.list_sessions().await?;
     let matches = sessions
         .into_iter()
@@ -517,18 +604,11 @@ fn workspace_title(cwd: &std::path::Path) -> String {
         .unwrap_or_else(|| "Workspace".into())
 }
 
-async fn load_session(harness: &Harness, session: Session) -> Result<App> {
-    let mut app = App::new(session);
-    recover_events(harness, &mut app).await?;
-    app.run_state = if app.session.status == ejm_harness::SessionStatus::Running {
-        RunState::Running
-    } else {
-        RunState::Idle
-    };
-    Ok(app)
+async fn load_session(harness: &LocalBackend, session: Session) -> Result<App> {
+    crate::remote::backend::load_app(harness, session).await
 }
 
-async fn termination_signal() {
+pub(crate) async fn termination_signal() {
     #[cfg(unix)]
     {
         if let Ok(mut terminate) =
@@ -544,7 +624,7 @@ async fn termination_signal() {
     let _ = tokio::signal::ctrl_c().await;
 }
 
-async fn recover_events(harness: &Harness, app: &mut App) -> Result<()> {
+async fn recover_events(harness: &LocalBackend, app: &mut App) -> Result<()> {
     loop {
         let page = harness
             .events(&app.session.id, app.last_sequence, 512)
@@ -563,14 +643,14 @@ async fn recover_events(harness: &Harness, app: &mut App) -> Result<()> {
 static PANIC_HOOK: std::sync::Once = std::sync::Once::new();
 static PANIC_BASELINE: std::sync::Mutex<Option<Modes>> = std::sync::Mutex::new(None);
 
-struct TerminalGuard {
-    terminal: Terminal<CrosstermBackend<Stdout>>,
+pub(crate) struct TerminalGuard {
+    pub(crate) terminal: Terminal<CrosstermBackend<Stdout>>,
     baseline: Modes,
     input: crate::terminal_input::Input,
 }
 
 impl TerminalGuard {
-    fn enter() -> Result<Self> {
+    pub(crate) fn enter() -> Result<Self> {
         let baseline = Modes::capture()?;
         *PANIC_BASELINE
             .lock()
@@ -627,15 +707,15 @@ impl TerminalGuard {
         }
     }
 
-    fn poll_input(&mut self) -> Result<bool> {
+    pub(crate) fn poll_input(&mut self) -> Result<bool> {
         self.input.poll()
     }
 
-    fn read_input(&mut self) -> Result<InputEvent> {
+    pub(crate) fn read_input(&mut self) -> Result<InputEvent> {
         self.input.read()
     }
 
-    fn reset_input(&mut self) -> Result<()> {
+    pub(crate) fn reset_input(&mut self) -> Result<()> {
         self.input.reset()
     }
 }
@@ -677,7 +757,7 @@ mod tests {
 
     struct TestUi {
         _state: tempfile::TempDir,
-        harness: Harness,
+        harness: LocalBackend,
         app: App,
         args: Args,
         extensions: Extensions,
@@ -714,7 +794,7 @@ mod tests {
             Self {
                 args,
                 _state: state,
-                harness,
+                harness: LocalBackend::new(harness),
                 app: App::new(session),
                 extensions: Extensions::empty().unwrap(),
                 extension_tasks: ExtensionTasks::default(),
@@ -743,6 +823,7 @@ mod tests {
     async fn slash_picker_completes_without_running_and_escape_preserves_draft() {
         let mut ui = TestUi::new().await;
         ui.app.composer.insert("/s");
+        ui.key(KeyCode::Down).await.unwrap();
         ui.key(KeyCode::Down).await.unwrap();
         ui.key(KeyCode::Tab).await.unwrap();
         assert_eq!(ui.app.composer.text, "/steer ");
@@ -821,6 +902,8 @@ mod tests {
         ui.app.widget_lines = vec!["fixture widget".into()];
         ui.app.composer.replace("/help");
         ui.key(KeyCode::Enter).await.unwrap();
+        ui.key(KeyCode::Down).await.unwrap();
+        ui.key(KeyCode::Down).await.unwrap();
         ui.key(KeyCode::Down).await.unwrap();
         ui.key(KeyCode::Enter).await.unwrap();
         assert_eq!(ui.app.composer.text, "/new ");

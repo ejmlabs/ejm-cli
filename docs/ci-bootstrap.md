@@ -7,8 +7,10 @@ command parsing, completion, and Help selection for implemented built-ins and
 granted package commands. Clap parses command names and argument counts;
 Ratatui renders the picker and Help. These remain CLI interaction and bounded
 view state. `ejm-harness` owns provider transport, authentication mechanics,
-tools, and run policy through its public APIs. Remote control and provider or
-account switching inside the TUI belong to later source layers.
+tools, and run policy through its public APIs. The
+[native remote source layer](native-remote-publication.md) adds host and
+controller interaction through those public APIs. Worker/browser source and
+provider or account switching inside the TUI belong to later source layers.
 
 Use the reviewed harness revision in `.github/harness-revision` and the locked
 dependency graph. Review any dependency or lock change with its owning source;
@@ -73,17 +75,21 @@ implementation is retained at
 active update/delete rule `25369476`, with no bypass actors. Protected main
 rules were unchanged in that receipt. CLI PR #3 completed the setup-hook adoption.
 PR #4 installed the completion guard, but its adoption run still used the old
-schema. Fresh installed-guard execution remains pending; see the
+schema. Fresh execution was pending at that cutoff; the PR #7 receipt below
+records later complete reports through installed C4. See the
 [adoption receipt](#cli-pr-4-adoption-receipt). The earlier
-caller revision was `5fae851502c2e3c31d4df9a44f8d56c2cb49e098`. Keep the
-working harness pin unchanged at
-`4a751c6a3f24d7d143140f79ff53517fb93e3531`.
+caller revision was `5fae851502c2e3c31d4df9a44f8d56c2cb49e098`. That caller-only
+adoption kept working harness pin
+`4a751c6a3f24d7d143140f79ff53517fb93e3531` unchanged. The following
+[native source preparation](native-remote-publication.md) records its separate
+protected API dependency and unverified consumer graph.
 
 The [deployment change](../openspec/changes/deploy-private-remote-relay/proposal.md)
 tracks the full release. All its tasks remain open in this source preparation.
-The caller update adds no product code or new harness API consumer. The action,
-locks, provider composition, account storage and CLI arguments match protected
-main. See the [source scope and local checks](#source-scope-and-local-checks) and
+At that caller-only cutoff, the update added no product code or new harness API
+consumer. Its action, locks, provider composition, account storage and CLI
+arguments matched its protected parent. See the
+[source scope and local checks](#source-scope-and-local-checks) and
 [terminal boundary](terminal-input.md) for the earlier source layers.
 
 ## What the action prepares
@@ -111,8 +117,9 @@ The source release continues to use the same central release workflow, with
 its `uses` and `standards-ref` pointing to the same revision. Product permissions,
 triggers, secret forwarding and human controls are unchanged.
 
-The CLI gate at this cutoff uses Rust and Python and keeps the working harness
-pin. It does not yet contain the native API consumers or Worker/browser source.
+The caller-only cutoff used Rust and Python and kept the working harness pin.
+The following native layer adds public API consumers and their PTY gate; it
+still excludes Worker/browser source.
 The hook installs Linux D-Bus build prerequisites before the later API pin
 adoption; the browser install step skips only when the relay manifest is absent.
 A manifest without its lock still fails.
@@ -181,12 +188,12 @@ gate and hosted run
 [`39309188976`](https://github.com/ejmlabs/ejm-cli/actions/runs/39309188976),
 including both actual complete AI reports with no findings. Protected main
 advanced to `e1efe7b5c05d090ccfb164bef70456429030b9d0` through PR #6 before
-selector adoption. A normal merge preserves that publication-guide
+selector adoption. The normal merge preserved that publication-guide
 consolidation and the standalone guide deletion. Those earlier results remain
-historical; the merged source needs fresh local and exact-head hosted checks.
-Protected main's three shared references use
-`c4f2873ef0eef5bc3c7d75cf71fa3489a911d134`. The proposed PR caller,
-draft-release caller and release `standards-ref` advance together to
+historical; the completed PR #7 receipt below binds the later revision.
+Before PR #7, protected main's three shared references used
+`c4f2873ef0eef5bc3c7d75cf71fa3489a911d134`. PR #7's PR caller,
+draft-release caller and release `standards-ref` advanced together to
 `b2e43c9b9ba814e6d3681d86c88830f3c0b11a3c`. Central PR #16 protected-merged
 the reviewed implementation as
 `49df106b82cfd703411b3595a82cd4d597ed0933`. Before this source preparation,
@@ -206,7 +213,7 @@ as [dated history](ci/shared-workflow-review/README.md), with its shared MIT
 notice. Keeping those files avoids a deletion/addition patch above the
 admission byte limit when rename detection is unavailable.
 
-For CLI changes, the proposed selector reads `.github/harness-revision` from
+For CLI changes, the installed selector reads `.github/harness-revision` from
 the exact admitted Git commit. It accepts a full lowercase 40-character SHA
 only from an ordinary small Git blob. It then uses bounded, redirect-free
 GitHub reads for the fixed `ejmlabs/ejm-harness` repository. The selected commit
@@ -221,25 +228,41 @@ credential. IDE selection keeps its trusted-base behavior. Draft release
 invocation and permissions stay unchanged; its generated payload includes the
 updated shared preparation library.
 
-This change keeps `.github/harness-revision` at
-`4a751c6a3f24d7d143140f79ff53517fb93e3531` and preserves `Cargo.lock`
-byte-for-byte. It changes no product runtime, dependency version, setup action,
+The caller-only change kept `.github/harness-revision` at
+`4a751c6a3f24d7d143140f79ff53517fb93e3531` and preserved `Cargo.lock`
+byte-for-byte. It changed no product runtime, dependency version, setup action,
 tool pin, credential, permission or admission/approval gate. The owner's
-existing public standards tasks and rollout records remain unchanged.
+public standards tasks and rollout records remained unchanged.
 
 Run the normal local gate and exact-head hosted Linux/macOS Quality and
 standards checks for this caller change. Require both actual independent
 reports to state `complete: true`, all aggregate statuses, separate exact-head
-approval and normal protected merge. This PR is admitted through installed C4;
+approval and normal protected merge. PR #7 ran through installed C4;
 its results cannot establish hosted execution of b2. After protected adoption,
 a fresh admitted CLI change must confirm that b2 records the actual selected
 commit/tree, protected-main authority and archive digest used by quality.
 Only then claim installed-selector acceptance. Later API pin and matching
 lockfile adoption remain separate from this caller change and may provide
 that execution evidence through their own full gates. Local product gates,
-hosted acceptance, protected adoption and that later installed-selector check
-remain pending in this source preparation. No product page, relay deployment,
-release or site publication changes are part of it.
+hosted acceptance and protected adoption of the caller are recorded below.
+The later installed-selector check remains pending. No product page, relay
+deployment, release or site publication was part of that caller-only change.
+
+### CLI PR #7 selector adoption receipt
+
+On 2026-10-19, [CLI PR #7](https://github.com/ejmlabs/ejm-cli/pull/7)
+protected-squash merged approved head
+`dd0b1fb72e399623458debef8bc28554407c789a` as
+`61aa4b4b137180ba6d76210b2cb5321cdc59658c`, tree
+`504892783c5b2b49db490582f4a11a782b8542df`, with sole parent
+`e1efe7b5c05d090ccfb164bef70456429030b9d0` and unchanged protection.
+[Fresh run `39317164563`](https://github.com/ejmlabs/ejm-cli/actions/runs/39317164563)
+passed Ubuntu/macOS quality, standards and required technical statuses; both
+actual independent reports state `complete: true` with no findings. Exact-head
+human approval and native approval then passed before protected merge.
+That caller source still used harness `4a751c6a...`; it does not prove the
+following native API pair. The native revision must prove actual B2 selection
+of protected harness `220305fe...`, its tree and archive digest in a fresh run.
 
 ## Verification and publication record
 

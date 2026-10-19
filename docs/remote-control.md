@@ -1,0 +1,217 @@
+# Remote control
+
+Remote access shares one selected CLI session through an account-gated relay.
+Local CLI use needs no relay account. This publication candidate contains the
+native host and controller source only. Its resolved dependency lock is carried
+unchanged from the reviewed native source. Its pin names actual protected
+harness API merge `220305fe4be7fecd33c3cf04b24f7a1b4b50503d` on actual
+protected CLI parent `61aa4b4b137180ba6d76210b2cb5321cdc59658c`.
+The earlier native local pass is historical; this revision has not been built
+or exercised. A compatible account service is required; no relay or
+browser UI is included here. See [candidate status](native-remote-publication.md)
+for the remaining gates. These instructions describe the intended native
+workflow after those prerequisites pass.
+
+## Sign in and host
+
+Set your operator's HTTPS origin. There is no built-in relay endpoint:
+
+```sh
+export EJM_CLI_RELAY_URL=https://YOUR-RELAY
+ejm-cli remote migrate-credentials
+ejm-cli remote login
+ejm-cli --replay remote host
+```
+
+Before first persistent use, stop older host/controller processes and run the
+preparation command, even on a fresh installation. Confirm locally only after
+those writers have stopped. It preserves any legacy identity or creates a new
+one when none exists. See the recovery steps below.
+
+Sign in through GitHub, approve the device code you requested, and accept the
+relay service terms. The relay requests the verified primary email with the
+GitHub email scope. Provider and package-registry accounts remain separate.
+The host and controller must use the same relay account.
+
+Hosting grants **view access by default**. To grant prompt submission,
+steering, queueing and cancellation:
+
+```sh
+ejm-cli --replay remote host --control
+```
+
+Replay is an offline echo provider. Omit `--replay` and configure a model
+to use a real provider. The host's existing file grants, approvals and tool
+policy apply to all remotely requested work.
+
+The host shows a private invitation on its alternate screen. It stays out of
+arguments, composer history and durable events. Transfer it over a private
+channel. First pairing expires after five minutes. The share lasts at most
+eight hours. Compare the controller's full fingerprint on both endpoints,
+then press Y on the host. Account recovery never replaces this confirmation.
+
+In a normal local TUI, after endpoint preparation and a saved relay login, use:
+
+| Action | Command |
+| --- | --- |
+| Share read-only | `/remote share` or `/remote share view` |
+| Grant control | `/remote share control` |
+| Inspect sharing | `/remote status` |
+| Revoke sharing | `/remote stop` |
+
+The sharing badge remains visible after the invitation panel closes.
+Switching the selected session or exiting the host stops sharing. Stopping
+discards prompts still in the remote queue. A run that already started
+continues locally unless the host cancels it.
+
+## Native controller
+
+```sh
+ejm-cli remote migrate-credentials
+ejm-cli remote login
+ejm-cli remote connect
+```
+
+Paste the invitation only into the protected prompt. The controller prints its
+public fingerprint for comparison. It never opens a model provider, file
+tools or a local harness journal.
+
+With control access, enter a prompt to start a turn. During a turn, ordinary
+Enter queues a prompt. `/steer TEXT` or Ctrl+K steers that exact run.
+`/stop` or Ctrl+C cancels that run. View access permits no mutation.
+Use `/status` to refresh retained events and check a pending result.
+Use `/quit` to leave.
+
+Every action names the expected session, run and event cursor. A run-state
+change invalidates an older view, including an intervening completed turn.
+Output-only progress keeps controls valid for the same exact run. A future
+cursor fails. The controller retains a failed draft; refresh and inspect the
+current session before choosing a new action.
+
+Reconnect uses a fresh encrypted handshake, restores retained events and asks
+for pending results. It never repeats a mutation. An unknown result can mean an
+action ran but its cached result was evicted. Inspect the output before making
+another request. After retries end, the terminal keeps the draft until you quit.
+
+## Credentials and recovery
+
+Native relay tokens and endpoint identity keys use the public harness encrypted
+vault at the state directory's `auth` root. macOS Keychain, Windows Credential
+Manager or an unlocked Linux Secret Service protects its key. The harness owns
+native access controls, locking, authenticated encryption and atomic writes.
+Linux needs the distribution's libdbus, a session D-Bus and an unlocked Secret
+Service. A locked, denied or corrupt store fails closed. Restore the original
+native key and vault together if key access is lost; do not generate a
+replacement key for an existing encrypted vault. There is no plaintext fallback.
+Without native key access, use an explicit temporary sign-in and identity in the
+foreground process:
+
+```sh
+ejm-cli --memory-only --replay remote host --control
+ejm-cli --memory-only remote connect
+```
+
+Each command signs in for that process. A standalone memory-only login ends
+when its process exits. Saved metadata contains only relay origin, account ID
+and device ID. One local state directory caches one relay account at a time.
+Each HTTPS origin has a separate credential namespace, with distinct
+`device-session` and `endpoint-identity` purposes under `ejm-cli-relay`. Provider
+and registry credentials cannot be used for relay access. Account/device
+metadata is bound inside the encrypted token record as well as the separate
+non-secret cache. Mismatched metadata requires sign-in again.
+
+### Prepare or upgrade persistent relay credentials
+
+Run this preparation once per relay origin before persistent host or controller
+use, including on a fresh installation. Normal endpoint loading reads only the
+vault and never probes individual legacy OS entries.
+
+1. Stop every older host and controller process that could write this origin's
+   keyring entries. The new vault lock does not exclude those older clients.
+2. Run `ejm-cli remote migrate-credentials` and confirm locally that the older
+   writers have stopped. Declining leaves both stores unchanged.
+3. Keep the existing state directory, including `relay-account.json`, until
+   migration finishes. Import retains the origin, account ID, device ID and
+   endpoint fingerprint. If no legacy or destination identity exists, this step
+   creates one. Conflicting destinations fail without legacy deletion.
+4. The CLI commits and reloads the destination and migration markers before
+   deleting legacy `relay-account-v1/device-session` and
+   `identity/native-noise-v1` entries. If cleanup fails, keep using the vault and
+   retry migration while older writers remain stopped.
+
+Logout removes the token and retains its migration marker, so leftover legacy
+tokens cannot be imported again. A missing marked endpoint key requires
+recovery, rather than silent identity replacement. Direct downgrade to an older
+writer is unsupported. If older writers cannot be stopped, defer the upgrade or
+explicitly choose a new memory-only foreground session. Memory-only mode never
+imports or saves credentials and creates a fresh endpoint identity each time.
+
+```sh
+ejm-cli remote accounts
+ejm-cli remote devices
+ejm-cli remote devices --revoke DEVICE_ID
+ejm-cli remote logout
+```
+
+Logout requests server revocation and removes the local credential. A network
+failure is reported as unconfirmed revocation. Use your operator's account page,
+when available, to revoke it when the service returns. Active relay leases last
+at most fifteen minutes;
+explicit room stop closes them sooner. Recovering an account grants relay
+admission only. It cannot recover a native private key or existing share key.
+
+## Encryption and trust
+
+Native endpoints use `Noise_XXpsk3_25519_ChaChaPoly_SHA256` through Snow 0.10.
+The invitation binds protocol version, relay origin, random routing ID, role,
+host public key, pairing deadline and a random 256-bit PSK. The controller
+pins the host key, and the host confirms and pins the first controller.
+Reconnect retains that pin while creating fresh ephemeral channel keys.
+Tampered, replayed, downgraded or wrong-key frames close the channel.
+
+The relay and Cloudflare terminate HTTPS but forward only handshake bytes and
+application ciphertext. They can observe account identity, coarse devices,
+addresses visible to the network, timing, size, routing IDs and connection
+activity. They can deny service and see a host public identity through an
+active Noise handshake. They cannot recover honest native endpoint stream
+plaintext from the forwarding protocol.
+
+A compromised endpoint or altered client can read its own plaintext. The
+native installation and update channel must be trusted. This source
+includes local contract tests, but this extracted tree has no runtime result.
+Snow states that it has not received a formal audit. Reachable
+invitation/plaintext buffers are cleared where practical; Snow does not promise
+forensic erasure of all internal key state.
+
+## Bounds and wire compatibility
+
+The wire protocol is version 1. Unsupported versions fail closed. Peers must
+use compatible versions. The native client sends each one-use connection ticket
+in a sensitive Authorization header. Neither tickets nor invitations belong in
+URLs or logs.
+
+Limits include 16 KiB ciphertext frames, 1 MiB message assembly, 512 events per
+replay page, 64 KiB prompts, eight queued remote prompts and a 128-result
+mutation cache. The host's mutation high-water mark survives cache eviction
+for the share. Every encrypted snapshot supplies that mark so a returning
+controller starts above it. Action numbers are bounded to the JavaScript
+safe-integer range. Old request IDs cannot execute again. Oversized output produces
+an explicit gap; the view remains bounded. Event cursors recover retained
+output, not omitted or deleted history.
+
+## Relay prerequisites and evidence
+
+The service must implement compatible account/device authorization, one-use
+header tickets, room admission, stop and revocation routes, and bounded
+WebSocket forwarding. Host and controller use the same relay account. Native
+account requests verify HTTPS certificates and refuse redirects. Native
+transport uses WSS and certificate validation. The loopback HTTP exception is
+compiled only for local tests.
+
+Relay operation, browser delivery, account capacity, daily quotas, payment and
+commercial policies belong to the separate Worker/browser publication layer.
+This source preparation does not deploy that service or activate data collection.
+Free hosting and production latency have not been measured for this candidate.
+See [native dependencies](remote-dependencies.md) and
+[publication gates](native-remote-publication.md). There is no claim that a live
+service, public binary or updated docs site is available.

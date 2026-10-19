@@ -51,7 +51,7 @@ ejm-cli logout REGISTRATION
 
 An account selector accepts a full registration ID or a unique prefix. If several accounts are saved, choose one explicitly. `accounts` reads cached metadata without contacting the provider. `models` retrieves the selected account's current model catalog. When `--model` and `EJM_CLI_MODEL` are absent, ChatGPT selects the first model from that catalog. Logout removes the saved registration and attempts provider revocation, reporting when revocation is unconfirmed.
 
-Credentials live under the configured state directory's `auth` subdirectory. On Unix, the store enforces owner-only directory and file permissions, atomic writes and cross-process locking. This is a private local file store, not an encrypted keychain. Account storage fails closed on platforms without supported private-file handling. Keep the entire state directory private.
+Credentials live under the configured state directory's `auth` subdirectory. The required shared-vault harness revision encrypts provider and native relay records and protects its key with the native key service. It owns private paths, locking and atomic writes. Unavailable, denied or corrupt key access fails closed. Keep the original vault and native key together for recovery, and keep the entire state directory private. The candidate still requires that exact harness revision and its locked platform checks before adoption; see [dependency integration](native-remote-publication.md#dependency-integration).
 
 Native OpenAI Responses access with an API key uses:
 
@@ -107,6 +107,8 @@ Terminals vary in how they encode modifier keys. Ctrl+J is the newline fallback 
 | Command | Action |
 | --- | --- |
 | `/help` | Show keys and choose a command to complete |
+| `/status` | Show local connection, account, session, grants and work metadata |
+| `/remote share [view\|control]`, `/remote status`, `/remote stop` | Share the selected session, inspect it or revoke sharing |
 | `/new [title]` | Create a session in the configured workspace |
 | `/sessions` | Choose a saved session |
 | `/agents` | Choose among managed sessions |
@@ -124,6 +126,41 @@ Terminals vary in how they encode modifier keys. Ctrl+J is the newline fallback 
 Switching sessions keeps the composer draft and sent-message history, selected
 package palette, command catalog and widget lines. Other runs remain managed by
 the same ejm-harness. `/stop` targets the selected session. Exiting cancels and drains all runs owned by this CLI process.
+
+## Native remote access
+
+The native source candidate requires a compatible separately operated relay and
+an account on that service. It pins the actual protected harness API merge;
+it now has protected CLI parent `61aa4b4b137180ba6d76210b2cb5321cdc59658c`.
+The earlier native local pass does not replace this revision's local and hosted
+checks. See [publication status](native-remote-publication.md). There is
+no built-in service origin. Select an explicit HTTPS origin with `--relay` or
+`EJM_CLI_RELAY_URL`. `--memory-only` keeps this foreground process's relay token
+and endpoint identity out of persistent storage.
+
+| Command | Purpose |
+| --- | --- |
+| `remote migrate-credentials` | Prepare persistent secrets after stopping older writers, even on a fresh installation |
+| `remote login [--no-browser]` | Approve a relay device sign-in through the browser |
+| `remote accounts` | Read cached relay account metadata without contacting the service |
+| `remote devices [--revoke DEVICE_ID]` | List account devices or revoke one |
+| `remote logout` | Remove the local token and request relay revocation |
+| `remote host [--control]` | Share the selected local TUI session, read-only unless control is granted |
+| `remote connect` | Read a private invitation in a protected terminal and control or view its session |
+
+Normal local use needs no relay account. A local TUI can use `/remote share
+[view|control]`, `/remote status` and `/remote stop`; `/status` shows local
+connection and work metadata. Native controllers expose only their allowed
+commands. View access cannot mutate. Control access retains the host's local
+tool grants and exact-run authority. Switching sessions or stopping the share
+discards queued remote prompts while a started run may continue locally.
+
+The host displays a private invitation and confirms the controller fingerprint.
+The controller never opens local model providers, tools or a journal. Setup,
+credential migration, memory-only use, failure handling and trust limits are
+in the [remote guide](remote-control.md). A missing marked endpoint key requires
+recovery, not silent replacement. The native guide does not promise a live relay
+or an updated public site.
 
 ## Packages and trust
 

@@ -123,3 +123,42 @@ product paths. It changes no caller, runtime, lock, gate or harness pin.
 Pass the normal hook and obtain fresh exact-head admission, hosted quality,
 two complete reviews and explicit approval before protected adoption. The
 central merge and retention receipt does not replace consumer acceptance.
+
+## Native source successor
+
+Prepare this native layer on actual protected CLI merge
+`61aa4b4b137180ba6d76210b2cb5321cdc59658c`, tree
+`504892783c5b2b49db490582f4a11a782b8542df`. CLI PR #7 protected-squash
+merged the approved `dd0b1fb72e399623458debef8bc28554407c789a` tree after
+hosted run `39317164563`, both complete reviews, exact approval and unchanged
+protection. Preserve its three B2 callers, readable context, owner standards and
+PR #6's guide consolidation and standalone-guide deletion.
+
+Apply only the reviewed 51-path delta from selector head
+`dd0b1fb72e399623458debef8bc28554407c789a` to local native commit
+`395524dd45a1096e4949d0eba742db17d1aaa940`, tree
+`5e2e3c61ff6150353bbddda656266c7cd5ab39f8`. Keep all 40 native code,
+test, lock, gate, spec and landing-page inputs byte-identical; refine only the
+current status records. Move only still-needed native status from
+the removed guide into the consolidated and native guides. Do not overlay a
+candidate tree or copy a separate site migration. Worker/browser source and
+their unconditional gates stay in their following layer.
+
+Pin the public API dependency to actual protected harness merge
+`220305fe4be7fecd33c3cf04b24f7a1b4b50503d`, tree
+`518bd4ecfc28b31832465df083fe53df9cd053dd`. Its source equals the earlier
+provisional API tree, so retain the exact reviewed native lock as the starting
+graph without hand-editing it. Root must verify locked resolution and the full
+gate on this exact pair. If Cargo requires a lock change, use Cargo's maintained
+update command and review the resulting diff before acceptance.
+
+The earlier native commit passed root's normal local gate on macOS: 116 unit
+and 6 integration tests, formatting, strict Clippy, release, Rustdoc, Machete,
+Deny and PTY. Its exact log and source are recorded in the
+[native guide](../../../docs/native-remote-publication.md#historical-local-pass).
+This protected-parent revision needs its own normal full gate. Review the
+docs/publication source boundary before native admission; then require hosted
+B2 authority and archive proof for harness `220305fe...`, both actual complete
+reviews, explicit approval and protected native adoption. Source preparation
+completes no release task. Real native key-service, terminal and live relay
+acceptance retain their separate limits.

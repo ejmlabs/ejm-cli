@@ -39,6 +39,7 @@ For the prepared CI action, source scope, and protected adoption order, see [CI 
 | `terminal_input` | Owned bounded input parser, event adaptation and reset |
 | `render` | Drawing and text layout |
 | `main` | Process composition and plain/JSON entry points |
+| `remote` | Native account transport, Noise pairing, bounded protocol, shared session authority and vault adapter |
 | Sibling ejm-harness | Shared authentication and credential storage, providers, run policy, context, tools, persistence and resource admission |
 
 Keep each piece responsible for one coherent job. Extend real variable seams through the public harness traits. A provider or tool implementation must honor its contract, including cancellation, budgets and error reporting. Prefer small capability interfaces over a large “service” object. Compose the concrete app in `main`; pass the harness into the UI. Do not introduce a dependency injection container, factory hierarchy or trait for a single fixed renderer.
@@ -62,6 +63,29 @@ The dependency checker denies unknown registries, unknown Git sources, wildcard 
 Use replay or local HTTP fixtures. No paid provider calls belong in tests. Prove a changed user action or failure condition with a focused test before running the complete gate. Preserve failed drafts, durable event order, explicit grants, Unicode boundaries, bounded scrollback and prompt cancellation. Run the PTY check after terminal changes; a render snapshot alone cannot prove raw-mode restoration.
 
 Record measured latency and memory with hardware, compiler profile and workload. The target is 100 managed agents with hosted models on four cores and 8 GB RAM. Do not claim that target from a single current-machine fixture.
+
+## Native remote publication
+
+The [native remote candidate](native-remote-publication.md) adds the reviewed
+native source and public harness requirements on actual protected CLI parent
+`61aa4b4b137180ba6d76210b2cb5321cdc59658c`. It preserves that parent's B2
+callers, source context and PR #6's consolidated publication guide. The pin
+uses actual protected harness API merge
+`220305fe4be7fecd33c3cf04b24f7a1b4b50503d` with the exact reviewed native
+lock. The earlier native local pass is historical; run the unchanged full gate
+on this protected-parent source, then verify exact-head hosted acceptance and
+installed-selector source authority before protected native adoption.
+
+The normal gate drives the native private-terminal fixture through
+`scripts/check_terminal.py`; all eight cases must pass before claiming native
+terminal acceptance. The gate selects the exact unit-test executable from
+compiler-artifact JSON emitted by that same locked Cargo test invocation,
+including cache hits. Missing or ambiguous artifacts fail; timestamps in a
+shared directory do not select a binary. `check_terminal.py --native-fixture
+CARGO_TEST_MESSAGES_JSONL` exposes the same validated path to other supervisors.
+The supervisor never builds or calls a model provider. Worker/browser source
+and Workerd/native round-trip fixtures belong to the following publication layer.
+This native slice adds no unconditional Node, browser or Worker gate.
 
 ## Project skills
 

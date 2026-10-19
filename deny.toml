@@ -32,6 +32,18 @@ skip = [
     { name = "fancy-regex", version = "=0.11.0" },
     { name = "nix", version = "=0.29.0" },
     { name = "syn", version = "=1.0.109" },
+    # Snow0.10 uses RustCrypto0.10; tungstenite0.30's SHA1 uses digest0.11.
+    { name = "block-buffer", version = "=0.10.4" },
+    { name = "crypto-common", version = "=0.1.7" },
+    { name = "digest", version = "=0.10.7" },
+    # Snow's ChaChaPoly and tungstenite's rand0.10 use incompatible ChaCha series.
+    { name = "chacha20", version = "=0.9.1" },
+    { name = "cpufeatures", version = "=0.2.17" },
+    # oauth2 5 uses rand0.8; tungstenite0.30 uses rand0.10.
+    { name = "rand", version = "=0.8.8" },
+    { name = "rand_core", version = "=0.6.4" },
+    # errno0.3/rustix1.1 and ring0.17 require Windows0.52; Tokio uses0.61.
+    { name = "windows-sys", version = "=0.52.0" },
     # jsonschema0.33 and reqwest0.13 require different incompatible base64 series.
     { name = "base64", version = "=0.22.1" },
     # SQLite's WASM VFS requires hashbrown0.16; native hashlink uses0.17.

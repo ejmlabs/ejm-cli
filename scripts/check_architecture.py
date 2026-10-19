@@ -9,6 +9,10 @@ import tomllib
 
 ROOT = Path(__file__).resolve().parents[1]
 ALLOWED_DEPENDENCIES = {
+    # Standard Noise, OS legacy import, strong randomness and authenticated relay transport.
+    "snow", "keyring-core", "getrandom", "base64", "sha2",
+    "apple-native-keyring-store", "windows-native-keyring-store", "dbus-secret-service-keyring-store",
+    "oauth2", "reqwest", "tokio-tungstenite", "futures-util",
     "anyhow", "clap", "crossterm", "ejm-harness-auth", "ejm-harness-coding", "ejm-harness-exec", "ejm-harness",
     "ratatui", "serde_json", "tokio", "tokio-util", "unicode-width",
     # Host-only sign-in URL validation and OS browser launch.
@@ -78,7 +82,7 @@ def check_packages() -> None:
         configured = workspace["workspace"]["dependencies"][dependency]
         require(configured["path"].startswith("../ejm-harness/"), f"{dependency} must come from the independent sibling harness project.")
     require((ROOT / "Cargo.lock").is_file(), "Commit Cargo.lock and use --locked.")
-    for path in (ROOT / "crates/ejm-cli/src").glob("*.rs"):
+    for path in (ROOT / "crates/ejm-cli/src").rglob("*.rs"):
         source = path.read_text().split("#[cfg(test)]", 1)[0]
         require(not re.search(r"\bCommand::new\s*\(", source), f"{path}: arbitrary process execution belongs in ejm-harness.")
         require(not re.search(r"(?:std|tokio)::process::(?:Command|Child)\b", source) or path.name == "browser.rs", f"{path}: only the browser host may supervise an OS URL launcher.")
