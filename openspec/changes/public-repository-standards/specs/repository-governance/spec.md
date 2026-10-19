@@ -46,6 +46,21 @@ Main MUST require passing quality, repository standards, and both AI review pass
 - **WHEN** the AI reviewer lacks credentials or either review pass fails
 - **THEN** its required gate does not report success
 
+#### Scenario: A review has no findings but is incomplete
+- **WHEN** either review lacks required source, cannot finish, or omits JSON boolean `complete: true`
+- **THEN** the installed completion guard rejects the result even if its findings list is empty
+
+### Requirement: Shared caller updates include exact source context
+A shared workflow pin update MUST include bounded, readable source evidence for the exact installed and proposed implementations. The evidence MUST identify commits, trees, source modes, blob IDs, SHA-256 digests, sizes, and original paths. It MUST remain nonexecuted source data and MUST NOT grant the model network access or repository credentials.
+
+#### Scenario: A caller revision changes
+- **WHEN** a PR changes the shared workflow revision
+- **THEN** both actual reviewers can inspect both exact implementations from the admitted source archive, including generated workflows, readable sources, review contracts, and templates
+
+#### Scenario: Review evidence names an earlier caller pair
+- **WHEN** the archived evidence does not match the trusted installed and proposed caller revisions
+- **THEN** it does not establish completion of the workflow comparison
+
 ### Requirement: Public guidance is discoverable
 The repository MUST provide consistent entry points for setup, development, documentation, contribution, support, vulnerability reporting, license terms, and release status.
 
