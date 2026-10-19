@@ -11,6 +11,7 @@ Changes follow [Semantic Versioning](https://semver.org/). Each repository is ve
 ### Fixed
 
 - Prepare the shared review-completion guard with exact installed and proposed workflow source evidence, preserving the existing CLI setup hook and harness pin. Hosted adoption and installed-guard verification remain pending.
+- Prepare the retained shared harness selector with complete canonical C4/b2 source context. Keep the current harness pin and lock unchanged. Normal product gates, protected caller adoption and installed-selector execution remain pending for this change.
 
 ### Changed
 
