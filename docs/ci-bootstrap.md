@@ -1,4 +1,44 @@
-# Relay publication prelude and CI setup
+# CI setup and protected adoption
+
+## Source scope and local checks
+
+The current source includes the owned terminal input reader and mode guard,
+command parsing, completion, and Help selection for implemented built-ins and
+granted package commands. Clap parses command names and argument counts;
+Ratatui renders the picker and Help. These remain CLI interaction and bounded
+view state. `ejm-harness` owns provider transport, authentication mechanics,
+tools, and run policy through its public APIs. Remote control and provider or
+account switching inside the TUI belong to later source layers.
+
+Use the reviewed harness revision in `.github/harness-revision` and the locked
+dependency graph. Review any dependency or lock change with its owning source;
+do not copy a larger feature branch's lockfile into a smaller source change.
+The [development guide](contributing.md) records required tools and the full
+gate. [Terminal input](terminal-input.md) records package choices, bounds,
+notices, and platform limits. Keep Cargo jobs at most two.
+
+From the repository root, run the existing product gate:
+
+```sh
+./scripts/check
+```
+
+It checks architecture, format, strict Clippy, workspace tests, a release build,
+Rust documentation, dependencies, and real PTY interaction and restoration.
+For command-parser diagnosis, use
+`cargo test -p ejm-cli --locked commands::`, followed by the affected App,
+render, or UI test filters. Local replay and fixtures need no paid provider,
+live relay, or browser session. Each result applies only to its tested source
+and host; the dated receipts and open acceptance checks below retain their
+separate scope.
+
+The current public page is authored at `site/dist/index.html`; this source has
+no `site/content` guide tree or site build step. `ejm-ui` owns shared visual and
+site contracts for the separate pending site migration. When that migration
+lands, retain the command guidance in its authored guide sources and build the
+CLI reference through its normal docs pipeline. Keep generated output and
+private sibling implementations out of source changes. Site adoption, browser
+checks, and publication require their own evidence.
 
 ## Adopted setup hook and completion guard
 
@@ -43,7 +83,7 @@ The [deployment change](../openspec/changes/deploy-private-remote-relay/proposal
 tracks the full release. All its tasks remain open in this source preparation.
 The caller update adds no product code or new harness API consumer. The action,
 locks, provider composition, account storage and CLI arguments match protected
-main. See the [prelude scope](command-foundation-publication.md) and
+main. See the [source scope and local checks](#source-scope-and-local-checks) and
 [terminal boundary](terminal-input.md) for the earlier source layers.
 
 ## What the action prepares
@@ -134,8 +174,17 @@ the separate site migration out of these source changes.
 
 ## Protected harness selector adoption
 
-This preparation starts from official CLI main
-`4d7756749b8ee1c1e9e91a70eefd3e36f345379f`. Its three shared references use
+Original preparation started from official CLI main
+`4d7756749b8ee1c1e9e91a70eefd3e36f345379f`. PR #7 head
+`3738509a467a1a8e6d7b04736c9f81ea35a9054c` then passed the normal local
+gate and hosted run
+[`39309188976`](https://github.com/ejmlabs/ejm-cli/actions/runs/39309188976),
+including both actual complete AI reports with no findings. Protected main
+advanced to `e1efe7b5c05d090ccfb164bef70456429030b9d0` through PR #6 before
+selector adoption. A normal merge preserves that publication-guide
+consolidation and the standalone guide deletion. Those earlier results remain
+historical; the merged source needs fresh local and exact-head hosted checks.
+Protected main's three shared references use
 `c4f2873ef0eef5bc3c7d75cf71fa3489a911d134`. The proposed PR caller,
 draft-release caller and release `standards-ref` advance together to
 `b2e43c9b9ba814e6d3681d86c88830f3c0b11a3c`. Central PR #16 protected-merged

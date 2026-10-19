@@ -2,7 +2,7 @@
 
 ## Context
 
-See proposal.md for the dependency mismatch. Fresh official CLI main is `4d7756749b8ee1c1e9e91a70eefd3e36f345379f`, tree `3e53f9728afbbda2ee18bbd34e65c76896d1180a`. Both caller files and the release standards reference use `c4f2873ef0eef5bc3c7d75cf71fa3489a911d134`. The current harness pin is `4a751c6a3f24d7d143140f79ff53517fb93e3531`; the lockfile SHA-256 is `064f6266d334ea2239f6857a463c0d8d779f73dd84c14146b54794832ef00830`.
+See proposal.md for the dependency mismatch. Original preparation used official CLI main `4d7756749b8ee1c1e9e91a70eefd3e36f345379f`, tree `3e53f9728afbbda2ee18bbd34e65c76896d1180a`. Current protected main is `e1efe7b5c05d090ccfb164bef70456429030b9d0`, tree `97687020f04c01587c00ffb7bcde0ab9d8f612f1`. A normal merge brings it into original PR #7 head `3738509a467a1a8e6d7b04736c9f81ea35a9054c` without rewriting that head. Preserve PR #6 publication-guide consolidation, its standalone guide deletion and its owner records. The later merge commit must have those exact PR and main heads as first and second parents; admission scope is measured against current protected main. Both caller files and the release standards reference use `c4f2873ef0eef5bc3c7d75cf71fa3489a911d134`. The current harness pin is `4a751c6a3f24d7d143140f79ff53517fb93e3531`; the lockfile SHA-256 is `064f6266d334ea2239f6857a463c0d8d779f73dd84c14146b54794832ef00830`.
 
 The old review bundle under `docs/ci/shared-workflow-review/` names ae903/C4. The shared exporter at exact b2 produces the complete C4/b2 pair from 16 canonical paths per revision. Those source bytes total 627715 before its manifest, below the 750000-byte export cap.
 
@@ -32,5 +32,5 @@ The old review bundle under `docs/ci/shared-workflow-review/` names ae903/C4. Th
 1. Confirm the fresh base, root's exact retention readback and immutable source pair. Complete this plan before apply.
 2. Export the canonical pair, update all three references, measure admission scope and update the affected guidance. Keep the harness pin and lock unchanged.
 3. Run focused canonical workflow/context, actionlint, strict OpenSpec, docs-link and whitespace checks. Hand root a frozen staged tree and bounded patch; root owns the normal full gate and publication.
-4. Obtain fresh exact-head readiness, two complete actual reviews, all required Linux/macOS and aggregate checks, separate approval and protected adoption. Confirm unchanged protection.
+4. Rerun the normal local gate and obtain fresh exact-head readiness, two complete actual reviews, all required Linux/macOS and aggregate checks, separate approval and protected adoption after the main update. Confirm unchanged protection. The original head passed local checks and hosted run `39309188976`, with both actual reports complete and no findings, but those results remain historical evidence for that head.
 5. Prove installed-selector source binding in a subsequent admitted change before claiming it active for a new dependency pair. A rollback uses an ordinary reviewed caller update to the prior immutable ref; it does not move retained refs or bypass gates.
