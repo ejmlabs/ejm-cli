@@ -2,6 +2,7 @@ mod app;
 mod args;
 mod auth;
 mod browser;
+mod commands;
 // Copied from the ejmlabs design kit (design-kit/ui/rust). Never edit these two files; copy new versions in.
 #[rustfmt::skip]
 #[allow(
@@ -24,6 +25,8 @@ mod ejm_tui;
 mod extensions;
 mod packages;
 mod render;
+mod terminal;
+mod terminal_input;
 mod ui;
 
 use std::{io::IsTerminal, sync::Arc};

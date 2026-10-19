@@ -28,6 +28,9 @@ serde.workspace = true
 clap = { version = "4.5", features = ["derive", "env"] }
 ratatui = { version = "0.30.2", default-features = false, features = ["crossterm_0_29", "layout-cache"] }
 crossterm = "0.29"
+# Owned terminal parser; keep rendering on the existing Crossterm backend.
+termwiz = { version = "=0.23.3", default-features = false }
+zeroize = { version = "=1.9.1", default-features = false, features = ["alloc"] }
 unicode-width = "0.2"
 url = "2"
 open = { version = "5.4.4", default-features = false }
@@ -35,6 +38,15 @@ hyper = { version = "1", features = ["http1", "server"] }
 hyper-util = { version = "0.1", features = ["tokio"] }
 http-body-util = "0.1"
 vte = { version = "0.15", default-features = false }
+
+[target.'cfg(unix)'.dependencies]
+# Safe nonblocking raw input and exact mode restoration.
+rustix = { version = "=1.1.5", default-features = false, features = ["std", "termios"] }
+
+[target.'cfg(windows)'.dependencies]
+# Safe native console mode and input-queue operations.
+crossterm_winapi = "=0.9.1"
+winsafe = { version = "=0.0.29", default-features = false, features = ["kernel"] }
 
 [dev-dependencies]
 tempfile.workspace = true

@@ -3,7 +3,10 @@ use std::{collections::VecDeque, fmt::Write};
 use ejm_harness::{Event, EventKind, Session, ToolOutput};
 
 pub use crate::ejm_tui::BlockKind;
-use crate::render::safe_text;
+use crate::{
+    commands::{self, CommandEntry, CommandPicker},
+    render::safe_text,
+};
 
 const MAX_BLOCKS: usize = 256;
 const MAX_DISPLAY_BYTES: usize = 256 * 1024;
@@ -17,7 +20,9 @@ pub struct TranscriptBlock {
 }
 
 pub enum Overlay {
-    Help,
+    Help {
+        selected: usize,
+    },
     Sessions {
         sessions: Vec<Session>,
         selected: usize,
@@ -43,6 +48,8 @@ pub struct App {
     pub dirty: bool,
     pub palette: Option<crate::extensions::Palette>,
     pub widget_lines: Vec<String>,
+    pub commands: Vec<CommandEntry>,
+    pub command_picker: CommandPicker,
     display_bytes: usize,
     received_text: bool,
 }
@@ -61,6 +68,8 @@ impl App {
             dirty: true,
             palette: None,
             widget_lines: Vec::new(),
+            commands: commands::catalog(&[]),
+            command_picker: CommandPicker::default(),
             display_bytes: 0,
             received_text: false,
         }
@@ -68,6 +77,43 @@ impl App {
 
     pub fn is_running(&self) -> bool {
         self.run_state != RunState::Idle
+    }
+
+    pub fn command_query(&self) -> Option<&str> {
+        let query = self.composer.text.strip_prefix('/')?;
+        (self.overlay.is_none()
+            && !self.command_picker.dismissed
+            && self.composer.cursor == self.composer.text.len()
+            && !query.contains(char::is_whitespace))
+        .then_some(query)
+    }
+
+    pub fn command_matches(&self) -> Vec<&CommandEntry> {
+        self.command_query().map_or_else(Vec::new, |query| {
+            self.commands
+                .iter()
+                .filter(|entry| entry.name.starts_with(query))
+                .collect()
+        })
+    }
+
+    pub fn complete_command(&mut self) {
+        let completion = self
+            .command_matches()
+            .get(self.command_picker.selected)
+            .map(|command| command.completion());
+        if let Some(completion) = completion {
+            self.composer.replace(&completion);
+            self.command_picker.dismissed = true;
+        }
+    }
+
+    pub fn switch_session(&mut self, mut next: Self) {
+        next.commands = std::mem::take(&mut self.commands);
+        next.palette = self.palette;
+        next.widget_lines = std::mem::take(&mut self.widget_lines);
+        next.composer = std::mem::take(&mut self.composer);
+        *self = next;
     }
 
     pub fn notice(&mut self, message: impl Into<String>) {
@@ -289,6 +335,12 @@ pub struct Composer {
 }
 
 impl Composer {
+    pub fn replace(&mut self, input: &str) {
+        self.text.clear();
+        self.cursor = 0;
+        self.insert(input);
+    }
+
     pub fn insert(&mut self, input: &str) {
         let input = safe_text(input);
         let available = MAX_COMPOSER_BYTES.saturating_sub(self.text.len());
@@ -385,6 +437,95 @@ impl Composer {
 )]
 mod tests {
     use super::*;
+
+    fn app() -> App {
+        App::new(
+            serde_json::from_value(serde_json::json!({
+                "id": "test", "title": "test", "cwd": "/tmp", "created_at_ms": 0,
+                "status": "idle"
+            }))
+            .unwrap(),
+        )
+    }
+
+    #[test]
+    fn command_prefix_completion_preserves_the_conversation() {
+        let mut app = app();
+        app.composer.insert("/s");
+        assert_eq!(app.command_query(), Some("s"));
+        assert_eq!(
+            app.command_matches()
+                .iter()
+                .map(|entry| entry.name.as_str())
+                .collect::<Vec<_>>(),
+            ["sessions", "steer", "stop", "skill"]
+        );
+
+        app.complete_command();
+        assert_eq!(app.composer.text, "/sessions");
+        assert_eq!(app.composer.cursor, app.composer.text.len());
+        assert!(app.command_query().is_none());
+        assert!(app.blocks.is_empty());
+        assert_eq!(app.run_state, RunState::Idle);
+
+        app.composer.replace("/s");
+        app.command_picker = CommandPicker {
+            selected: 1,
+            dismissed: false,
+        };
+        app.complete_command();
+        assert_eq!(app.composer.text, "/steer ");
+        assert!(app.command_picker.dismissed);
+    }
+
+    #[test]
+    fn command_dismissal_and_noncommand_drafts_keep_text_editable() {
+        let mut app = app();
+        app.composer.insert("/s");
+        app.command_picker.dismissed = true;
+        assert!(app.command_query().is_none());
+        assert_eq!(app.composer.text, "/s");
+
+        app.command_picker = CommandPicker::default();
+        app.composer.left();
+        assert!(app.command_query().is_none());
+        app.composer.right();
+        assert_eq!(app.command_query(), Some("s"));
+        for draft in [
+            "ordinary text",
+            " /mod",
+            "/model sample",
+            "/mod\nsecond line",
+        ] {
+            app.composer.replace(draft);
+            assert!(app.command_query().is_none(), "{draft}");
+            assert_eq!(app.composer.text, draft);
+        }
+
+        app.composer.replace("/does-not-exist");
+        app.complete_command();
+        assert_eq!(app.composer.text, "/does-not-exist");
+        assert!(app.command_matches().is_empty());
+    }
+
+    #[test]
+    fn replacement_keeps_unicode_and_composer_bounds() {
+        let mut composer = Composer::default();
+        composer.insert("sent message");
+        composer.take();
+        composer.replace(&format!(
+            "\x1b[31m{}\x1b[0m",
+            "界".repeat(MAX_COMPOSER_BYTES)
+        ));
+        assert!(composer.text.len() <= MAX_COMPOSER_BYTES);
+        assert!(composer.text.chars().all(|character| character == '界'));
+        assert_eq!(composer.cursor, composer.text.len());
+        let draft = composer.text.clone();
+        composer.history(true);
+        assert_eq!(composer.text, "sent message");
+        composer.history(false);
+        assert_eq!(composer.text, draft);
+    }
 
     #[test]
     fn edits_unicode_without_splitting_codepoints_and_recovers_draft() {

@@ -21,6 +21,11 @@ def supervise(binary: Path, state: str, report: Path) -> None:
     child = subprocess.Popen([str(binary), "--replay", "--state-dir", state])
     signal.signal(signal.SIGTERM, lambda *_: child.send_signal(signal.SIGTERM))
     returncode = child.wait()
+    import select
+
+    # macOS marks restored canonical input PENDIN until readiness is checked.
+    # Poll without reading so the comparison still checks every terminal flag.
+    select.select([0], [], [], 0)
     report.write_text(json.dumps({
         "returncode": returncode,
         "restored": termios.tcgetattr(0) == original,

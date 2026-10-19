@@ -22,6 +22,8 @@ The hook installer changes only this repository's `core.hooksPath`. It does not 
 
 The workflows reject a missing or mutable harness revision. A private harness checkout needs a scoped read credential; public source does not. See [CONTRIBUTING.md](../CONTRIBUTING.md) for human admission and approval, and [RELEASING.md](../RELEASING.md) for remote checks and publication gates. The PTY gate checks interaction and terminal restoration on its host. Local macOS results do not prove Linux behavior. Windows terminal behavior requires separate evidence.
 
+For the combined relay publication prelude, prepared CI action and protected adoption order, see [Relay publication prelude and CI setup](ci-bootstrap.md). It retains the current reviewed harness pin. Source preparation is separate from hosted product verification.
+
 ## Ownership and Rust design rules
 
 | Module | Owns |
@@ -30,7 +32,9 @@ The workflows reject a missing or mutable harness revision. A private harness ch
 | `auth` | Host browser launch, bounded loopback callback handling and safe account presentation through `ejm-harness-auth` |
 | `browser` | Cancellable, timed OS URL launcher supervision for explicit sign-in |
 | `app` | Bounded view state and durable-event application |
-| `ui` | Input, harness calls and terminal lifecycle |
+| `ui` | Input dispatch, harness calls and terminal lifecycle |
+| `terminal` | Native mode capture/restoration and key-repeat policy |
+| `terminal_input` | Owned bounded input parser, event adaptation and reset |
 | `render` | Drawing and text layout |
 | `main` | Process composition and plain/JSON entry points |
 | Sibling ejm-harness | Shared authentication and credential storage, providers, run policy, context, tools, persistence and resource admission |
@@ -39,7 +43,7 @@ Keep each piece responsible for one coherent job. Extend real variable seams thr
 
 Use trusted, maintained packages for established infrastructure. Protocol parsing, cryptography and other standard concerns should use a reviewed package when one meets the requirements. Custom code should provide ejm-cli's distinct behavior, including its TUI interaction and app state. If a package cannot meet a verified requirement, document that gap before replacing it.
 
-The CLI uses Hyper for loopback callback HTTP, `url` for URI validation, `open` for OS browser handlers and Alacritty's VTE parser for terminal control sequences. Keep VTE's default features disabled so its OSC buffer stays fixed at 1 KiB. Browser completion, cancellation and plain-text display policy remain CLI responsibilities.
+The CLI uses Hyper for loopback callback HTTP, `url` for URI validation and `open` for OS browser handlers. Alacritty's VTE parser removes control sequences from displayed output; keep its default features disabled so its OSC buffer stays fixed at 1 KiB. Termwiz owns terminal input parsing, with thin native mode and event adapters. See [Terminal input boundary](terminal-input.md) for limits, package choices and the candidate's open verification gates. Browser completion, cancellation and plain-text display policy remain CLI responsibilities.
 
 These are Rust applications of single responsibility, substitutability, interface segregation and dependency inversion. Ownership, enums and `Result` should make illegal states and failure paths clear. A new abstraction needs a current second use or a documented variable boundary. Rendering must never launch a subprocess or contact a model provider.
 

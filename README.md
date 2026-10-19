@@ -67,8 +67,11 @@ Native execution runs as the current user and is not a security sandbox.
 - Plain and JSON modes for pipes and automation.
 - Terminal restoration on errors, panic, and handled signals.
 
-Use `/help` for commands. Enter sends or queues, Ctrl+K steers, Ctrl+C stops,
-and Ctrl+S opens sessions. `/agents` shows managed sessions.
+Type `/` to filter commands. Up/Down chooses a command, Tab completes it, and
+Escape closes the picker without changing the draft. `/help` also lists granted
+package commands; Enter copies the selected command into the composer. Enter
+sends or queues a complete command or prompt, Ctrl+K steers, Ctrl+C stops, and
+Ctrl+S opens sessions. `/agents` shows managed sessions.
 
 ```sh
 ejm-cli run "Explain the parser" --json

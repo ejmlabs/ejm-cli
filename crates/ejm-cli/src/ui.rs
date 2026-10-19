@@ -8,8 +8,8 @@ use anyhow::{Context, Result};
 use crossterm::{
     cursor::Show,
     event::{
-        self, DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture,
-        Event as InputEvent, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEventKind,
+        DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture,
+        Event as InputEvent, KeyCode, KeyEvent, KeyModifiers, MouseEventKind,
     },
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
@@ -21,8 +21,10 @@ use tokio::task::JoinSet;
 use crate::{
     app::{App, Overlay, RunState},
     args::Args,
+    commands,
     extensions::Extensions,
     render,
+    terminal::{Modes, accepts_key},
 };
 
 pub async fn run(harness: Harness, args: &Args, extensions: &Extensions) -> Result<()> {
@@ -38,6 +40,7 @@ pub async fn run(harness: Harness, args: &Args, extensions: &Extensions) -> Resu
     };
     let mut app = load_session(&harness, session).await?;
     app.palette = extensions.palette;
+    app.commands = commands::catalog(&extensions.commands());
     if extensions.count() > 0 {
         app.notice(format!(
             "{} trusted native packages enabled. /extensions shows grants.",
@@ -58,8 +61,8 @@ pub async fn run(harness: Harness, args: &Args, extensions: &Extensions) -> Resu
             () = &mut shutdown => return Ok(()),
             _ = tick.tick() => {
                 for _ in 0..64 {
-                    if !event::poll(Duration::ZERO)? { break; }
-                    let input = event::read()?;
+                    if !terminal.poll_input()? { break; }
+                    let input = terminal.read_input()?;
                     match handle_input(input, &mut app, &harness, args, extensions, &mut extension_tasks).await {
                         Ok(true) => return Ok(()),
                         Ok(false) => {},
@@ -115,9 +118,7 @@ async fn handle_input(
 ) -> Result<bool> {
     app.dirty = true;
     match input {
-        InputEvent::Key(key)
-            if key.kind == KeyEventKind::Press || key.kind == KeyEventKind::Repeat =>
-        {
+        InputEvent::Key(key) if accepts_key(key) => {
             if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
                 if app.run_state == RunState::Running {
                     harness.cancel(&app.session.id).await?;
@@ -129,6 +130,9 @@ async fn handle_input(
             }
             if app.overlay.is_some() {
                 return handle_overlay_key(key, app, harness).await;
+            }
+            if handle_picker_key(key, app) {
+                return Ok(false);
             }
             if key.modifiers.contains(KeyModifiers::CONTROL) {
                 match key.code {
@@ -145,12 +149,16 @@ async fn handle_input(
                             );
                         }
                     }
-                    KeyCode::Char('j') => app.composer.insert("\n"),
+                    KeyCode::Char('j') => {
+                        app.composer.insert("\n");
+                        app.command_picker = commands::CommandPicker::default();
+                    }
                     KeyCode::Char('a') => app.composer.home(),
                     KeyCode::Char('e') => app.composer.end(),
                     KeyCode::Char('u') => {
                         app.composer.text.clear();
                         app.composer.cursor = 0;
+                        app.command_picker = commands::CommandPicker::default();
                     }
                     _ => {}
                 }
@@ -161,7 +169,7 @@ async fn handle_input(
                             .modifiers
                             .intersects(KeyModifiers::ALT | KeyModifiers::SHIFT) =>
                     {
-                        app.composer.insert("\n");
+                        edit_composer(key, app);
                     }
                     KeyCode::Enter => {
                         let text = app.composer.text.clone();
@@ -173,30 +181,14 @@ async fn handle_input(
                             app.composer.take();
                         }
                     }
-                    KeyCode::Char(character) => app.composer.insert(&character.to_string()),
-                    KeyCode::Backspace => app.composer.backspace(),
-                    KeyCode::Delete => app.composer.delete(),
-                    KeyCode::Left => app.composer.left(),
-                    KeyCode::Right => app.composer.right(),
-                    KeyCode::Home => app.composer.home(),
-                    KeyCode::End => {
-                        app.composer.end();
-                        app.scroll_from_bottom = 0;
-                    }
-                    KeyCode::Up => app.composer.history(true),
-                    KeyCode::Down => app.composer.history(false),
-                    KeyCode::PageUp => {
-                        app.scroll_from_bottom = app.scroll_from_bottom.saturating_add(12);
-                    }
-                    KeyCode::PageDown => {
-                        app.scroll_from_bottom = app.scroll_from_bottom.saturating_sub(12);
-                    }
-                    KeyCode::Esc => app.scroll_from_bottom = 0,
-                    _ => {}
+                    _ => edit_composer(key, app),
                 }
             }
         }
-        InputEvent::Paste(text) => app.composer.insert(&text),
+        InputEvent::Paste(text) => {
+            app.command_picker = commands::CommandPicker::default();
+            app.composer.insert(&text);
+        }
         InputEvent::Mouse(mouse) => match mouse.kind {
             MouseEventKind::ScrollUp => {
                 app.scroll_from_bottom = app.scroll_from_bottom.saturating_add(3);
@@ -211,27 +203,104 @@ async fn handle_input(
     Ok(false)
 }
 
+pub(crate) fn handle_picker_key(key: KeyEvent, app: &mut App) -> bool {
+    if key
+        .modifiers
+        .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT | KeyModifiers::SHIFT)
+        || app.command_query().is_none()
+    {
+        return false;
+    }
+    let matches = app.command_matches();
+    let count = matches.len();
+    let exact = matches
+        .iter()
+        .any(|entry| app.composer.text.strip_prefix('/') == Some(entry.name.as_str()));
+    match key.code {
+        KeyCode::Up => app.command_picker.selected = app.command_picker.selected.saturating_sub(1),
+        KeyCode::Down => {
+            app.command_picker.selected =
+                (app.command_picker.selected + 1).min(count.saturating_sub(1));
+        }
+        KeyCode::Tab => app.complete_command(),
+        KeyCode::Esc => app.command_picker.dismissed = true,
+        KeyCode::Enter if count > 0 && !exact => app.complete_command(),
+        _ => return false,
+    }
+    true
+}
+
+pub(crate) fn edit_composer(key: KeyEvent, app: &mut App) {
+    if matches!(
+        key.code,
+        KeyCode::Char(_)
+            | KeyCode::Backspace
+            | KeyCode::Delete
+            | KeyCode::Enter
+            | KeyCode::Up
+            | KeyCode::Down
+    ) {
+        app.command_picker = commands::CommandPicker::default();
+    }
+    match key.code {
+        KeyCode::Enter => app.composer.insert("\n"),
+        KeyCode::Char(character) => app.composer.insert(&character.to_string()),
+        KeyCode::Backspace => app.composer.backspace(),
+        KeyCode::Delete => app.composer.delete(),
+        KeyCode::Left => app.composer.left(),
+        KeyCode::Right => app.composer.right(),
+        KeyCode::Home => app.composer.home(),
+        KeyCode::End => {
+            app.composer.end();
+            app.scroll_from_bottom = 0;
+        }
+        KeyCode::Up => app.composer.history(true),
+        KeyCode::Down => app.composer.history(false),
+        KeyCode::PageUp => app.scroll_from_bottom = app.scroll_from_bottom.saturating_add(12),
+        KeyCode::PageDown => app.scroll_from_bottom = app.scroll_from_bottom.saturating_sub(12),
+        KeyCode::Esc => app.scroll_from_bottom = 0,
+        _ => {}
+    }
+}
+
 async fn handle_overlay_key(key: KeyEvent, app: &mut App, harness: &Harness) -> Result<bool> {
     match key.code {
         KeyCode::Esc => app.overlay = None,
-        KeyCode::Up => {
-            if let Some(Overlay::Sessions { selected, .. }) = &mut app.overlay {
-                *selected = selected.saturating_sub(1);
-            }
-        }
-        KeyCode::Down => {
-            if let Some(Overlay::Sessions { sessions, selected }) = &mut app.overlay {
-                *selected = (*selected + 1).min(sessions.len().saturating_sub(1));
+        KeyCode::Up | KeyCode::Down | KeyCode::PageUp | KeyCode::PageDown => {
+            let selection = match &mut app.overlay {
+                Some(Overlay::Sessions { sessions, selected }) => Some((selected, sessions.len())),
+                Some(Overlay::Help { selected }) => Some((selected, app.commands.len())),
+                None => None,
+            };
+            if let Some((selected, count)) = selection {
+                let step = if matches!(key.code, KeyCode::PageUp | KeyCode::PageDown) {
+                    8
+                } else {
+                    1
+                };
+                *selected = if matches!(key.code, KeyCode::Up | KeyCode::PageUp) {
+                    selected.saturating_sub(step)
+                } else {
+                    selected.saturating_add(step).min(count.saturating_sub(1))
+                };
             }
         }
         KeyCode::Enter => {
+            if let Some(Overlay::Help { selected }) = &app.overlay {
+                if let Some(command) = app.commands.get(*selected) {
+                    app.composer.replace(&command.completion());
+                    app.command_picker.dismissed = true;
+                }
+                app.overlay = None;
+                return Ok(false);
+            }
             let session = if let Some(Overlay::Sessions { sessions, selected }) = &app.overlay {
                 sessions.get(*selected).cloned()
             } else {
                 None
             };
             if let Some(session) = session {
-                *app = load_session(harness, session).await?;
+                app.switch_session(load_session(harness, session).await?);
             } else {
                 app.overlay = None;
             }
@@ -250,12 +319,11 @@ async fn submit(
     extension_tasks: &mut ExtensionTasks,
 ) -> Result<bool> {
     if let Some(command) = text.strip_prefix('/') {
-        let (name, value) = command
-            .split_once(char::is_whitespace)
-            .unwrap_or((command, ""));
-        let value = value.trim();
+        let command = commands::parse(command)?;
+        let name = command.name.as_str();
+        let value = command.value;
         match name {
-            "help" => app.overlay = Some(Overlay::Help),
+            "help" => app.overlay = Some(Overlay::Help { selected: 0 }),
             "quit" | "exit" => return Ok(true),
             "sessions" | "agents" => open_sessions(app, harness).await?,
             "new" => {
@@ -270,10 +338,12 @@ async fn submit(
                         cwd,
                     })
                     .await?;
-                *app = App::new(session);
+                app.switch_session(App::new(session));
             }
             "resume" if !value.is_empty() => {
-                *app = load_session(harness, find_session(harness, value).await?).await?;
+                app.switch_session(
+                    load_session(harness, find_session(harness, value).await?).await?,
+                );
             }
             "stop" => {
                 harness.cancel(&app.session.id).await?;
@@ -490,18 +560,48 @@ async fn recover_events(harness: &Harness, app: &mut App) -> Result<()> {
     Ok(())
 }
 
+static PANIC_HOOK: std::sync::Once = std::sync::Once::new();
+static PANIC_BASELINE: std::sync::Mutex<Option<Modes>> = std::sync::Mutex::new(None);
+
 struct TerminalGuard {
     terminal: Terminal<CrosstermBackend<Stdout>>,
+    baseline: Modes,
+    input: crate::terminal_input::Input,
 }
 
 impl TerminalGuard {
     fn enter() -> Result<Self> {
-        let previous_hook = panic::take_hook();
-        panic::set_hook(Box::new(move |information| {
+        let baseline = Modes::capture()?;
+        *PANIC_BASELINE
+            .lock()
+            .map_err(|_| anyhow::anyhow!("terminal recovery state is unavailable"))? =
+            Some(baseline.clone());
+        PANIC_HOOK.call_once(|| {
+            let previous_hook = panic::take_hook();
+            panic::set_hook(Box::new(move |information| {
+                let _ = crate::terminal::flush_pending_input();
+                restore_terminal();
+                if let Ok(saved) = PANIC_BASELINE.try_lock()
+                    && let Some(baseline) = saved.as_ref()
+                {
+                    let _ = baseline.restore();
+                }
+                previous_hook(information);
+            }));
+        });
+        if let Err(error) = enable_raw_mode() {
             restore_terminal();
-            previous_hook(information);
-        }));
-        enable_raw_mode()?;
+            let _ = baseline.restore();
+            return Err(error.into());
+        }
+        let input = match crate::terminal_input::Input::new() {
+            Ok(input) => input,
+            Err(error) => {
+                restore_terminal();
+                let _ = baseline.restore();
+                return Err(error);
+            }
+        };
         let mut stdout = io::stdout();
         if let Err(error) = execute!(
             stdout,
@@ -510,21 +610,46 @@ impl TerminalGuard {
             EnableBracketedPaste
         ) {
             restore_terminal();
+            let _ = baseline.restore();
             return Err(error.into());
         }
         match Terminal::new(CrosstermBackend::new(stdout)) {
-            Ok(terminal) => Ok(Self { terminal }),
+            Ok(terminal) => Ok(Self {
+                terminal,
+                baseline,
+                input,
+            }),
             Err(error) => {
                 restore_terminal();
+                let _ = baseline.restore();
                 Err(error.into())
             }
         }
+    }
+
+    fn poll_input(&mut self) -> Result<bool> {
+        self.input.poll()
+    }
+
+    fn read_input(&mut self) -> Result<InputEvent> {
+        self.input.read()
+    }
+
+    fn reset_input(&mut self) -> Result<()> {
+        self.input.reset()
     }
 }
 
 impl Drop for TerminalGuard {
     fn drop(&mut self) {
+        // A reader panic may still hold its package mutex. Panic hooks only
+        // flush OS input; ordinary exits can also discard parsed events.
+        if !std::thread::panicking() {
+            let _ = self.reset_input();
+        }
+        let _ = crate::terminal::flush_pending_input();
         restore_terminal();
+        let _ = self.baseline.restore();
     }
 }
 
@@ -537,4 +662,185 @@ fn restore_terminal() {
         LeaveAlternateScreen,
         Show
     );
+}
+
+#[cfg(test)]
+#[expect(
+    clippy::unwrap_used,
+    reason = "Invalid offline terminal fixtures must fail the test immediately."
+)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+    use ejm_harness::{HarnessConfig, ReplayProvider};
+    use std::sync::Arc;
+
+    struct TestUi {
+        _state: tempfile::TempDir,
+        harness: Harness,
+        app: App,
+        args: Args,
+        extensions: Extensions,
+        extension_tasks: ExtensionTasks,
+    }
+
+    impl TestUi {
+        async fn new() -> Self {
+            let state = tempfile::tempdir().unwrap();
+            let harness = Harness::with_hooks(
+                HarnessConfig {
+                    state_dir: state.path().into(),
+                    ..HarnessConfig::default()
+                },
+                Arc::new(ReplayProvider::echo()),
+                Vec::new(),
+                Vec::new(),
+            )
+            .unwrap();
+            let session = harness
+                .create_session(SessionOptions {
+                    cwd: state.path().into(),
+                    title: "fixture".into(),
+                })
+                .await
+                .unwrap();
+            let args = Args::try_parse_from([
+                "ejm-cli",
+                "--replay",
+                "--state-dir",
+                state.path().to_str().unwrap(),
+            ])
+            .unwrap();
+            Self {
+                args,
+                _state: state,
+                harness,
+                app: App::new(session),
+                extensions: Extensions::empty().unwrap(),
+                extension_tasks: ExtensionTasks::default(),
+            }
+        }
+
+        async fn input(&mut self, input: InputEvent) -> Result<bool> {
+            handle_input(
+                input,
+                &mut self.app,
+                &self.harness,
+                &self.args,
+                &self.extensions,
+                &mut self.extension_tasks,
+            )
+            .await
+        }
+
+        async fn key(&mut self, code: KeyCode) -> Result<bool> {
+            self.input(InputEvent::Key(KeyEvent::new(code, KeyModifiers::NONE)))
+                .await
+        }
+    }
+
+    #[tokio::test]
+    async fn slash_picker_completes_without_running_and_escape_preserves_draft() {
+        let mut ui = TestUi::new().await;
+        ui.app.composer.insert("/s");
+        ui.key(KeyCode::Down).await.unwrap();
+        ui.key(KeyCode::Tab).await.unwrap();
+        assert_eq!(ui.app.composer.text, "/steer ");
+        assert!(ui.app.blocks.is_empty());
+        assert!(
+            ui.harness
+                .events(&ui.app.session.id, 0, 100)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        ui.app.composer.replace("/st");
+        ui.app.command_picker.dismissed = false;
+        ui.key(KeyCode::Esc).await.unwrap();
+        assert_eq!(ui.app.composer.text, "/st");
+        assert!(ui.app.command_query().is_none());
+        ui.key(KeyCode::Left).await.unwrap();
+        ui.key(KeyCode::Right).await.unwrap();
+        assert!(ui.app.command_query().is_none());
+        ui.key(KeyCode::Char('a')).await.unwrap();
+        assert_eq!(ui.app.command_query(), Some("sta"));
+    }
+
+    #[tokio::test]
+    async fn invalid_commands_keep_the_draft_and_do_not_start_work() {
+        let mut ui = TestUi::new().await;
+        ui.app.composer.insert("/resume");
+        let error = ui.key(KeyCode::Enter).await.unwrap_err();
+        assert!(error.to_string().contains("Usage: /resume ID"));
+        assert_eq!(ui.app.composer.text, "/resume");
+        assert!(
+            ui.harness
+                .events(&ui.app.session.id, 0, 100)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        ui.app.composer.replace("/help");
+        ui.key(KeyCode::Enter).await.unwrap();
+        assert!(matches!(ui.app.overlay, Some(Overlay::Help { .. })));
+    }
+
+    #[tokio::test]
+    async fn paste_never_executes_and_history_works_outside_the_picker() {
+        let mut ui = TestUi::new().await;
+        ui.app.composer.insert("previous prompt");
+        ui.app.composer.take();
+        ui.input(InputEvent::Paste("/stop\n🦀".into()))
+            .await
+            .unwrap();
+        assert_eq!(ui.app.composer.text, "/stop\n🦀");
+        assert!(ui.app.command_query().is_none());
+        assert!(
+            ui.harness
+                .events(&ui.app.session.id, 0, 100)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        ui.key(KeyCode::Up).await.unwrap();
+        assert_eq!(ui.app.composer.text, "previous prompt");
+        ui.key(KeyCode::Down).await.unwrap();
+        assert_eq!(ui.app.composer.text, "/stop\n🦀");
+    }
+
+    #[tokio::test]
+    async fn help_completes_without_execution_and_session_switch_keeps_host_state() {
+        let mut ui = TestUi::new().await;
+        let previous_session = ui.app.session.id.clone();
+        let catalog = ui
+            .app
+            .commands
+            .iter()
+            .map(commands::CommandEntry::usage)
+            .collect::<Vec<_>>();
+        ui.app.widget_lines = vec!["fixture widget".into()];
+        ui.app.composer.replace("/help");
+        ui.key(KeyCode::Enter).await.unwrap();
+        ui.key(KeyCode::Down).await.unwrap();
+        ui.key(KeyCode::Enter).await.unwrap();
+        assert_eq!(ui.app.composer.text, "/new ");
+        assert!(ui.app.overlay.is_none());
+        assert_eq!(ui.app.session.id, previous_session);
+        assert_eq!(ui.harness.list_sessions().await.unwrap().len(), 1);
+
+        ui.app.composer.replace("/new next session");
+        ui.key(KeyCode::Enter).await.unwrap();
+        assert_ne!(ui.app.session.id, previous_session);
+        assert_eq!(ui.app.session.title, "next session");
+        assert_eq!(ui.app.widget_lines, ["fixture widget"]);
+        assert_eq!(
+            ui.app
+                .commands
+                .iter()
+                .map(commands::CommandEntry::usage)
+                .collect::<Vec<_>>(),
+            catalog
+        );
+        assert_eq!(ui.app.composer.text, "");
+    }
 }

@@ -12,11 +12,26 @@ allow = [
     "CDLA-Permissive-2.0",
 ]
 
+# Exact licenses of Termwiz's required Unicode data and terminfo parser.
+# Preserve the bundled texts in docs/terminal-third-party-notices.md.
+exceptions = [
+    { name = "finl_unicode", version = "=1.5.0", allow = ["Unicode-DFS-2016"] },
+    { name = "wezterm-bidi", version = "=0.2.3", allow = ["Unicode-DFS-2016"] },
+    { name = "terminfo", version = "=0.9.0", allow = ["WTFPL"] },
+]
+
 [bans]
 multiple-versions = "deny"
 wildcards = "deny"
 highlight = "all"
 skip = [
+    # Termwiz0.23 requires these older incompatible terminal/parser series.
+    { name = "bit-set", version = "=0.5.3" },
+    { name = "bit-vec", version = "=0.6.3" },
+    { name = "bitflags", version = "=1.3.2" },
+    { name = "fancy-regex", version = "=0.11.0" },
+    { name = "nix", version = "=0.29.0" },
+    { name = "syn", version = "=1.0.109" },
     # jsonschema0.33 and reqwest0.13 require different incompatible base64 series.
     { name = "base64", version = "=0.22.1" },
     # SQLite's WASM VFS requires hashbrown0.16; native hashlink uses0.17.
