@@ -51,7 +51,7 @@ harness pin. Do not reuse the larger native remote lockfile. Review the graph
 and remeasure the final committed file, line and byte counts after lock
 resolution against the unchanged admission caps. Pass the unchanged full local
 gate, real PTY restoration checks and exact-source hosted checks before claiming
-acceptance. See [prelude scope](../../../docs/command-foundation-publication.md)
+acceptance. See [source scope and local checks](../../../docs/ci-bootstrap.md#source-scope-and-local-checks)
 and [terminal input boundary](../../../docs/terminal-input.md).
 
 The supported order is: merge this prelude under the restored current caller;

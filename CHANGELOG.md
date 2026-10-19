@@ -12,6 +12,10 @@ Changes follow [Semantic Versioning](https://semver.org/). Each repository is ve
 
 - Prepare the shared review-completion guard with exact installed and proposed workflow source evidence, preserving the existing CLI setup hook and harness pin. Hosted adoption and installed-guard verification remain pending.
 
+### Changed
+
+- Consolidate source setup, local checks, and site-migration limits in the CI guide, replacing the obsolete publication prelude note and its inbound links.
+
 ## [0.1.0] - 2026-10-18
 
 - Initial development baseline. This entry documents source version metadata; it does not assert a published release or production readiness.
