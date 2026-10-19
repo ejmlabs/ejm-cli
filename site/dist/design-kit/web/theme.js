@@ -91,10 +91,13 @@
     if (system.addEventListener) system.addEventListener('change', follow); else if (system.addListener) system.addListener(follow);
   }
 
-  // One listener serves every toggle, including buttons added later.
+  // One listener serves every toggle, including buttons added later. [data-theme-set="dark"] sets a theme directly.
   document.addEventListener('click', function (event) {
     var target = event.target;
-    if (target && target.closest && target.closest('[data-theme-toggle]')) toggle();
+    if (!target || !target.closest) return;
+    if (target.closest('[data-theme-toggle]')) toggle();
+    var direct = target.closest('[data-theme-set]');
+    if (direct) set(direct.getAttribute('data-theme-set'));
   });
   if (window.MutationObserver) {
     new MutationObserver(function (records) {
