@@ -2,10 +2,13 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>ejm-cli, ejmlabs</title>
   <meta name="description" content="ejm-cli is a Rust coding agent for the terminal from ejmlabs. One native binary, read only until you grant more, built to run many sessions without flooding your machine.">
   <meta name="theme-color" content="#29443B">
+  <script src="/design-kit/web/theme.js"></script>
+  <script src="/design-kit/web/motion.js"></script>
+  <script src="/design-kit/web/analytics.js" defer></script>
   <link rel="canonical" href="https://cli.ejmlabs.com/">
   <meta property="og:type" content="website">
   <meta property="og:title" content="ejm-cli">
@@ -28,15 +31,15 @@
   <a class="ejm-skip" href="#main">Skip to content</a>
 
   <header class="ejm-header ejm-header--sticky ejm-header--forest">
-    <a class="ejm-header__logo" href="https://ejmlabs.com/" aria-label="ejmlabs home"><img src="/design-kit/logos/ejmlabs-paper.svg" alt="ejmlabs" width="234" height="40"></a>
-    <details class="ejm-menu">
+    <a class="ejm-header__logo" href="https://ejmlabs.com/" aria-label="ejmlabs home" rel="external"><span class="ejm-logo" role="img" aria-label="ejmlabs"></span></a>
+    <div class="ejm-header__tools"><details class="ejm-menu">
       <summary><span class="ejm-menu__label">Menu</span></summary>
       <nav class="ejm-nav" aria-label="Main">
-        <a href="https://ejmlabs.com/">ejmlabs.com</a>
-        <a href="https://harness.ejmlabs.com/">ejm-harness</a>
-        <a href="https://ide.ejmlabs.com/">ejm-ide</a>
+        <a href="https://ejmlabs.com/" rel="external">ejmlabs.com</a>
+        <a href="https://harness.ejmlabs.com/" rel="external">ejm-harness</a>
+        <a href="https://ide.ejmlabs.com/" rel="external">ejm-ide</a>
       </nav>
-    </details>
+    </details><button class="ejm-theme-toggle" type="button" data-theme-toggle aria-pressed="false"><span class="ejm-icon ejm-icon--moon" aria-hidden="true"></span><span class="ejm-sr">Dark mode</span></button></div>
     <nav class="ejm-subnav" aria-label="On this page">
       <a href="#how">How it works</a>
       <a href="#grants">Permissions</a>
@@ -229,7 +232,7 @@ ejm-cli --allow-write --allow-shell</code></pre></div>
     <section class="ejm-band ejm-band--forest ejm-cta ejm-cta--split" aria-labelledby="cta-title">
       <div class="ejm-page"><div class="ejm-cta__body">
         <div class="ejm-cta__text"><h2 class="ejm-h2" id="cta-title">Built on an open engine.</h2><p class="ejm-lead">ejm-cli is a separate app on ejm-harness, the Rust engine that runs many sessions through one resource governor.</p></div>
-        <div class="ejm-cluster"><a class="ejm-button" href="https://harness.ejmlabs.com/">Read about ejm-harness</a><a class="ejm-button ejm-button--secondary" href="https://ejmlabs.com/">ejmlabs.com</a></div>
+        <div class="ejm-cluster"><a class="ejm-button" href="https://harness.ejmlabs.com/" rel="external">Read about ejm-harness</a><a class="ejm-button ejm-button--secondary" href="https://ejmlabs.com/" rel="external">ejmlabs.com</a></div>
       </div></div>
     </section>
   </main>
@@ -238,23 +241,23 @@ ejm-cli --allow-write --allow-shell</code></pre></div>
     <div class="ejm-page">
       <div class="ejm-footer__grid">
         <div class="ejm-footer__brand">
-          <img src="/design-kit/logos/ejmlabs-paper.svg" alt="ejmlabs" width="281" height="48">
+          <span class="ejm-logo ejm-logo--large" role="img" aria-label="ejmlabs"></span>
           <p class="ejm-footer__signature">Small experiments. Useful things.</p>
         </div>
         <div class="ejm-footer__groups">
           <div>
             <h2>projects</h2>
             <ul>
-              <li><a href="https://harness.ejmlabs.com/">ejm-harness</a></li>
+              <li><a href="https://harness.ejmlabs.com/" rel="external">ejm-harness</a></li>
               <li><a href="https://cli.ejmlabs.com/">ejm-cli</a></li>
-              <li><a href="https://ide.ejmlabs.com/">ejm-ide</a></li>
+              <li><a href="https://ide.ejmlabs.com/" rel="external">ejm-ide</a></li>
             </ul>
           </div>
           <div>
             <h2>ejmlabs</h2>
             <ul>
-              <li><a href="https://ejmlabs.com/">ejmlabs.com</a></li>
-              <li><a href="https://ejmlabs.com/design-kit/">Brand kit</a></li>
+              <li><a href="https://ejmlabs.com/" rel="external">ejmlabs.com</a></li>
+              <li><a href="https://ejmlabs.com/design-kit/" rel="external">Brand kit</a></li>
             </ul>
           </div>
         </div>
