@@ -22,7 +22,7 @@ The hook installer changes only this repository's `core.hooksPath`. It does not 
 
 The workflows reject a missing or mutable harness revision. A private harness checkout needs a scoped read credential; public source does not. See [CONTRIBUTING.md](../CONTRIBUTING.md) for human admission and approval, and [RELEASING.md](../RELEASING.md) for remote checks and publication gates. The PTY gate checks interaction and terminal restoration on its host. Local macOS results do not prove Linux behavior. Windows terminal behavior requires separate evidence.
 
-For the combined relay publication prelude, prepared CI action and protected adoption order, see [Relay publication prelude and CI setup](ci-bootstrap.md). It retains the current reviewed harness pin. Source preparation is separate from hosted product verification.
+For the prepared CI action, source scope, and protected adoption order, see [CI setup and protected adoption](ci-bootstrap.md). It retains the current reviewed harness pin. Source preparation is separate from hosted product verification.
 
 ## Ownership and Rust design rules
 

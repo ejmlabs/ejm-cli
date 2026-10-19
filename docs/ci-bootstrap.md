@@ -1,4 +1,44 @@
-# Relay publication prelude and CI setup
+# CI setup and protected adoption
+
+## Source scope and local checks
+
+The current source includes the owned terminal input reader and mode guard,
+command parsing, completion, and Help selection for implemented built-ins and
+granted package commands. Clap parses command names and argument counts;
+Ratatui renders the picker and Help. These remain CLI interaction and bounded
+view state. `ejm-harness` owns provider transport, authentication mechanics,
+tools, and run policy through its public APIs. Remote control and provider or
+account switching inside the TUI belong to later source layers.
+
+Use the reviewed harness revision in `.github/harness-revision` and the locked
+dependency graph. Review any dependency or lock change with its owning source;
+do not copy a larger feature branch's lockfile into a smaller source change.
+The [development guide](contributing.md) records required tools and the full
+gate. [Terminal input](terminal-input.md) records package choices, bounds,
+notices, and platform limits. Keep Cargo jobs at most two.
+
+From the repository root, run the existing product gate:
+
+```sh
+./scripts/check
+```
+
+It checks architecture, format, strict Clippy, workspace tests, a release build,
+Rust documentation, dependencies, and real PTY interaction and restoration.
+For command-parser diagnosis, use
+`cargo test -p ejm-cli --locked commands::`, followed by the affected App,
+render, or UI test filters. Local replay and fixtures need no paid provider,
+live relay, or browser session. Each result applies only to its tested source
+and host; the dated receipts and open acceptance checks below retain their
+separate scope.
+
+The current public page is authored at `site/dist/index.html`; this source has
+no `site/content` guide tree or site build step. `ejm-ui` owns shared visual and
+site contracts for the separate pending site migration. When that migration
+lands, retain the command guidance in its authored guide sources and build the
+CLI reference through its normal docs pipeline. Keep generated output and
+private sibling implementations out of source changes. Site adoption, browser
+checks, and publication require their own evidence.
 
 ## Adopted setup hook and completion guard
 
@@ -43,7 +83,7 @@ The [deployment change](../openspec/changes/deploy-private-remote-relay/proposal
 tracks the full release. All its tasks remain open in this source preparation.
 The caller update adds no product code or new harness API consumer. The action,
 locks, provider composition, account storage and CLI arguments match protected
-main. See the [prelude scope](command-foundation-publication.md) and
+main. See the [source scope and local checks](#source-scope-and-local-checks) and
 [terminal boundary](terminal-input.md) for the earlier source layers.
 
 ## What the action prepares
