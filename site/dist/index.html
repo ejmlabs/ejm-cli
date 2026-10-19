@@ -82,7 +82,7 @@ Executor capabilities: admission enforced</code></pre>
             <p class="ejm-eyebrow">how it works</p>
             <h2 class="ejm-h2" id="how-title">Built for the terminal you already use.</h2>
           </div>
-          <p class="ejm-head__text">The screen follows your terminal colors and never paints a background. <span class="ejm-mono">--replay</span> is an offline demo provider, so you can try it with no account and no network.</p>
+          <div class="ejm-head__text"><p>The screen follows your terminal colors and never paints a background. <span class="ejm-mono">--replay</span> is an offline demo provider, so you can try it with no account and no network.</p></div>
         </div>
         <div class="ejm-features">
           <div class="ejm-feature"><span class="ejm-feature__icon"><span class="ejm-icon ejm-icon--code" aria-hidden="true"></span></span><h3 class="ejm-feature__title">A real composer</h3><p class="ejm-feature__text">Unicode, multiline input, bracketed paste and message history. Paste a stack trace without sending it by accident.</p></div>
@@ -102,7 +102,7 @@ Executor capabilities: admission enforced</code></pre>
             <p class="ejm-eyebrow">keys</p>
             <h2 class="ejm-h2" id="keys-title">Five keys to remember.</h2>
           </div>
-          <p class="ejm-head__text">Type <span class="ejm-mono">/help</span> in the app for the full list of keys and commands.</p>
+          <div class="ejm-head__text"><p>Type <span class="ejm-mono">/help</span> in the app for the full list of keys and commands.</p></div>
         </div>
         <div class="ejm-table" role="region" aria-label="Main keys" tabindex="0">
           <table>
@@ -158,9 +158,9 @@ ejm-cli --allow-write --allow-shell</code></pre></div>
         </div>
         <dl class="ejm-stats">
           <div class="ejm-stat"><dt class="ejm-stat__label">managed sessions by default</dt><dd class="ejm-stat__value">100</dd></div>
-          <div class="ejm-stat"><dt class="ejm-stat__label">model requests, local jobs and heavy jobs at once</dt><dd class="ejm-stat__value">8 / 4 / 1</dd></div>
-          <div class="ejm-stat"><dt class="ejm-stat__label">cap on visible transcript memory</dt><dd class="ejm-stat__value">256 KiB</dd></div>
-          <div class="ejm-stat"><dt class="ejm-stat__label">first composer paint, fresh state</dt><dd class="ejm-stat__value">24 ms</dd></div>
+          <div class="ejm-stat"><dt class="ejm-stat__label">model requests at once by default, with 4 local jobs and 1 heavy job</dt><dd class="ejm-stat__value">8</dd></div>
+          <div class="ejm-stat"><dt class="ejm-stat__label">KiB cap on visible transcript memory</dt><dd class="ejm-stat__value">256</dd></div>
+          <div class="ejm-stat"><dt class="ejm-stat__label">ms to first composer paint, fresh state</dt><dd class="ejm-stat__value">24</dd></div>
         </dl>
         <aside class="ejm-callout"><p class="ejm-callout__label">note</p><p>Paint time measured on 18 October 2026 on a Mac16,8 with a replay provider, from process start to first paint in a real PTY. Warm p95 was 41 ms across 20 samples. A modern Mac does not prove the old-laptop target, and no comparison with other agents has run yet.</p></aside>
       </div>
@@ -173,7 +173,7 @@ ejm-cli --allow-write --allow-shell</code></pre></div>
             <p class="ejm-eyebrow">models</p>
             <h2 class="ejm-h2" id="models-title">Bring your own model.</h2>
           </div>
-          <p class="ejm-head__text">Four provider kinds work today. Pick one with <span class="ejm-mono">--provider</span>, or pass an explicit model.</p>
+          <div class="ejm-head__text"><p>Four provider kinds work today. Pick one with <span class="ejm-mono">--provider</span>, or pass an explicit model.</p></div>
         </div>
         <div class="ejm-table" role="region" aria-label="Supported providers" tabindex="0">
           <table>
