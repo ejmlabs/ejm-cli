@@ -101,6 +101,7 @@ fn draw_screen(
             theme,
             glyphs,
             &[
+                ("/", "commands"),
                 ("Enter", "send"),
                 ("Ctrl+C", "stop/quit"),
                 ("Alt+Enter", "new line"),
@@ -113,7 +114,65 @@ fn draw_screen(
         hint_area,
     );
 
+    draw_commands(frame, app, theme, glyphs, input, header.bottom());
     draw_overlay(frame, app, theme, glyphs);
+}
+
+fn draw_commands(
+    frame: &mut Frame<'_>,
+    app: &App,
+    theme: &Theme,
+    glyphs: &Glyphs,
+    input: Rect,
+    top: u16,
+) {
+    if app.command_query().is_none() {
+        return;
+    }
+    let matches = app.command_matches();
+    let rows = matches.len().clamp(1, 7);
+    let height = u16::try_from(rows + 2)
+        .unwrap_or(9)
+        .min(input.y.saturating_sub(top));
+    if height < 3 {
+        return;
+    }
+    let area = Rect::new(
+        input.x + 1,
+        input.y - height,
+        input.width.saturating_sub(2),
+        height,
+    );
+    frame.render_widget(Clear, area);
+    let block = titled_block(
+        glyphs,
+        "commands: Up/Down choose, Tab complete, Esc close",
+        theme.plain,
+    );
+    let width = usize::from(block.inner(area).width);
+    let items = if matches.is_empty() {
+        vec![ListItem::new(Line::styled(
+            "No matching commands. /help lists commands.",
+            theme.dim,
+        ))]
+    } else {
+        matches
+            .iter()
+            .enumerate()
+            .map(|(index, entry)| {
+                ListItem::new(list_row(
+                    theme,
+                    glyphs,
+                    &entry.usage(),
+                    &entry.description,
+                    index == app.command_picker.selected,
+                    width,
+                ))
+            })
+            .collect()
+    };
+    let mut state = ListState::default().with_selected(Some(app.command_picker.selected));
+    frame.render_stateful_widget(List::new(items).block(block), area, &mut state);
 }
 
 fn draw_header(
@@ -270,7 +329,7 @@ fn draw_composer(
 fn draw_overlay(frame: &mut Frame<'_>, app: &App, theme: &Theme, glyphs: &Glyphs) {
     let area = frame.area();
     match &app.overlay {
-        Some(Overlay::Help) => draw_help(frame, theme, glyphs),
+        Some(Overlay::Help { selected }) => draw_help(frame, app, *selected, theme, glyphs),
         Some(Overlay::Sessions { sessions, selected }) => {
             let popup = popup(area, 86, 20);
             frame.render_widget(Clear, popup);
@@ -314,21 +373,31 @@ fn draw_overlay(frame: &mut Frame<'_>, app: &App, theme: &Theme, glyphs: &Glyphs
     }
 }
 
-fn draw_help(frame: &mut Frame<'_>, theme: &Theme, glyphs: &Glyphs) {
-    let popup = popup(frame.area(), 78, 24);
+fn draw_help(frame: &mut Frame<'_>, app: &App, selected: usize, theme: &Theme, glyphs: &Glyphs) {
+    let popup = popup(frame.area(), 94, 27);
     frame.render_widget(Clear, popup);
     let block = titled_block(
         glyphs,
-        &format!("ejm-cli {} help", glyphs.separator),
+        &format!(
+            "ejm-cli {} help: Up/Down scroll, Enter complete, Esc close",
+            glyphs.separator
+        ),
         theme.plain,
     );
-    let width = usize::from(block.inner(popup).width);
+    let inner = block.inner(popup);
+    let width = usize::from(inner.width);
     let recall = if is_ascii(glyphs) {
         "Up / Down"
     } else {
         "\u{2191} / \u{2193}"
     };
     let row = |key: &str, text: &str| kv_line(theme, glyphs, key, text, 16, width);
+    frame.render_widget(block, popup);
+    let [keys, commands] = Layout::vertical([
+        Constraint::Length(inner.height.saturating_sub(2).min(10)),
+        Constraint::Min(1),
+    ])
+    .areas(inner);
     frame.render_widget(
         Paragraph::new(vec![
             Line::styled("Conversation", theme.accent),
@@ -340,24 +409,27 @@ fn draw_help(frame: &mut Frame<'_>, theme: &Theme, glyphs: &Glyphs) {
             row(recall, "Recall sent messages"),
             row("PageUp/PageDown", "Scroll transcript; End follows output"),
             Line::raw(""),
-            Line::styled("Commands", theme.accent),
-            row("/new [title]", "Create a session in this workspace"),
-            row("/sessions", "Choose a saved session (Ctrl+S)"),
-            row("/resume ID", "Open a saved session"),
-            row("/queue MESSAGE", "Queue a follow-up turn"),
-            row("/steer MESSAGE", "Send direction to the active run"),
-            row("/stop", "Cancel the current run"),
-            row("/help", "Show this reference"),
-            row("/quit", "Stop runs and exit"),
-            Line::raw(""),
-            Line::styled(
-                "Grants are fixed at launch. Esc closes this panel.",
-                theme.dim,
-            ),
-        ])
-        .block(block),
-        popup,
+            Line::styled("Commands: type / to filter, Tab to complete", theme.accent),
+        ]),
+        keys,
     );
+    let items = app
+        .commands
+        .iter()
+        .enumerate()
+        .map(|(index, entry)| {
+            ListItem::new(list_row(
+                theme,
+                glyphs,
+                &entry.usage(),
+                &entry.description,
+                index == selected,
+                width,
+            ))
+        })
+        .collect::<Vec<_>>();
+    let mut state = ListState::default().with_selected(Some(selected));
+    frame.render_stateful_widget(List::new(items), commands, &mut state);
 }
 
 // Provider and tool output must never become terminal escape sequences.
@@ -396,7 +468,7 @@ mod tests {
     use super::*;
     use crate::{ejm_theme::UNICODE, ejm_tui::Appearance};
     use clap::Parser;
-    use ratatui::{Terminal, backend::TestBackend, style::Color};
+    use ratatui::{Terminal, backend::TestBackend, buffer::Buffer, style::Color};
 
     #[test]
     fn strips_terminal_control_sequences_and_preserves_readable_text() {
@@ -474,13 +546,16 @@ mod tests {
         assert_eq!((row, col), (1, 2));
     }
 
-    fn screen(args: &Args, glyphs: &Glyphs, width: u16, height: u16) -> String {
+    fn app() -> App {
         let session = serde_json::from_value(serde_json::json!({
             "id": "123456789", "title": "test", "cwd": "/tmp", "created_at_ms": 0,
             "status": "idle"
         }))
         .unwrap();
-        let mut app = App::new(session);
+        App::new(session)
+    }
+
+    fn render_app(args: &Args, glyphs: &Glyphs, width: u16, height: u16, mut app: App) -> Buffer {
         let governor =
             ejm_harness_exec::Governor::new(ejm_harness_exec::ResourceLimits::default()).unwrap();
         let snapshot = ejm_harness::HarnessSnapshot {
@@ -494,13 +569,19 @@ mod tests {
         terminal
             .draw(|frame| draw_screen(frame, &mut app, args, &snapshot, &theme, glyphs))
             .unwrap();
-        terminal
-            .backend()
-            .buffer()
+        terminal.backend().buffer().clone()
+    }
+
+    fn text(buffer: &Buffer) -> String {
+        buffer
             .content()
             .iter()
             .map(ratatui::buffer::Cell::symbol)
             .collect::<String>()
+    }
+
+    fn screen(args: &Args, glyphs: &Glyphs, width: u16, height: u16) -> String {
+        text(&render_app(args, glyphs, width, height, app()))
     }
 
     #[test]
@@ -514,7 +595,7 @@ mod tests {
                 assert!(text.contains("12 agents · models 2+3q · tools 0+0q · Ready"));
                 assert!(text.contains("› Describe a task…"));
                 assert!(text.contains("╭ message"));
-                assert!(text.contains("Enter send · Ctrl+C stop/quit · Alt+Enter new line"));
+                assert!(text.contains("/ commands · Enter send · Ctrl+C stop/quit"));
             }
         }
         assert!(screen(&args, &UNICODE, 19, 8).contains("Enlarge the"));
@@ -527,5 +608,72 @@ mod tests {
         assert!(text.is_ascii(), "{text}");
         assert!(text.contains("> Describe a task..."));
         assert!(text.contains("+ message"));
+    }
+
+    #[test]
+    fn command_picker_filters_and_keeps_selection_visible_without_color() {
+        let args = Args::try_parse_from(["ejm-cli", "--replay", "--plain", "--no-color"]).unwrap();
+        for (width, height) in [(100, 30), (40, 10)] {
+            let mut app = app();
+            app.composer.insert("/s");
+            app.command_picker.selected = 1;
+            let buffer = render_app(&args, &crate::ejm_theme::ASCII, width, height, app);
+            let text = text(&buffer);
+            assert!(text.is_ascii(), "{text}");
+            assert!(text.contains("/sessions"), "{text}");
+            assert!(text.contains("/steer MESSAGE"), "{text}");
+            assert!(!text.contains("/reload"), "{text}");
+            assert!(
+                buffer
+                    .content()
+                    .iter()
+                    .any(|cell| cell.modifier.contains(Modifier::REVERSED))
+            );
+            assert!(
+                buffer
+                    .content()
+                    .iter()
+                    .all(|cell| cell.fg == Color::Reset && cell.bg == Color::Reset)
+            );
+        }
+    }
+
+    #[test]
+    fn dismissed_picker_preserves_the_visible_draft() {
+        let args = Args::try_parse_from(["ejm-cli", "--replay"]).unwrap();
+        let mut app = app();
+        app.composer.insert("/s");
+        app.command_picker.dismissed = true;
+        let text = text(&render_app(&args, &UNICODE, 100, 30, app));
+        assert!(text.contains("› /s"), "{text}");
+        assert!(!text.contains("commands: Up/Down"), "{text}");
+    }
+
+    #[test]
+    fn help_scrolls_selected_commands_into_view_on_short_screens() {
+        let args = Args::try_parse_from(["ejm-cli", "--replay", "--plain"]).unwrap();
+        for (width, height) in [(100, 30), (40, 10)] {
+            for name in ["help", "sessions", "reload", "exit"] {
+                let mut app = app();
+                let selected = app
+                    .commands
+                    .iter()
+                    .position(|entry| entry.name == name)
+                    .unwrap();
+                app.overlay = Some(Overlay::Help { selected });
+                let text = text(&render_app(
+                    &args,
+                    &crate::ejm_theme::ASCII,
+                    width,
+                    height,
+                    app,
+                ));
+                assert!(
+                    text.contains(&format!("/{name}")),
+                    "{width}x{height}: {text}"
+                );
+                assert!(text.is_ascii(), "{text}");
+            }
+        }
     }
 }

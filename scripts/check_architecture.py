@@ -17,6 +17,8 @@ ALLOWED_DEPENDENCIES = {
     "hyper", "hyper-util", "http-body-util",
     # Alacritty's ANSI parser with a fixed OSC buffer and no default features.
     "vte",
+    # Owned terminal parsing, bounded buffer cleanup and safe native input modes.
+    "termwiz", "zeroize", "rustix", "crossterm_winapi", "winsafe",
     # Reusable package installation/runtime ports and validated, portable manifests.
     "ejm-harness-packages", "ejm-harness-package-spec", "serde",
 }
@@ -68,6 +70,8 @@ def check_packages() -> None:
     manifest = tomllib.loads((ROOT / "crates/ejm-cli/Cargo.toml").read_text())
     require(manifest["lints"]["workspace"] is True, "The CLI must inherit workspace lints.")
     extra = set(manifest["dependencies"]) - ALLOWED_DEPENDENCIES
+    for target in manifest.get("target", {}).values():
+        extra.update(set(target.get("dependencies", {})) - ALLOWED_DEPENDENCIES)
     require(not extra, f"Review new dependencies and update this boundary check with a reason: {sorted(extra)}")
     require(manifest["dependencies"]["vte"]["default-features"] is False, "Keep VTE's fixed OSC buffer by disabling default features.")
     for dependency in ("ejm-harness", "ejm-harness-coding", "ejm-harness-exec", "ejm-harness-auth", "ejm-harness-packages", "ejm-harness-package-spec"):

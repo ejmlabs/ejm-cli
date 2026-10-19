@@ -139,6 +139,26 @@ impl Extensions {
         self.resolve(name, ExportKind::Command)
     }
 
+    pub fn commands(&self) -> Vec<(String, String)> {
+        self.packages
+            .iter()
+            .flat_map(|(package, grants)| {
+                package
+                    .manifest
+                    .exports
+                    .commands
+                    .iter()
+                    .filter(|command| grants.commands.contains(&command.name))
+                    .map(|command| {
+                        (
+                            format!("{}:{}", package.manifest.name, command.name),
+                            command.description.clone(),
+                        )
+                    })
+            })
+            .collect()
+    }
+
     pub fn context(
         &self,
         harness: &ejm_harness::Harness,

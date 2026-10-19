@@ -1,0 +1,44 @@
+name: Prepare ejm-cli CI
+description: Install the pinned relay build and browser-test prerequisites.
+runs:
+  using: composite
+  steps:
+    - name: Install pinned Node
+      uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+      with:
+        node-version: 26.12.0
+        package-manager-cache: false
+
+    - name: Install pinned npm
+      shell: bash
+      run: npm install --global --ignore-scripts npm@11.20.0
+
+    - name: Install Linux native build prerequisites
+      if: ${{ runner.os == 'Linux' }}
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install --yes --no-install-recommends pkg-config libdbus-1-dev
+
+    - name: Install the pinned Rust WebAssembly target
+      shell: bash
+      run: rustup target add --toolchain 1.99.1 wasm32-unknown-unknown
+
+    - name: Install pinned wasm-bindgen CLI
+      shell: bash
+      run: cargo +1.99.1 install wasm-bindgen-cli --version 0.2.129 --locked --bin wasm-bindgen --jobs 2
+
+    - name: Install locked browser tools and Chrome
+      if: ${{ hashFiles('product/relay/package.json') != '' }}
+      shell: bash
+      working-directory: ${{ github.action_path }}/../../../relay
+      run: |
+        npm ci --ignore-scripts
+        npm exec --no -- playwright install --with-deps chrome
+
+    - name: Record tool versions
+      shell: bash
+      run: |
+        node --version
+        npm --version
+        wasm-bindgen --version
