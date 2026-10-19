@@ -16,6 +16,11 @@ Queued remote prompts SHALL remain host-owned and revocable until admission. Adm
 - **WHEN** sharing stops while accepted prompts wait for completion observers
 - **THEN** stop acknowledgement removes those prompts before any later admission, including after the observer returns
 
+#### Scenario: Local input and signals during cleanup
+
+- **WHEN** a completion observer is blocked or host startup owns protected input
+- **THEN** local revocation, session changes, exit and termination remain responsive, restore the terminal and prevent queued remote admission; trusted local stop also cancels retained local successors
+
 #### Scenario: A fast local successor overtakes replay
 
 - **WHEN** the target's driver hands off to a queued local successor that finishes before the host observes completion

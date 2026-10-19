@@ -516,6 +516,10 @@ async fn serve_connected(
             }
             () = sleep_until(share_deadline) => return Err(anyhow!("sharing expired")),
             () = sleep_until(lease_deadline) => return Ok(()),
+            ready = backend.queue_ready(now_ms()) => {
+                ready?;
+                backend.settle(now_ms()).await?;
+            }
             request = socket.receive() => {
                 let Ok(request) = request else { return Ok(()); };
                 let WireBody::Client(request) = request.body else { bail!("controller sent a server message"); };

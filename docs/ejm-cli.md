@@ -125,7 +125,8 @@ Terminals vary in how they encode modifier keys. Ctrl+J is the newline fallback 
 
 Switching sessions keeps the composer draft and sent-message history, selected
 package palette, command catalog and widget lines. Other runs remain managed by
-the same ejm-harness. `/stop` targets the selected session. Exiting cancels and drains all runs owned by this CLI process.
+the same ejm-harness. `/stop` targets the selected session, including retained
+cleanup and queued local successors. Exiting cancels and drains all runs owned by this CLI process.
 
 ## Native remote access
 

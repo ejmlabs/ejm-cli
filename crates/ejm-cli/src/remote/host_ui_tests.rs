@@ -56,6 +56,7 @@ fn host(session: &Session, task: HostTask) -> HostUi {
             body: Zeroizing::new("fixture invitation".into()),
             answer: None,
         }),
+        shutdown: CancellationToken::new(),
         cancel: CancellationToken::new(),
         task: Some(task),
     }
@@ -437,6 +438,173 @@ async fn terminal_private_boundary(config: &RemoteTerminalConfig) -> Result<()> 
     backend.shutdown().await
 }
 
+// Only the ignored PTY fixture replaces OAuth transport. Production login is unchanged.
+pub(super) async fn startup_login_fixture(cancel: CancellationToken) -> Result<()> {
+    if std::env::var("EJM_REMOTE_TERMINAL_CASE").as_deref() == Ok("host-signal") {
+        super::super::protected::login_notice(
+            "Offline host startup fixture",
+            true,
+            "https://relay.example",
+            cancel,
+        )
+        .await?;
+        anyhow::bail!("host fixture must stop before OAuth transport");
+    }
+    Ok(())
+}
+
+struct ObserverGate {
+    started: tokio::sync::Notify,
+    start_release: tokio::sync::Notify,
+    ended: mpsc::Sender<CancellationToken>,
+    end_release: tokio::sync::Notify,
+}
+
+#[async_trait::async_trait]
+impl ejm_harness::Hook for ObserverGate {
+    async fn run_start(&self, _: &ejm_harness::HookContext, prompt: String) -> Result<String> {
+        self.started.notify_one();
+        self.start_release.notified().await;
+        Ok(prompt)
+    }
+    async fn run_end(
+        &self,
+        context: &ejm_harness::HookContext,
+        _: &ejm_harness::RunSummary,
+    ) -> Result<()> {
+        self.ended.send(context.cancel.clone()).await?;
+        self.end_release.notified().await;
+        Ok(())
+    }
+}
+
+async fn queued_observer(
+    backend: &LocalBackend,
+    session: &Session,
+    gate: &ObserverGate,
+    ends: &mut mpsc::Receiver<CancellationToken>,
+) -> Result<(ejm_harness::RunHandle, CancellationToken)> {
+    use super::super::protocol::{
+        ClientRequest, ExpectedState, Mutation, MutationAction, MutationOutcome, ServerMessage,
+    };
+    let target = backend.start(&session.id, "original target".into()).await?;
+    gate.started.notified().await;
+    let ServerMessage::Snapshot {
+        through_sequence, ..
+    } = backend
+        .request(
+            "observer",
+            ClientRequest::Snapshot {
+                after_sequence: 0,
+                limit: 512,
+            },
+            NOW,
+        )
+        .await?
+    else {
+        anyhow::bail!("missing fixture snapshot");
+    };
+    let response = backend
+        .request(
+            "observer",
+            ClientRequest::Mutation {
+                mutation: Mutation {
+                    sequence: 1,
+                    expected: ExpectedState {
+                        session_id: session.id.clone(),
+                        run_id: Some(target.id.clone()),
+                        event_sequence: through_sequence,
+                    },
+                    action: MutationAction::Queue {
+                        run_id: target.id.clone(),
+                        text: "must stay revoked".into(),
+                    },
+                },
+            },
+            NOW,
+        )
+        .await?;
+    anyhow::ensure!(
+        matches!(
+            response,
+            ServerMessage::Outcome {
+                outcome: MutationOutcome::Queued,
+                ..
+            }
+        ),
+        "remote queue not accepted"
+    );
+    gate.start_release.notify_one();
+    let observer = ends.recv().await.context("missing blocked observer")?;
+    Ok((target, observer))
+}
+
+async fn terminal_observer_loop() -> Result<()> {
+    let directory = tempfile::tempdir()?;
+    let (ended, mut ends) = mpsc::channel(1);
+    let gate = Arc::new(ObserverGate {
+        started: tokio::sync::Notify::new(),
+        start_release: tokio::sync::Notify::new(),
+        ended,
+        end_release: tokio::sync::Notify::new(),
+    });
+    let harness = Harness::with_hooks(
+        HarnessConfig {
+            state_dir: directory.path().join("sessions"),
+            ..HarnessConfig::default()
+        },
+        Arc::new(ReplayProvider::echo()),
+        vec![],
+        vec![gate.clone()],
+    )?;
+    let session = harness
+        .create_session(SessionOptions {
+            cwd: directory.path().into(),
+            title: "observer fixture".into(),
+        })
+        .await?;
+    let backend = LocalBackend::new(harness);
+    backend
+        .begin_share(&session.id, "observer".into(), ShareRole::Control, u64::MAX)
+        .await?;
+    let (mut target, observer) = queued_observer(&backend, &session, &gate, &mut ends).await?;
+    let (mut task, _sender, _release) = held_task("observer");
+    task.expires_at_ms = u64::MAX;
+    let mut sharing = host(&session, task);
+    sharing.panel = None;
+    let mut app = App::new(session.clone());
+    app.notice("Observer blocked");
+    let args = Args::try_parse_from(["ejm-cli", "--replay"])?;
+    let extensions = crate::extensions::Extensions::empty()?;
+    let terminal = crate::ui::TerminalGuard::enter()?;
+    crate::ui::with_shutdown(
+        &backend,
+        CancellationToken::new(),
+        crate::ui::run_app(&backend, &args, &extensions, sharing, app, terminal),
+    )
+    .await?;
+    anyhow::ensure!(
+        !observer.is_cancelled(),
+        "local input waited for observer release or timeout"
+    );
+    anyhow::ensure!(
+        backend.shared_session().await.is_none(),
+        "local exit retained remote authority"
+    );
+    gate.end_release.notify_one();
+    target.wait().await?;
+    let events = backend.events(&session.id, 0, 512).await?;
+    anyhow::ensure!(
+        events
+            .iter()
+            .filter(|event| matches!(event.kind, ejm_harness::EventKind::RunStarted { .. }))
+            .count()
+            == 1,
+        "revoked remote prompt started"
+    );
+    backend.shutdown().await
+}
+
 #[expect(
     clippy::panic,
     reason = "The PTY supervisor verifies private input is discarded before panic restores echo."
@@ -451,6 +619,30 @@ async fn remote_terminal_interaction_fixture() -> Result<()> {
     let config = terminal_config()?;
     let mode = std::env::var("EJM_REMOTE_TERMINAL_CASE")
         .context("remote terminal fixture case missing")?;
+    if mode == "host-signal" {
+        let (directory, backend, _) = backend().await?;
+        let args = Args::try_parse_from([
+            "ejm-cli",
+            "--replay",
+            "--memory-only",
+            "--relay",
+            "https://relay.example",
+            "--state-dir",
+            directory.path().to_str().context("fixture path")?,
+            "remote",
+            "host",
+        ])?;
+        crate::ui::run(
+            (*backend).clone(),
+            &args,
+            &crate::extensions::Extensions::empty()?,
+        )
+        .await?;
+        return backend.shutdown().await;
+    }
+    if mode.starts_with("observer-") {
+        return terminal_observer_loop().await;
+    }
     #[cfg(unix)]
     let mut panic_signal =
         tokio::signal::unix::signal(tokio::signal::unix::SignalKind::user_defined1())?;

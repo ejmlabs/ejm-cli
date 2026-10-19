@@ -9,6 +9,7 @@ use super::{
 };
 use anyhow::{Context, Result, ensure};
 use ejm_harness::{Event, EventKind, Harness, RunHandle, RunStatus, Session};
+use futures_util::FutureExt;
 use std::{
     collections::{BTreeMap, VecDeque},
     ops::Deref,
@@ -144,14 +145,7 @@ impl LocalBackend {
         let mut state = self.authority.lock().await;
         self.refresh(&mut state, session).await?;
         Self::discard_pending(&mut state, session);
-        if let Some(run) = state
-            .sessions
-            .get(session)
-            .and_then(|view| view.active.as_deref())
-        {
-            self.harness.cancel_run(session, run).await?;
-        }
-        Ok(())
+        self.harness.cancel(session).await
     }
 
     pub async fn begin_share(
@@ -192,6 +186,10 @@ impl LocalBackend {
             return true;
         }
         false
+    }
+
+    pub async fn stop_sharing(&self) {
+        self.authority.lock().await.share = None;
     }
 
     pub async fn shared_session(&self) -> Option<String> {
@@ -413,9 +411,11 @@ impl LocalBackend {
         let Some(mut pending) = pending else {
             return Ok(());
         };
-        // Durable RunFinished precedes run-end hooks. Keep revocation free to win
-        // while the exact target finishes those hooks and its active-map cleanup.
-        let completed = pending.handle.wait_completion().await;
+        // Poll the retained watch result once. Never suspend terminal input on a
+        // run-end observer; the original handle remains owned by the live share.
+        let Some(completed) = pending.handle.wait_completion().now_or_never() else {
+            return Ok(());
+        };
         let mut state = self.authority.lock().await;
         if !pending.is_current(&state) {
             return Ok(());
@@ -455,6 +455,20 @@ impl LocalBackend {
         Ok(())
     }
 
+    pub async fn queue_ready(&self, now: u64) -> Result<()> {
+        let pending = {
+            let mut state = self.authority.lock().await;
+            self.queued_completion(&mut state, now).await?
+        };
+        if let Some(mut pending) = pending {
+            // Readiness only wakes the transport; settle rechecks admission.
+            let _ = pending.handle.wait_completion().await;
+            Ok(())
+        } else {
+            std::future::pending().await
+        }
+    }
+
     async fn queued_completion(
         &self,
         state: &mut Authority,
@@ -465,6 +479,9 @@ impl LocalBackend {
         };
         if now >= share.expires {
             state.share = None;
+            return Ok(None);
+        }
+        if share.queue.is_empty() {
             return Ok(None);
         }
         let session = share.session.clone();

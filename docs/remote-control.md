@@ -31,8 +31,9 @@ those writers have stopped. It preserves any legacy identity or creates a new
 one when none exists. See the recovery steps below.
 
 On Linux and macOS, Ctrl-C or SIGTERM cancels remote commands and releases
-their protected terminal mode. The real-command SIGTERM correction still needs
-its regression and full-gate verification before release.
+their protected terminal mode. Signal ownership begins before memory-only host
+sign-in and initial sharing. The lifecycle correction still needs its production
+loop, startup PTY and full-gate verification before release.
 
 Sign in through GitHub, approve the device code you requested, and accept the
 relay service terms. The relay requests the verified primary email with the
@@ -90,8 +91,10 @@ Use `/quit` to leave.
 
 Queued prompts stay in the host until the exact target succeeds and its
 bounded completion observers return. A durable finished event alone does not
-release them. The host waits outside its share lock, then rechecks the share,
-expiry and current target before admission. If detailed completion reports a
+release them. The host polls the retained completion without blocking terminal
+input, then rechecks the share, expiry and current target before admission.
+Local `/stop` also cancels retained run cleanup and its queued local successors;
+remote stop remains bound to the controller's exact run. If detailed completion reports a
 local queued successor, the host discards the dependent remote chain even if
 that successor has already finished. Stopping or replacing the share
 during that wait discards undispatched prompts. Text above 16,384 UTF-8 bytes

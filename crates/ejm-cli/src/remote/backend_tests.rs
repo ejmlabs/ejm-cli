@@ -162,6 +162,11 @@ mod contracts {
                         if let EventKind::RunFinished { summary } = event.kind
                             && summary.run_id == run_id
                         {
+                            if let Some(mut handle) =
+                                self.backend.subscribe_run(&self.session.id, run_id).await
+                            {
+                                handle.wait().await?;
+                            }
                             return Ok(summary);
                         }
                     }
@@ -260,14 +265,8 @@ mod contracts {
         fixture: &Fixture,
         sequence: u64,
     ) -> Result<()> {
-        tokio::select! {
-            biased;
-            result = settling => {
-                result?;
-                bail!("queued admission finished before its run-end observer");
-            }
-            result = fixture.outcome(sequence) => assert_eq!(result?, MutationOutcome::Queued),
-        }
+        settling.await?;
+        assert_eq!(fixture.outcome(sequence).await?, MutationOutcome::Queued);
         Ok(())
     }
 
@@ -735,7 +734,8 @@ mod contracts {
                 assert_waiting(&mut settling, &fixture, sequence).await?;
                 assert_eq!(fixture.outcome(2).await?, MutationOutcome::Queued);
                 hooks.end_release.notify_one();
-                settling.await?;
+                fixture.backend.queue_ready(NOW).await?;
+                fixture.backend.settle(NOW).await?;
                 target = accepted(fixture.outcome(sequence).await?)?;
                 assert_eq!(
                     starts.recv().await.context("missing admitted start")?,
@@ -808,8 +808,8 @@ mod contracts {
                 )
                 .await?;
             hooks.end_release.notify_one();
-            settling.await?;
             assert_eq!(target.wait().await?.status, RunStatus::Completed);
+            fixture.backend.settle(NOW).await?;
             assert!(
                 fixture
                     .backend
@@ -817,6 +817,34 @@ mod contracts {
                     .await
             );
             assert_eq!(fixture.started_prompts().await?, ["revoked target"]);
+            fixture.backend.shutdown().await
+        })
+        .await?
+    }
+
+    #[tokio::test]
+    async fn local_stop_cancels_successors_during_run_end_cleanup() -> Result<()> {
+        timeout(Duration::from_secs(10), async {
+            let (hooks, mut starts, mut ends) = CompletionGates::new();
+            let fixture =
+                Fixture::with_hooks(None, ShareRole::Control, vec![hooks.clone()]).await?;
+            let mut target = fixture
+                .backend
+                .start(&fixture.session.id, "local target".into())
+                .await?;
+            assert_eq!(starts.recv().await.context("missing target")?, target.id);
+            fixture
+                .backend
+                .enqueue(&fixture.session.id, "must not start".into())
+                .await?;
+            hooks.start_release.notify_one();
+            assert_eq!(ends.recv().await.context("missing end")?, target.id);
+            assert!(fixture.expected().await?.run_id.is_none());
+            fixture.backend.cancel(&fixture.session.id).await?;
+            hooks.end_release.notify_one();
+            let completion = timeout(Duration::from_secs(3), target.wait_completion()).await??;
+            assert!(!completion.queued_successor);
+            assert_eq!(fixture.started_prompts().await?, ["local target"]);
             fixture.backend.shutdown().await
         })
         .await?
@@ -876,7 +904,7 @@ mod contracts {
             hooks.end_release.notify_one();
             assert_eq!(completion.wait().await?.status, RunStatus::Completed);
             // Resume host admission only after the local successor has disappeared.
-            settling.await?;
+            fixture.backend.settle(NOW).await?;
             assert_rejected(&fixture.outcome(1).await?, RemoteError::StaleState);
             assert_eq!(
                 fixture.started_prompts().await?,

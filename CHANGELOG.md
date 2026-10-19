@@ -11,6 +11,7 @@ Changes follow [Semantic Versioning](https://semver.org/). Each repository is ve
 
 ### Fixed
 
+- Prepare responsive local revocation during completion observers, signal cleanup before protected host startup, and trusted local stop of retained cleanup and queued successors. Corrected lifecycle gates remain pending.
 - Adopt the retained 40d shared reviewer source context and isolated Linux CI Secret Service through protected PR #9. Its baseline Linux/macOS gates passed; installed 40d readable harness review and the native vault gate remain separate.
 - Prepare SIGTERM cancellation and terminal restoration for real remote commands; the corrected combined gate remains pending.
 - Keep display recovery ordered through acknowledged journal catch-up, suppressing newer live events until recovery completes.

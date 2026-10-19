@@ -38,23 +38,20 @@ pub struct HostUi {
     role: ShareRole,
     connected: bool,
     panel: Option<Panel>,
+    shutdown: CancellationToken,
     cancel: CancellationToken,
     task: Option<HostTask>,
 }
 
 impl HostUi {
-    pub async fn prepare(args: &Args) -> Result<Self> {
+    pub async fn prepare(args: &Args, shutdown: CancellationToken) -> Result<Self> {
         let account = if super::host_role(args).is_some() {
             let origin = super::origin(args)?;
             Some(if args.memory_only {
-                RelayAccount::login(
-                    origin,
-                    &args.state_dir(),
-                    true,
-                    false,
-                    CancellationToken::new(),
-                )
-                .await?
+                #[cfg(test)]
+                tests::startup_login_fixture(shutdown.clone()).await?;
+                RelayAccount::login(origin, &args.state_dir(), true, false, shutdown.clone())
+                    .await?
             } else {
                 RelayAccount::load(origin, &args.state_dir()).await?
             })
@@ -67,7 +64,8 @@ impl HostUi {
             role: ShareRole::View,
             connected: false,
             panel: None,
-            cancel: CancellationToken::new(),
+            cancel: shutdown.child_token(),
+            shutdown,
             task: None,
         })
     }
@@ -105,7 +103,7 @@ impl HostUi {
                 invite.share_expires_at_ms(),
             )
             .await?;
-        self.cancel = CancellationToken::new();
+        self.cancel = self.shutdown.child_token();
         self.session = Some(session.into());
         self.role = role;
         self.connected = false;

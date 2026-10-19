@@ -312,3 +312,22 @@ the harness's existing vault tests rather than copy their implementation.
 Update the canonical registry guide in this source layer; the separate docs
 composition and final pair's normal locked and hosted gates remain required.
 This source correction completes no deployment task.
+
+## Native lifecycle review correction
+
+Both complete reviews of native head `e7409919...` found that awaiting completion
+inside the UI tick stalls local revocation and that host startup enters protected
+input before signal registration. One also found local cancellation relied on
+replay idleness while the harness still retained run-end cleanup and successors.
+Poll the retained completion once per tick with `FutureExt::now_or_never`, after
+local input, keeping the existing exact-run and authority checks. The transport
+also awaits that receiver outside authority as a wake only, with no idle clock;
+cancellation and expiry precede a fresh admission check. Install the
+biased signal scope before preparation, cancel its parent token and revoke the
+share on exit. Keep terminal futures scoped and host tasks cancelled on drop.
+Trusted local stop uses session cancellation; remote cancellation stays run-bound.
+Exercise the production terminal loop with blocked observers and the actual
+memory-only host startup using a test-only offline login transport seam. Prove
+input acknowledgments precede observer release or timeout. Fresh normal and hosted
+gates remain required; all eleven tasks stay open. The separate certificate
+duplicate allegation is not accepted evidence against the passing dependency gate.

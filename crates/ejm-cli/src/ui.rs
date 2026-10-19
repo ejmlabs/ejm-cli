@@ -29,33 +29,72 @@ use crate::{
 };
 
 pub async fn run(harness: Harness, args: &Args, extensions: &Extensions) -> Result<()> {
-    let harness = LocalBackend::new(harness);
-    let mut remote = HostUi::prepare(args).await?;
-    let mut events = harness.subscribe();
-    let mut app = initial_app(&harness, args, extensions).await?;
-    let mut extension_tasks = ExtensionTasks::default();
-    let mut widget_tick = tokio::time::interval(Duration::from_secs(1));
-    widget_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    let backend = LocalBackend::new(harness);
+    let cancel = tokio_util::sync::CancellationToken::new();
+    with_shutdown(
+        &backend,
+        cancel.clone(),
+        run_terminal(&backend, args, extensions, cancel),
+    )
+    .await
+}
+
+pub(crate) async fn with_shutdown(
+    backend: &LocalBackend,
+    cancel: tokio_util::sync::CancellationToken,
+    operation: impl std::future::Future<Output = Result<()>>,
+) -> Result<()> {
+    let guard = cancel.drop_guard();
+    // The first poll registers SIGTERM before startup can own a raw terminal.
+    let result = tokio::select! {
+        biased;
+        () = termination_signal() => Ok(()),
+        result = operation => result,
+    };
+    drop(guard);
+    backend.stop_sharing().await;
+    result
+}
+
+async fn run_terminal(
+    harness: &LocalBackend,
+    args: &Args,
+    extensions: &Extensions,
+    cancel: tokio_util::sync::CancellationToken,
+) -> Result<()> {
+    let mut remote = HostUi::prepare(args, cancel).await?;
+    let app = initial_app(harness, args, extensions).await?;
     let mut terminal = TerminalGuard::enter()?;
     if let Some(role) = crate::remote::host_role(args) {
-        remote.share(&harness, args, &app.session.id, role).await?;
+        remote.share(harness, args, &app.session.id, role).await?;
         if remote.has_panel() {
             terminal.reset_input()?;
         }
     }
+    run_app(harness, args, extensions, remote, app, terminal).await
+}
+
+pub(crate) async fn run_app(
+    harness: &LocalBackend,
+    args: &Args,
+    extensions: &Extensions,
+    mut remote: HostUi,
+    mut app: App,
+    mut terminal: TerminalGuard,
+) -> Result<()> {
+    let mut events = harness.subscribe();
+    let mut extension_tasks = ExtensionTasks::default();
+    let mut widget_tick = tokio::time::interval(Duration::from_secs(1));
+    widget_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut tick = tokio::time::interval(Duration::from_millis(32));
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut last_status_draw = Instant::now();
-    let shutdown = termination_signal();
-    tokio::pin!(shutdown);
     'events: loop {
         tokio::select! {
-            () = &mut shutdown => break,
             _ = tick.tick() => {
                 let private_panel = remote.has_panel();
-                remote.poll(&mut app, &harness, crate::remote::now_ms()?).await;
+                remote.poll(&mut app, harness, crate::remote::now_ms()?).await;
                 if private_panel != remote.has_panel() { terminal.reset_input()?; }
-                harness.settle(crate::remote::now_ms()?).await?;
                 for _ in 0..64 {
                     if !terminal.poll_input()? { break; }
                     let input = terminal.read_input()?;
@@ -65,39 +104,40 @@ pub async fn run(harness: Harness, args: &Args, extensions: &Extensions) -> Resu
                         continue;
                     }
                     if HostUi::is_command(&input, &app) {
-                        match remote.command(&app.composer.text, &harness, args, &app.session.id).await {
+                        match remote.command(&app.composer.text, harness, args, &app.session.id).await {
                             Ok(message) => { app.composer.take(); if let Some(message) = message { app.notice(message); } }
                             Err(error) => app.error(format!("{error:#}")),
                         }
                         if remote.has_panel() { terminal.reset_input()?; break; }
                         continue;
                     }
-                    match handle_input(input, &mut app, &harness, args, extensions, &mut extension_tasks).await {
+                    match handle_input(input, &mut app, harness, args, extensions, &mut extension_tasks).await {
                         Ok(true) => break 'events,
                         Ok(false) => {},
                         Err(error) => app.error(format!("{error:#}")),
                     }
                     if remote.session_changed(&app.session.id) {
-                        remote.stop(&harness).await;
+                        remote.stop(harness).await;
                         app.notice("Sharing ended because the selected session changed.");
                     }
                 }
+                harness.settle(crate::remote::now_ms()?).await?;
                 if app.dirty || (app.is_running() && last_status_draw.elapsed() >= Duration::from_millis(250)) {
-                    draw_app(&mut terminal, &mut app, args, &remote, &harness).await?;
+                    draw_app(&mut terminal, &mut app, args, &remote, harness).await?;
                     last_status_draw = Instant::now();
                 }
             }
             event = events.recv() => match event {
                 Ok(event) => app.apply(event),
                 Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
-                    recover_events(&harness, &mut app).await?;
+                    recover_events(harness, &mut app).await?;
                 }
                 Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
             },
             _ = widget_tick.tick(), if extensions.has_widgets() && !extension_tasks.widget_active && !extension_tasks.widgets_paused => {
                 extension_tasks.widget_active = true;
                 let extensions = extensions.clone();
-                let context = extensions.context(&harness, &app.session);
+                let context = extensions.context(harness, &app.session);
                 extension_tasks.jobs.spawn(async move { ExtensionReply::Widgets(extensions.widgets(context).await) });
             }
             reply = extension_tasks.jobs.join_next(), if !extension_tasks.jobs.is_empty() => {
@@ -106,7 +146,7 @@ pub async fn run(harness: Harness, args: &Args, extensions: &Extensions) -> Resu
             }
         }
     }
-    remote.stop(&harness).await;
+    remote.stop(harness).await;
     Ok(())
 }
 

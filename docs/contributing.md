@@ -78,7 +78,7 @@ passes remain historical.
 
 The prepared queue correction consumes the harness owner's exact current-run
 completion subscription. It keeps one completion receiver for the revocable
-remote target, waits outside host authority, discards an atomically reported
+remote target, polls completion after local input, discards an atomically reported
 local-successor handoff and rechecks the share and current
 run before admitting a prompt. This reuses the existing watch result, without a
 new task, channel, queue engine or dependency. The backend contract covers a real
@@ -90,7 +90,8 @@ see the [correction record](native-remote-publication.md#prepared-completion-and
 
 The normal gate drives the native private-terminal fixture through
 `scripts/check_terminal.py`; all eight fixture cases and the real-command
-SIGTERM case must pass before claiming native terminal acceptance. The gate
+SIGTERM case, memory-only host startup and four blocked-observer loop cases must
+pass before claiming native terminal acceptance. The gate
 selects the exact unit-test executable from
 compiler-artifact JSON emitted by that same locked Cargo test invocation,
 including cache hits. Missing or ambiguous artifacts fail; timestamps in a

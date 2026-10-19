@@ -152,6 +152,25 @@ def check(binary: Path, terminate: bool, remote_case: str | None = None, remote_
                     return re.sub(rb"\x1b\[[0-?]*[ -/]*[@-~]", b"", output[mark:])
 
         def check_remote_flow() -> None:
+            if remote_case == "host-signal":
+                read_until(b"Relay sign-in")
+                flags = termios.tcgetattr(slave)[3]
+                assert not flags & (termios.ICANON | termios.ECHO), "host login did not protect terminal input"
+                os.write(master, b"\x1b[200~" + private_input + b"\x1b[201~")
+                process.send_signal(signal.SIGTERM)
+                return
+            if remote_case and remote_case.startswith("observer-"):
+                read_until(b"Observer blocked")
+                if remote_case == "observer-signal":
+                    process.send_signal(signal.SIGTERM)
+                else:
+                    command = {"observer-stop": b"/remote stop\r", "observer-switch": b"/new\r", "observer-quit": b"/quit\r"}[remote_case]
+                    os.write(master, command)
+                    if remote_case != "observer-quit":
+                        expected = b"Sharing stopped" if remote_case == "observer-stop" else b"Sharing ended because the selected session changed"
+                        read_until(expected)
+                        os.write(master, b"/quit\r")
+                return
             read_until(b"Connect to a shared session")
             assert not termios.tcgetattr(slave)[3] & termios.ICANON, "private input did not enter raw mode"
             entered = private_input.ljust(8193, b"x") if remote_case == "error" else private_input
@@ -256,7 +275,7 @@ def check(binary: Path, terminate: bool, remote_case: str | None = None, remote_
 
 
 REMOTE_TEST = "remote::host_ui::tests::remote_terminal_interaction_fixture"
-REMOTE_CASES = ("flow", "queued-complete", "queued-partial", "cancel", "interrupt", "error", "signal", "panic")
+REMOTE_CASES = ("flow", "queued-complete", "queued-partial", "cancel", "interrupt", "error", "signal", "panic", "host-signal", "observer-stop", "observer-switch", "observer-quit", "observer-signal")
 
 
 def native_fixture(messages: Path) -> Path:

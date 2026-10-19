@@ -12,6 +12,20 @@ API merge 42e below. Earlier native 61aa-based results remain historical. The
 combined normal gate, hosted review and native adoption remain pending. Recheck
 the protected source after the separate public cutover before admission.
 
+## Lifecycle review successor
+
+The normal gate passed on native head `e7409919...`. Both complete hosted reviews
+found blocked terminal input during completion waits and unhandled signals during
+protected host startup. One also found trusted local stop missed retained run-end
+cleanup. This successor polls completion after local input, starts signal ownership
+before preparation, revokes on exit and uses session-level local cancellation.
+Its offline PTY cases enter the production loop with blocked observers and the real
+memory-only host path with only OAuth transport replaced. Fresh corrected runtime,
+normal and hosted acceptance remain pending. All eleven deployment tasks stay open.
+The e740 local and Linux gates passed Cargo Deny, including all four policy groups;
+the review's separate certificate-duplicate allegation does not justify a graph
+or policy change. This successor preserves the lock and deny policy.
+
 ## Included source
 
 The native module contains account/device HTTP, a certificate-rejection TLS
@@ -112,7 +126,7 @@ remains exact; this consumer's matching full/hosted gates are still pending.
 The completion change adds no package dependency or background task.
 
 `LocalBackend` retains one handle for its current revocable queue target. It
-waits outside host authority, refreshes durable state and rechecks the same share,
+polls once without blocking terminal input, refreshes durable state and rechecks the same share,
 expiry, target and current run before popping a prompt. It discards the dependent
 chain when detailed completion reports a queued local successor, even if that
 successor finished before replay. Revocation or a
@@ -128,8 +142,8 @@ bytes without losing valid pending work. On 2026-10-19, the retained focused
 0a7a/826e run passed all 12 backend contracts. Event-only completion and a 64 KiB
 validator each failed their intended regression. The corrected log SHA-256 is
 `5506447deee7629e5ce05412f26a572d4ae97598ec8bd0c544dce07a7350f165`.
-This prepared successor preserves those test/runtime inputs; it has no combined
-full-gate pass. Hosted source binding, two complete reviews, explicit approval,
+Those focused results remain historical. This successor adapts the contracts for
+nonblocking completion and still needs its combined full gate. Hosted source binding, two complete reviews, explicit approval,
 protected adoption and live relay/docs acceptance remain separate.
 
 The display-recovery focused run separately passed both corrected contracts;
@@ -171,8 +185,9 @@ PTY supervisor. The gate captures compiler-artifact JSON from its existing locke
 Cargo test run and passes the exact native unit-test executable to the supervisor.
 It rejects missing or ambiguous artifacts instead of scanning a shared build
 directory by modification time. It then checks host flow, complete and partial
-queued paste, cancellation,
-interrupt, error, signal and panic. The ordinary interaction and restoration
+queued paste, cancellation, interrupt, error, signal and panic. It also checks
+memory-only host startup and stop, switch, quit and signal while a run-end
+observer remains blocked. The ordinary interaction and restoration
 checks remain. A focused rerun is `python3 scripts/check_terminal.py --remote-only
 CARGO_TEST_MESSAGES_JSONL`, using stdout captured from the current checkout's
 `cargo test --workspace --all-targets --locked --message-format=json-render-diagnostics`.
