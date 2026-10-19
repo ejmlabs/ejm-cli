@@ -1,6 +1,6 @@
 # Relay publication prelude and CI setup
 
-## Adopted setup hook and proposed completion guard
+## Adopted setup hook and completion guard
 
 The combined CI bootstrap, terminal input boundary and command foundation
 merged through CLI PR #2 as protected main commit
@@ -16,9 +16,9 @@ CLI PR #3 then adopted the scoped shared setup hook as protected main
 and release `standards-ref` pin
 `ae903129564926a14287f75d2012610c59cccb65`.
 
-This follow-up changes those three references together to combined shared
-implementation `c4f2873ef0eef5bc3c7d75cf71fa3489a911d134`. Shared PR #14 adopted
-that retained implementation as protected main
+CLI PR #4 adopted combined shared implementation
+`c4f2873ef0eef5bc3c7d75cf71fa3489a911d134` at those three references.
+Shared PR #14 adopted that retained implementation as protected main
 `d00d8bbc7231485eb918008c562d835f394e82ea`. It preserves the CLI setup hook
 and Linux harness prerequisites, and rejects an incomplete AI result even with
 no findings. Each pass must return JSON boolean `complete: true`. The earlier
@@ -31,8 +31,10 @@ tree `91b7f5c0990e27f2e0fdfcce26aac18afdcf6b81`. The exact reviewed
 implementation is retained at
 `refs/heads/workflow-pins/ae903129564926a14287f75d2012610c59cccb65` under
 active update/delete rule `25369476`, with no bypass actors. Protected main
-rules were unchanged in that receipt. CLI PR #3 completed that caller adoption;
-it does not establish execution of the proposed completion guard. The earlier
+rules were unchanged in that receipt. CLI PR #3 completed the setup-hook adoption.
+PR #4 installed the completion guard, but its adoption run still used the old
+schema. Fresh installed-guard execution remains pending; see the
+[adoption receipt](#cli-pr-4-adoption-receipt). The earlier
 caller revision was `5fae851502c2e3c31d4df9a44f8d56c2cb49e098`. Keep the
 working harness pin unchanged at
 `4a751c6a3f24d7d143140f79ff53517fb93e3531`.
@@ -60,10 +62,10 @@ one step is skipped. A relay manifest without its lockfile fails installation.
 Tool installation needs network access and the hosted runner's package manager.
 
 The prior `5fae851502c2e3c31d4df9a44f8d56c2cb49e098` caller did not invoke
-this action. The installed `ae903129564926a14287f75d2012610c59cccb65` caller
-adds its exact local-action step only for the admitted `ejm-cli` profile in the
+this action. The `ae903129564926a14287f75d2012610c59cccb65` caller
+added its exact local-action step only for the admitted `ejm-cli` profile in the
 credential-free quality job, after Rust setup and before `./scripts/check`.
-The proposed `c4f2873ef0eef5bc3c7d75cf71fa3489a911d134` implementation retains
+The installed `c4f2873ef0eef5bc3c7d75cf71fa3489a911d134` implementation retains
 that exact hook.
 The source release continues to use the same central release workflow, with
 its `uses` and `standards-ref` pointing to the same revision. Product permissions,
@@ -84,17 +86,17 @@ review a fresh clean-checkout gate for each proposed source snapshot.
 1. Confirm the reviewed local action is on trusted CLI `main`. The prelude
    receipt above records its protected merge; retain its exact action, working
    harness pin and lock through this prerequisite.
-2. Check both exact retained implementations in the
-   [source evidence](ci/shared-workflow-review/README.md): installed
-   `ae903129564926a14287f75d2012610c59cccb65` and proposed
-   `c4f2873ef0eef5bc3c7d75cf71fa3489a911d134`. Verify canonical source identity
-   and retention protection. Keep all three proposed caller references equal.
-3. After ownership review, admit, review and merge the paired guard update
-   through normal protection, with the working harness pin unchanged. Obtain
-   fresh exact-source Linux and macOS quality results and inspect both actual
-   AI reports for completed scope. The adoption run uses the old validator;
-   test the installed completion guard through a later fresh admitted PR.
-4. Complete protected review of the required new private harness APIs. After the
+2. Retain the exact old/new implementation pair reviewed for PR #4 in the
+   [source evidence](ci/shared-workflow-review/README.md):
+   `ae903129564926a14287f75d2012610c59cccb65` and
+   `c4f2873ef0eef5bc3c7d75cf71fa3489a911d134`. The three installed caller
+   references now match the latter revision.
+3. PR #4 completed normal protected adoption with the working harness pin
+   unchanged, hosted Linux and macOS quality results, and two actual completed
+   AI reviews. Its run used the old validator. Complete the separate
+   [fresh installed-guard acceptance](#fresh-installed-guard-acceptance) before
+   claiming hosted execution of the new completion contract.
+4. Complete protected review of the required new harness APIs. After the
    hook provides their Linux native prerequisites, adopt the full reviewed API
    commit in `.github/harness-revision` through its own protected change. Retain
    the private credential scope and expiry requirements below.
@@ -137,19 +139,65 @@ complete that review or establish acceptance.
 
 The [shared workflow source evidence](ci/shared-workflow-review/README.md)
 supplies deduplicated exact plaintext copies of both implementations and their
-readable source, now rotating the installed `ae903129...` and proposed
-`c4f2873e...` pair in place. The manifest includes full revisions, trees,
+readable source for the old `ae903129...` and adopted `c4f2873e...` pair.
+The manifest includes full revisions, trees,
 original paths and modes, Git blob IDs, and SHA-256 receipts. These files are
-review data and add no execution authority. This follow-up changes the three
-caller references; runtime, tools, locks and the working harness pin remain
+review data and add no execution authority. PR #4 changed the three caller
+references; runtime, tools, locks and the working harness pin remained
 unchanged.
 
-This local preparation checks exact source context, canonical standards and
-callers, actionlint, strict OpenSpec, affected documentation links, whitespace,
-and the full patch limits. It does not run the native, site or full product
-gate, make model calls, or start hosted workflows. Fresh admitted Linux/macOS
-quality checks, two complete actual reviews, exact-head human approval and
-protected adoption remain required. Source publication and first releases keep
-their separate gates. This contributor CI guidance changes no product behavior;
-the relay source layer owns its public setup and recovery docs and their separate
-site publication.
+### CLI PR #4 adoption receipt
+
+On 2026-10-19, [CLI PR #4](https://github.com/ejmlabs/ejm-cli/pull/4) merged
+normally as `d5113beb9c42565e6dc124052dbd633d0d12d25d`. Its tree
+`f98ae57edd69a8a298616a1151a9473ba822b1cf` exactly matches reviewed head
+`07116d5e1ead7c006f185f26951736b02449fbba`. All five required statuses and the
+native approval passed; protection was unchanged, with no administrator bypass
+or settings exception.
+
+The [admitted run](https://github.com/ejmlabs/ejm-cli/actions/runs/39293429847)
+used trusted base `189170a37b3efab4e842266cb09d8aeeeb4d5d1b` and shared
+implementation `ae903129564926a14287f75d2012610c59cccb65`. Ubuntu 24.04 and
+macOS 15 each passed the required gate, including 58 unit tests, 5 integration
+tests, the release build, Rust documentation, dependency checks and actual PTY
+interaction/restoration. Repository standards passed for version `0.1.0`. The
+separate registry job succeeded but performs no registry checks for the CLI.
+
+Both independent `gpt-6.1-sol` sessions used medium reasoning. Their actual
+reports matched the reviewed head and pass numbers, stated completed static
+scope, and had no findings. The old schema has no `complete` field. These
+reports establish completed static review for adoption; they do not establish
+hosted enforcement of the installed `complete: true` contract.
+
+### Fresh installed-guard acceptance
+
+Task 4.4 in the existing
+[OpenSpec change](../openspec/changes/public-repository-standards/tasks.md)
+remains open. Use a fresh PR containing only this adoption receipt and acceptance
+record, based on protected main with the installed `c4f2873e...` callers. No
+workflow, setup action, harness pin, runtime, dependency or canonical review
+source changes are needed.
+
+1. After ownership review of its exact head, obtain separate human readiness
+   and approval for that full SHA through the existing admission process. A new
+   head needs new decisions. Do not reuse PR #4's admission or rerun its jobs.
+2. Read the actual new run, both report artifacts and both reviewer transcripts.
+   Confirm execution of canonical
+   `c4f2873ef0eef5bc3c7d75cf71fa3489a911d134`, including its result validator.
+   Each report must match the new head and its distinct pass number, contain
+   JSON boolean `complete: true`, and describe completed scope. Record artifact
+   IDs, digests, distinct sessions, model and medium reasoning. Wrapper success
+   or an empty findings list alone does not prove a completed review.
+3. Require successful Ubuntu and macOS Quality jobs, Repository standards,
+   Human readiness, Maintainer approval, AI review and native approval on the
+   current head. Read back unchanged protection. Merge only after those exact-head
+   human decisions and all gates pass; use the expected head without a bypass.
+4. Keep task 4.4 open until that evidence exists. Keep task 3.2's remaining
+   failure, stale-commit, revocation, missing-secret and release-refusal cases
+   open until separately verified. A successful fresh run does not prove those
+   negative cases.
+
+Preparing this receipt starts no hosted work or model calls. It changes no
+product behavior, source availability or release status. Source publication,
+first releases and the relay's public setup and recovery docs retain their
+separate gates. No site publication is claimed.
