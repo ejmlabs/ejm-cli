@@ -96,21 +96,26 @@ review a fresh clean-checkout gate for each proposed source snapshot.
    AI reviews. Its run used the old validator. Complete the separate
    [fresh installed-guard acceptance](#fresh-installed-guard-acceptance) before
    claiming hosted execution of the new completion contract.
-4. Complete protected review of the required new harness APIs. After the
-   hook provides their Linux native prerequisites, adopt the full reviewed API
-   commit in `.github/harness-revision` through its own protected change. Retain
-   the private credential scope and expiry requirements below.
-5. Publish native remote API consumers with a lockfile resolved for the new
-   trusted harness pin, then the bounded Worker/browser source. Run hosted Linux
+4. Adopt the retained harness selector through the three caller references,
+   keeping the working harness pin and lock unchanged. Follow the
+   [selector adoption order](#protected-harness-selector-adoption) below and
+   prove its installed execution in a subsequent admitted change.
+5. Complete protected review of the required new harness APIs. After the
+   setup hook and selector are installed, adopt the full reviewed API commit
+   and its matching consumer lockfile through a protected change. Retain the
+   private credential scope and expiry requirements below.
+6. Publish native remote API consumers against that reviewed dependency pair,
+   then the bounded Worker/browser source. Run hosted Linux
    and macOS quality checks for each exact admitted head. Retain the protected
    merge and release checks.
 
 Readiness may be posted under the maintainer's explicit delegation. Approval
 of each exact head requires its separate explicit human answer. Admission is
-tied to a non-draft PR targeting `main`; each new head needs fresh decisions. The quality workflow reads
-`.github/harness-revision` from trusted base `main`, not from the proposed PR.
-A passing pin-only PR therefore does not prove the new API consumer pair. Its
-later API-consuming source must pass a fresh locked gate with that trusted pin.
+tied to a non-draft PR targeting `main`; each new head needs fresh decisions.
+The installed C4 workflow reads `.github/harness-revision` from trusted base
+`main`. Until selector adoption, a passing pin-only PR does not prove the new
+API consumer pair. After adoption, the selector can test an admitted pin and
+matching lockfile together, subject to the protected-source checks below.
 
 The prepare job exports `product.tar` under `product/` and the selected private
 harness under `ejm-harness/`, preserving the workspace's `../ejm-harness` paths.
@@ -126,6 +131,66 @@ deleted lines, and 1,000,000 diff bytes per PR. Measure this caller prerequisite
 against protected main and remeasure every later committed diff.
 Keep generated build output, dependency caches, private environment files and
 the separate site migration out of these source changes.
+
+## Protected harness selector adoption
+
+This preparation starts from official CLI main
+`4d7756749b8ee1c1e9e91a70eefd3e36f345379f`. Its three shared references use
+`c4f2873ef0eef5bc3c7d75cf71fa3489a911d134`. The proposed PR caller,
+draft-release caller and release `standards-ref` advance together to
+`b2e43c9b9ba814e6d3681d86c88830f3c0b11a3c`. Central PR #16 protected-merged
+the reviewed implementation as
+`49df106b82cfd703411b3595a82cd4d597ed0933`. Before this source preparation,
+root verified the exact
+`workflow-pins/b2e43c9b9ba814e6d3681d86c88830f3c0b11a3c` ref and its active
+update/deletion blocks with no bypass actors. Read back that full retained ref
+and protection again before admission.
+
+The complete old C4/new b2 pair is in the
+[canonical manifest](../.github/review-context/manifest.json). The shared
+exporter copies all 16 required source paths per revision and records their
+full commits, trees, source modes, Git blob IDs, byte counts and SHA-256
+digests. Its 33 files total 636783 bytes, below the 750000-byte context cap.
+They are untrusted source evidence; the workflow callers, product gate and
+runtime do not execute them. The older ae903/C4 documentation bundle remains
+as [dated history](ci/shared-workflow-review/README.md), with its shared MIT
+notice. Keeping those files avoids a deletion/addition patch above the
+admission byte limit when rename detection is unavailable.
+
+For CLI changes, the proposed selector reads `.github/harness-revision` from
+the exact admitted Git commit. It accepts a full lowercase 40-character SHA
+only from an ordinary small Git blob. It then uses bounded, redirect-free
+GitHub reads for the fixed `ejmlabs/ejm-harness` repository. The selected commit
+must equal or be an ancestor of the exact reported protected `main`. Missing,
+malformed, unprotected, inaccessible or divergent authority fails preparation.
+The checkout must match the verified commit and tree. The admitted context
+records that identity, the protected-main authority and source archive SHA-256.
+The existing credential-free quality job builds that exact source archive
+with the admitted CLI source and lockfile. Both independent static reviewers
+receive the same authority context. Their model steps receive no checkout
+credential. IDE selection keeps its trusted-base behavior. Draft release
+invocation and permissions stay unchanged; its generated payload includes the
+updated shared preparation library.
+
+This change keeps `.github/harness-revision` at
+`4a751c6a3f24d7d143140f79ff53517fb93e3531` and preserves `Cargo.lock`
+byte-for-byte. It changes no product runtime, dependency version, setup action,
+tool pin, credential, permission or admission/approval gate. The owner's
+existing public standards tasks and rollout records remain unchanged.
+
+Run the normal local gate and exact-head hosted Linux/macOS Quality and
+standards checks for this caller change. Require both actual independent
+reports to state `complete: true`, all aggregate statuses, separate exact-head
+approval and normal protected merge. This PR is admitted through installed C4;
+its results cannot establish hosted execution of b2. After protected adoption,
+a fresh admitted CLI change must confirm that b2 records the actual selected
+commit/tree, protected-main authority and archive digest used by quality.
+Only then claim installed-selector acceptance. Later API pin and matching
+lockfile adoption remain separate from this caller change and may provide
+that execution evidence through their own full gates. Local product gates,
+hosted acceptance, protected adoption and that later installed-selector check
+remain pending in this source preparation. No product page, relay deployment,
+release or site publication changes are part of it.
 
 ## Verification and publication record
 

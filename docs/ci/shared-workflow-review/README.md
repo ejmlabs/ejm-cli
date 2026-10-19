@@ -1,15 +1,27 @@
 # Shared workflow review source
 
-This directory supplies the external source needed to review the paired PR
+## Historical ae903/C4 pair
+
+This retained bundle records the earlier CLI PR #4 comparison on 2026-10-19.
+The current selector adoption uses the complete canonical C4/b2 pair in
+[`.github/review-context/manifest.json`](../../../.github/review-context/manifest.json).
+That manifest identifies both exact revisions and all 16 source paths per
+revision. These older copies remain to keep the adoption patch below the
+1,000,000-byte admission limit without relying on rename detection. Their
+later removal is separate cleanup; they are not the current selector evidence.
+
+This directory supplied the external source needed to review the paired PR
 and draft-release caller update. It contains documentation data, with `.txt`
 suffixes and no executable modes. The workflow callers, product gate, runtime
-and dependency pins do not read or execute these copies.
+and dependency pins do not read or execute these copies. The
+[copied MIT notice](LICENSE.txt) also covers the current canonical central
+source export.
 
 ## Source revisions
 
 - Repository: `ejmlabs/.github`.
-- Installed caller: `ae903129564926a14287f75d2012610c59cccb65`.
-- Proposed caller: `c4f2873ef0eef5bc3c7d75cf71fa3489a911d134`.
+- Historical installed caller: `ae903129564926a14287f75d2012610c59cccb65`.
+- Historical proposed caller: `c4f2873ef0eef5bc3c7d75cf71fa3489a911d134`.
 
 CLI main `189170a37b3efab4e842266cb09d8aeeeb4d5d1b` already adopted the
 installed caller. Shared PR #14 adopted the proposed combined implementation
@@ -80,8 +92,10 @@ comparison was incomplete despite successful wrapper jobs and zero findings.
 Those reports do not establish acceptance. Source publication, hosted quality
 and completed review remain separate checks.
 
-The current adoption still runs through installed `ae903129...`, which lacks
+That historical adoption ran through installed `ae903129...`, which lacks
 the completion field. Inspect both actual reports and transcripts for completed
 scope before merging. After adoption, a fresh admitted PR must test the installed
 guard, which requires JSON boolean `complete: true` in each review result.
-This local source update establishes neither hosted result.
+This retained bundle establishes neither hosted result. See the current
+[selector adoption order](../../ci-bootstrap.md#protected-harness-selector-adoption)
+for the C4/b2 transition and its remaining checks.
