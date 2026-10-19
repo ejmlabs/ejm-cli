@@ -1,8 +1,10 @@
 # ejm-cli
 
-The `ejm-cli` binary is the reference client for the public Rust ejm-harness. It needs no account or server. The CLI links ejm-harness directly and uses the same tool registration and session APIs as community applications.
+The `ejm-cli` binary is the reference client for the public Rust ejm-harness API. The CLI links ejm-harness directly and uses the same tool registration and session APIs as community applications. Offline replay needs no account or server. Hosted models need provider access.
 
 ## Start
+
+Build from sibling source checkouts with Rust 1.99.1, as shown in the [quick start](../README.md#quick-start). The examples below use `ejm-cli` from your `PATH`, except for the source-tree `cargo run` examples.
 
 ```sh
 cargo run -p ejm-cli -- --replay
@@ -94,13 +96,93 @@ Terminals vary in how they encode modifier keys. Ctrl+J is the newline fallback 
 | `/help` | Show command and key reference |
 | `/new [title]` | Create a session in the configured workspace |
 | `/sessions` | Choose a saved session |
+| `/agents` | Choose among managed sessions |
 | `/resume ID` | Resume by full ID or unique prefix |
 | `/queue MESSAGE` | Add a turn, or start when idle |
 | `/steer MESSAGE` | Send direction to the active run |
 | `/stop` | Cancel current work |
 | `/quit` | Cancel runs and exit |
+| `/extensions` | List enabled packages, tool/command grants and hook counts |
+| `/widgets pause`, `/widgets resume` | Pause selected widgets, or resume after a failure |
+| `/theme NAME` | Select a theme asset from an enabled package |
+| `/prompt NAME [INPUT]`, `/skill NAME [INPUT]` | Add a package asset and optional input to a run |
+| `/reload @publisher/package` | Reload unchanged exports while all runs and callbacks are idle |
 
 Switching sessions leaves other runs managed by the same ejm-harness. `/stop` targets the selected session. Exiting cancels and drains all runs owned by this CLI process.
+
+## Packages and trust
+
+`package`, `packages` and `pkg` name the same command. Package state lives in the state directory's `packages` subdirectory. Code packages need Node 24 or later, or Python 3.11 or later. Asset-only packages need neither runtime. Installation does not install dependencies or run package code, package-manager lifecycle scripts or build backends.
+
+**Enabled native packages run arbitrary code as your user.** Named grants control registration with the harness. They do not restrict file access, network access, secrets, subprocesses or runtime memory. Package hashes verify selected content; they do not establish that code is safe. Inspect the source and bundled dependencies before enabling a package.
+
+### Install and enable
+
+For a local package directory containing a valid `gerry.package.json`:
+
+```sh
+ejm-cli package install ./my-package
+ejm-cli package list
+```
+
+Installation records an exact content snapshot and leaves it disabled with no grants. Local `.tgz` archives work too. Use `local:` or `./` for a local path that resembles a remote reference.
+
+Remote source forms require exact versions or a full Git commit. Replace the names and versions in these examples with a package you have reviewed:
+
+| Source | Form |
+| --- | --- |
+| Package registry | `@publisher/package@1.2.3` |
+| Public npm | `npm:@publisher/package@1.2.3` |
+| Public PyPI portable wheel | `pypi:distribution==1.2.3` |
+| Public GitHub commit archive | `git:https://github.com/publisher/package.git#FULL_40_CHARACTER_COMMIT` |
+
+Pass the source as one argument to `ejm-cli package install SOURCE`. Git support does not fetch submodules or Git LFS. npm and PyPI support do not install dependencies. Bundle unsupported layouts locally. See the [harness package contracts](https://github.com/ejmlabs/ejm-harness/blob/main/docs/packages.md) for archive, runtime and source requirements.
+
+After inspection, explicitly trust the installed version and name only the exports you need. This example uses the names from the harness guide:
+
+```sh
+ejm-cli package enable @example/workflow --trust \
+  --tool word_count --hook run_start --grant-provider offline --command hello --grant-widget status
+```
+
+`--tool`, `--hook`, `--grant-provider`, `--command` and `--grant-widget` may repeat. The grant options are separate from global `--provider` and `--widget` host selectors. Hook names are `run_start`, `before_model`, `before_tool`, `after_tool` and `run_end`. Undeclared exports are rejected. Themes, prompts and skills are available from enabled packages without a separate export grant. Trust applies to the entire native package, including its imports.
+
+### Use and change packages
+
+Select a granted provider or widget, or an enabled theme, by its qualified name:
+
+```sh
+ejm-cli --package-provider @example/workflow:offline \
+  --theme @example/workflow:midnight --widget @example/workflow:status
+```
+
+`--widget` may repeat up to four times. Widgets refresh at most once a second. A widget failure pauses refresh until `/widgets resume`. Unambiguous short export names also work. A slash command such as `/hello INPUT` invokes a granted package command; `/@publisher/package:hello INPUT` resolves a collision. Built-in commands keep precedence.
+
+`/prompt NAME INPUT` and `/skill NAME INPUT` submit the asset text and optional input as a turn, or queue it during an active run. `/theme NAME` selects an enabled theme; `NO_COLOR` remains authoritative. `/reload @publisher/package` requires all runs and extension callbacks to be idle. Changed manifests or grants require a restart.
+
+```sh
+ejm-cli package update @publisher/package 1.2.4
+ejm-cli package disable @publisher/package
+ejm-cli package remove @publisher/package
+```
+
+Update installs a new exact registry version and clears trust and grants. Inspect it and enable it again explicitly. Disable and remove affect future CLI processes. Active processes retain their loaded snapshot until exit; restart to unload them. Remove deletes the registration, and stored snapshots may remain for active hosts.
+
+### Registry and publishing
+
+Registry commands use `https://harness.meetgerry.ai`. The endpoint and live service have their own availability and release requirements. These commands make network requests:
+
+```sh
+ejm-cli package search QUERY
+ejm-cli package info @publisher/package 1.2.3
+ejm-cli package login --no-browser
+ejm-cli package whoami
+ejm-cli package logout
+```
+
+Registry sign-in uses a revocable account session, separate from model-provider accounts. Approve only the request you started. Tokens stay in the private package store's `registry-session.json`; the CLI never accepts or displays them as arguments. Logout removes the local session and reports remote revocation failures.
+
+`ejm-cli package pack DIRECTORY --output package.tgz` creates a new local archive and refuses to overwrite an existing file. `package publisher HANDLE --display-name NAME` claims a registry namespace, and `package publish DIRECTORY` uploads a package using the saved registry session. Those last two commands change the remote registry. They are deliberate author actions, separate from installing or running the CLI.
 
 ## Scripts and saved sessions
 

@@ -1,21 +1,48 @@
 # ejm-cli
 
-A Rust terminal coding agent built on [ejm-harness](../ejm-harness/README.md).
+## Overview
+
+A Rust terminal coding agent built on [ejm-harness](https://github.com/ejmlabs/ejm-harness).
 The CLI and harness are separate projects. ejm-cli demonstrates the same
-public engine API available to community projects. No account
-or server is needed.
+public engine API available to community projects. Offline replay needs no
+account or server. Hosted models need provider access.
 
-## Try it
+## Status
 
-Check out `ejm-cli` and `ejm-harness` as sibling directories, then run:
+The project is being prepared for public use. Build from source with access to
+both repositories. There is no supported binary installer or package-manager
+distribution. See [the release policy](RELEASING.md) for version and release gates.
+
+## Requirements
+
+- Rust 1.99.1, selected by `rust-toolchain.toml`.
+- Git and sibling checkouts of `ejm-cli` and `ejm-harness`.
+- A terminal for the TUI. Use `run` for pipes and automation.
+- Provider credentials for hosted models. Offline replay needs none.
+
+The core binary needs no Node or Python runtime. Optional code packages need
+Node 24 or later, or Python 3.11 or later, for their selected runtime. See
+[packages and trust](docs/ejm-cli.md#packages-and-trust).
+
+## Quick start
+
+Clone both repositories into the same parent directory:
 
 ```sh
+git clone https://github.com/ejmlabs/ejm-harness.git
+git clone https://github.com/ejmlabs/ejm-cli.git
+cd ejm-cli
 cargo build --release --locked
 ./target/release/ejm-cli --replay
 ./target/release/ejm-cli --replay run "Hello"
 ```
 
-`--replay` is an offline demo that echoes your prompt. For real coding work,
+`--replay` is an offline demo that echoes your prompt. The TUI needs a terminal.
+Use `./target/release/ejm-cli` below, or add its directory to your `PATH`.
+
+## Usage
+
+For real coding work,
 configure a hosted OpenAI compatible provider:
 
 ```sh
@@ -28,8 +55,9 @@ export EJM_CLI_BASE_URL=https://api.deepseek.com/v1
 Native file tools are read only by default. Add `--allow-write` to grant writing
 and `--allow-shell` to grant shell execution. Grants stay visible in the TUI.
 Keys come from environment variables and are never accepted as command arguments.
+Native execution runs as the current user and is not a security sandbox.
 
-## Terminal experience
+### Terminal experience
 
 - Unicode composer, multiline input, bracketed paste, and sent-message history.
 - Streaming transcript with code, Markdown, and diff styling.
@@ -51,19 +79,17 @@ ejm-cli doctor
 
 See [the full CLI guide](docs/ejm-cli.md) for controls, configuration, and limits.
 
-## Fast without flooding the host
+### Resource limits
 
 Ratatui and Crossterm render the TUI. Rust and Tokio drive the harness directly.
-There is no Node or Python runtime dependency for ejm-cli. Agents share a
-resource governor instead of creating a shell each. The default envelope allows
+Agents share a resource governor instead of creating a shell each. The default envelope allows
 100 managed sessions, eight model requests, four local jobs, and one heavy job.
 
-Native execution runs as the current user and is not a security sandbox.
 `ejm-cli doctor` reports actual enforcement capabilities. Hosted models, old-laptop
 acceptance, and speed comparisons have distinct proof requirements. See
 [benchmark evidence](docs/benchmarks.md).
 
-## Develop
+## Development
 
 Read [AGENTS.md](AGENTS.md) and [the contribution guide](docs/contributing.md).
 The project skills cover implementation, review, terminal behavior, performance,
@@ -74,6 +100,28 @@ dependency policy, release builds, and real PTY checks run through one command:
 ./scripts/check
 ```
 
-This source release has not been published or packaged. CI configuration is
-included; remote checks and branch protection need a published repository and
-a pinned ejm-harness revision. [MIT licensed](LICENSE).
+## Documentation
+
+- [CLI reference](docs/ejm-cli.md): controls, providers, sessions, packages and trust.
+- [Performance evidence](docs/benchmarks.md): measurements, method and limits.
+- [Development guide](docs/contributing.md): tools, ownership and the required gate.
+- [Release policy](RELEASING.md): versions and publication requirements.
+
+## Contributing
+
+Read [CONTRIBUTING.md](CONTRIBUTING.md) and the [code of conduct](CODE_OF_CONDUCT.md)
+before opening a PR.
+
+## Security
+
+Follow [SECURITY.md](SECURITY.md) to report a vulnerability privately. Keep
+provider keys and the state directory out of source control. Review native
+package code before granting trust.
+
+## Support
+
+See [SUPPORT.md](SUPPORT.md) for questions and bug reports.
+
+## License
+
+[MIT](LICENSE). See [third-party notices](THIRD_PARTY_NOTICES.md) for bundled assets.

@@ -17,7 +17,7 @@ cargo build --release --locked
 The final local release run on 2026-10-18 measured first composer paint at
 24.197 ms with fresh state and 41.312 ms at warm p95 across 20 samples. It used
 a Mac16,8 with 12 logical CPUs, 24 GiB RAM, macOS 26.5.2, and Rust 1.99.1.
-The [raw report](../../ejm-harness/docs/evidence/benchmark.json) includes the
+The [raw report](https://github.com/ejmlabs/ejm-harness/blob/main/docs/evidence/benchmark.json) includes the
 CLI binary hash and every sample. No hosted API calls were made.
 
 The runner measures process creation to the first composer paint in a real

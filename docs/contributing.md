@@ -18,14 +18,9 @@ The repository's `rust-toolchain.toml` selects Rust 1.99.1 when using rustup, wi
 
 The complete gate validates architecture and skill routing, checks format, runs strict Clippy, runs deterministic tests, builds release binaries, checks Rust documentation, finds unused dependencies, checks licenses and advisories, and runs real PTY interaction/restoration tests. It is the entry point for local work, the pre-commit hook and CI. Build jobs are capped at two in `.cargo/config.toml`. `CARGO_TARGET_DIR` may share a local compilation cache.
 
-The hook installer changes only this repository's `core.hooksPath`. It does not install a global hook. CI requires the `quality` job on Linux and macOS. Configure these repository variables after publishing the two projects:
+The hook installer changes only this repository's `core.hooksPath`. It does not install a global hook. The quality gate runs on Linux and macOS. The trusted `.github/workflows/pr.yml` and `.github/workflows/release.yml` entry points read the reviewed full 40-character sibling harness commit from `.github/harness-revision`.
 
-| Variable | Required value |
-| --- | --- |
-| `EJM_HARNESS_REPOSITORY` | Public GitHub `owner/repository` for ejm-harness |
-| `EJM_HARNESS_REVISION` | Reviewed full 40-character commit SHA |
-
-The workflow rejects missing or mutable harness revisions. The projects have not been published as part of this implementation. Repository administrators must enable required checks in branch protection after the first remote workflow run. The PTY gate checks interaction and terminal restoration on its host. Local macOS results do not prove Linux behavior; the Linux/macOS CI matrix still needs to run. Windows terminal behavior requires separate evidence.
+The workflows reject a missing or mutable harness revision. A private harness checkout needs a scoped read credential; public source does not. See [CONTRIBUTING.md](../CONTRIBUTING.md) for human admission and approval, and [RELEASING.md](../RELEASING.md) for remote checks and publication gates. The PTY gate checks interaction and terminal restoration on its host. Local macOS results do not prove Linux behavior. Windows terminal behavior requires separate evidence.
 
 ## Ownership and Rust design rules
 
@@ -64,4 +59,4 @@ Record measured latency and memory with hardware, compiler profile and workload.
 
 ## Project skills
 
-The skills in `.agents/skills` route implementation, review, terminal and theme work, sign-in, packages, performance, testing, dependencies, the sibling harness, docs and claims, the marketing site, and releases. `AGENTS.md` lists which skill fits which task. The gate checks each skill's frontmatter and references, that the set matches `scripts/check_architecture.py`, and that `AGENTS.md` routes to every skill. Keep them concise and specific to this project. Read only the skill that matches the task, and update the owning reference when a convention changes. When you add a skill, add it to the check script and to the table in `AGENTS.md`.
+The skills in `.agents/skills` route implementation, review, terminal and theme work, sign-in, packages, performance, testing, dependencies, the sibling harness, docs and claims, the marketing site, and releases. The six `openspec-*` skills handle exploration, proposals, plan updates, implementation, spec sync and archival. All feature and bugfix work follows OpenSpec because this project has an `openspec/` directory. `AGENTS.md` lists which skill fits each task. The gate checks each skill's frontmatter and references, that the exact set matches `scripts/check_architecture.py`, and that `AGENTS.md` routes to every skill. Keep them concise and specific to this project. Read only the skill that matches the task, and update the owning reference when a convention changes. When you add a skill, add it to the check script and to the table in `AGENTS.md`.

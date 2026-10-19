@@ -25,6 +25,10 @@ REQUIRED_SKILLS = {
     "ejm-cli-packages", "ejm-cli-performance", "ejm-cli-testing", "ejm-cli-dependencies",
     "ejm-cli-harness", "ejm-cli-docs", "ejm-cli-site", "ejm-cli-release",
 }
+OPENSPEC_SKILLS = {
+    "openspec-explore", "openspec-propose", "openspec-update-change",
+    "openspec-apply-change", "openspec-sync-specs", "openspec-archive-change",
+}
 
 
 def require(condition: bool, message: str) -> None:
@@ -82,7 +86,7 @@ def check_packages() -> None:
 def check_skills() -> None:
     skill_root = ROOT / ".agents/skills"
     skills = {path.parent.name for path in skill_root.glob("*/SKILL.md")}
-    require(skills == REQUIRED_SKILLS, "Keep the skill routing inventory in sync with .agents/skills.")
+    require(skills == REQUIRED_SKILLS | OPENSPEC_SKILLS, "Keep the skill routing inventory in sync with .agents/skills.")
     routing = (ROOT / "AGENTS.md").read_text()
     for name in sorted(skills):
         require(f"`{name}`" in routing, f"AGENTS.md must route to the {name} skill.")

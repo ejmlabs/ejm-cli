@@ -41,11 +41,11 @@ pub enum PackageCommand {
         #[arg(long, value_name = "EVENT", value_parser = ["run_start", "before_model", "before_tool", "after_tool", "run_end"])]
         hook: Vec<String>,
         #[arg(long, value_name = "EXPORT")]
-        provider: Vec<String>,
+        grant_provider: Vec<String>,
         #[arg(long, value_name = "EXPORT")]
         command: Vec<String>,
         #[arg(long, value_name = "EXPORT")]
-        widget: Vec<String>,
+        grant_widget: Vec<String>,
     },
     Disable {
         name: String,
@@ -100,9 +100,9 @@ pub async fn run(args: &Args, command: &PackageCommand) -> Result<bool> {
             trust,
             tool,
             hook,
-            provider,
+            grant_provider,
             command,
-            widget,
+            grant_widget,
         } => {
             ensure!(*trust, "--trust is required for native extensions");
             let hooks = hook
@@ -114,9 +114,9 @@ pub async fn run(args: &Args, command: &PackageCommand) -> Result<bool> {
                 PackageGrants {
                     tools: tool.clone(),
                     hooks,
-                    providers: provider.clone(),
+                    providers: grant_provider.clone(),
                     commands: command.clone(),
-                    widgets: widget.clone(),
+                    widgets: grant_widget.clone(),
                 },
             )?;
             show(&record)?;
