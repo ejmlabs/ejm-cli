@@ -123,3 +123,43 @@ product paths. It changes no caller, runtime, lock, gate or harness pin.
 Pass the normal hook and obtain fresh exact-head admission, hosted quality,
 two complete reviews and explicit approval before protected adoption. The
 central merge and retention receipt does not replace consumer acceptance.
+
+## Readable dependency review prerequisite
+
+This follow-up starts from protected CLI main
+`61aa4b4b137180ba6d76210b2cb5321cdc59658c`, tree
+`504892783c5b2b49db490582f4a11a782b8542df`. It preserves the installed b2
+harness selector, working harness pin and matching lock. Advance only the PR
+caller, draft-release caller and release `standards-ref` together from
+`b2e43c9b9ba814e6d3681d86c88830f3c0b11a3c` to reviewed shared PR #18 head
+`40d446bb4c5113216fd05ec5423625b7af473987`. Its protected merge
+`fbe8264f0ab47a4bf9260355dc8129728c13f261` has the same tree
+`305c9c9be0bd80a36f33044eec9cdff639fb6c61`; its exact workflow-pins ref is
+retained under the active update/delete rule with no bypass actors. Recheck
+retention and protected main before admission.
+
+The new shared reviewer setup extracts every prepared source tar with Python's
+maintained `data` filter, including the already selected harness archive. Both
+reviewers can inspect its source as plain files without extracting an archive
+or fetching dependencies. Their existing read-only and no-network restrictions remain. They must not
+execute project code. Use the maintained exporter for exactly the
+old b2/new 40d shared source pair, with all 32 records and manifest below its
+750000-byte cap. Retain the separate dated documentation bundle and MIT notice.
+Do not add UI source metadata or install a new UI dependency in this consumer.
+
+The existing persistent-account contract needs more than Linux D-Bus headers
+on a headless runner. This change includes the root-owned local-action correction: install
+Ubuntu noble-updates `gnome-keyring=46.1-2ubuntu0.2` with recommendations disabled,
+start a maintained `dbus-daemon` session bus and unlock
+`gnome-keyring-daemon --components=secrets --daemonize --unlock` using a random
+ephemeral password on stdin. Keep XDG data/runtime in separate 0700 directories
+under `RUNNER_TEMP`. Export only the bus address and XDG paths through
+`GITHUB_ENV` to later credential-free quality steps. No real credentials, eval,
+plaintext backend, product-vault change, memory-provider flag or test skip is
+allowed. macOS setup and the product gate stay unchanged.
+
+This source preparation proves no installed reviewer execution, Linux keyring
+acceptance, hosted product result, protected consumer adoption or relay release.
+Keep task 2.2 and every other release task open until their required evidence
+exists. Run the unchanged normal hook and fresh exact-head hosted checks after
+root integrates the action, then review actual complete, head-bound AI reports.

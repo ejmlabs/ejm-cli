@@ -18,7 +18,25 @@ runs:
       shell: bash
       run: |
         sudo apt-get update
-        sudo apt-get install --yes --no-install-recommends pkg-config libdbus-1-dev
+        sudo apt-get install --yes --no-install-recommends pkg-config libdbus-1-dev gnome-keyring=46.1-2ubuntu0.2
+
+    - name: Prepare an isolated Linux Secret Service
+      if: ${{ runner.os == 'Linux' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        umask 077
+        keyring_dir="$(mktemp -d "$RUNNER_TEMP/ejm-cli-keyring.XXXXXX")"
+        install -d -m 700 "$keyring_dir/data" "$keyring_dir/runtime"
+        export XDG_DATA_HOME="$keyring_dir/data"
+        export XDG_RUNTIME_DIR="$keyring_dir/runtime"
+        export DBUS_SESSION_BUS_ADDRESS
+        DBUS_SESSION_BUS_ADDRESS="$(dbus-daemon --session --fork --print-address)"
+        python3 -c 'import secrets; print(secrets.token_urlsafe(32))' |
+          gnome-keyring-daemon --components=secrets --daemonize --unlock >/dev/null
+        printf '%s\n' "XDG_DATA_HOME=$XDG_DATA_HOME" \
+          "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR" \
+          "DBUS_SESSION_BUS_ADDRESS=$DBUS_SESSION_BUS_ADDRESS" >> "$GITHUB_ENV"
 
     - name: Install the pinned Rust WebAssembly target
       shell: bash

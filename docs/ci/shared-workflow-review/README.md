@@ -3,7 +3,7 @@
 ## Historical ae903/C4 pair
 
 This retained bundle records the earlier CLI PR #4 comparison on 2026-10-19.
-The current selector adoption uses the complete canonical C4/b2 pair in
+The current readable-dependency update uses the complete canonical b2/40d pair in
 [`.github/review-context/manifest.json`](../../../.github/review-context/manifest.json).
 That manifest identifies both exact revisions and all 16 source paths per
 revision. These older copies remain to keep the adoption patch below the

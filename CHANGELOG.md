@@ -10,6 +10,7 @@ Changes follow [Semantic Versioning](https://semver.org/). Each repository is ve
 
 ### Fixed
 
+- Prepare the retained shared reviewer source-extraction update with exact b2/40d context and an isolated Linux CI Secret Service for existing persistent-account fixtures. Preserve the working harness pin, lock, provider and macOS setup. Fresh local, hosted and installed-reviewer checks remain pending.
 - Prepare the shared review-completion guard with exact installed and proposed workflow source evidence, preserving the existing CLI setup hook and harness pin. Hosted adoption and installed-guard verification remain pending.
 - Prepare the retained shared harness selector with complete canonical C4/b2 source context. Keep the current harness pin and lock unchanged. Normal product gates, protected caller adoption and installed-selector execution remain pending for this change.
 

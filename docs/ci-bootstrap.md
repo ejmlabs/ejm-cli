@@ -91,8 +91,17 @@ main. See the [source scope and local checks](#source-scope-and-local-checks) an
 The composite action at `.github/actions/setup-ci/action.yml` uses the pinned
 `actions/setup-node` revision and installs Node 26.12.0, npm 11.20.0, the Rust
 1.99.1 WebAssembly target and wasm-bindgen CLI 0.2.129. Cargo installation uses
-two jobs. Linux setup installs `pkg-config` and `libdbus-1-dev` for the later
-protected native credential service.
+two jobs. Linux setup installs `pkg-config`, `libdbus-1-dev` and Ubuntu
+noble-updates `gnome-keyring=46.1-2ubuntu0.2`, with recommendations disabled.
+It starts an isolated session D-Bus and unlocks GNOME Keyring's Secret Service
+with a random test password passed only through stdin. Data and runtime state
+use separate private directories under `RUNNER_TEMP`; only their paths and
+the bus address pass to later quality steps through `GITHUB_ENV`. The hosted
+runner owns the test service's lifetime. No production credentials are needed.
+This follows the [keyring store's own CI setup](https://github.com/open-source-cooperative/dbus-secret-service-keyring-store/blob/main/.github/workflows/ci.yaml)
+and uses the [Ubuntu package](https://packages.ubuntu.com/noble-updates/gnome-keyring).
+The existing persistent-account integration test checks the store contract.
+Fresh hosted Linux results must verify this setup; local macOS results cannot.
 
 The admitted workflow exports the CLI source under `product/`. When
 `product/relay/package.json` exists, the action runs `npm ci --ignore-scripts`
@@ -105,8 +114,7 @@ The prior `5fae851502c2e3c31d4df9a44f8d56c2cb49e098` caller did not invoke
 this action. The `ae903129564926a14287f75d2012610c59cccb65` caller
 added its exact local-action step only for the admitted `ejm-cli` profile in the
 credential-free quality job, after Rust setup and before `./scripts/check`.
-The installed `c4f2873ef0eef5bc3c7d75cf71fa3489a911d134` implementation retains
-that exact hook.
+The installed b2 and proposed 40d implementations retain that exact hook.
 The source release continues to use the same central release workflow, with
 its `uses` and `standards-ref` pointing to the same revision. Product permissions,
 triggers, secret forwarding and human controls are unchanged.
@@ -176,37 +184,17 @@ the separate site migration out of these source changes.
 
 Original preparation started from official CLI main
 `4d7756749b8ee1c1e9e91a70eefd3e36f345379f`. PR #7 head
-`3738509a467a1a8e6d7b04736c9f81ea35a9054c` then passed the normal local
-gate and hosted run
-[`39309188976`](https://github.com/ejmlabs/ejm-cli/actions/runs/39309188976),
-including both actual complete AI reports with no findings. Protected main
-advanced to `e1efe7b5c05d090ccfb164bef70456429030b9d0` through PR #6 before
-selector adoption. A normal merge preserves that publication-guide
-consolidation and the standalone guide deletion. Those earlier results remain
-historical; the merged source needs fresh local and exact-head hosted checks.
-Protected main's three shared references use
-`c4f2873ef0eef5bc3c7d75cf71fa3489a911d134`. The proposed PR caller,
-draft-release caller and release `standards-ref` advance together to
-`b2e43c9b9ba814e6d3681d86c88830f3c0b11a3c`. Central PR #16 protected-merged
-the reviewed implementation as
-`49df106b82cfd703411b3595a82cd4d597ed0933`. Before this source preparation,
-root verified the exact
-`workflow-pins/b2e43c9b9ba814e6d3681d86c88830f3c0b11a3c` ref and its active
-update/deletion blocks with no bypass actors. Read back that full retained ref
-and protection again before admission.
+`3738509a467a1a8e6d7b04736c9f81ea35a9054c` passed the normal local gate and
+hosted run [`39309188976`](https://github.com/ejmlabs/ejm-cli/actions/runs/39309188976),
+including both actual complete AI reports with no findings. Protected main then
+advanced through PR #6. A normal merge preserved that owner's publication-guide
+consolidation and standalone guide deletion. After fresh review, PR #7 was
+protected-squash merged as `61aa4b4b137180ba6d76210b2cb5321cdc59658c`, tree
+`504892783c5b2b49db490582f4a11a782b8542df`. Its three references installed
+`b2e43c9b9ba814e6d3681d86c88830f3c0b11a3c`. The original preparation and its
+C4/b2 source manifest remain in that exact committed source history.
 
-The complete old C4/new b2 pair is in the
-[canonical manifest](../.github/review-context/manifest.json). The shared
-exporter copies all 16 required source paths per revision and records their
-full commits, trees, source modes, Git blob IDs, byte counts and SHA-256
-digests. Its 33 files total 636783 bytes, below the 750000-byte context cap.
-They are untrusted source evidence; the workflow callers, product gate and
-runtime do not execute them. The older ae903/C4 documentation bundle remains
-as [dated history](ci/shared-workflow-review/README.md), with its shared MIT
-notice. Keeping those files avoids a deletion/addition patch above the
-admission byte limit when rename detection is unavailable.
-
-For CLI changes, the proposed selector reads `.github/harness-revision` from
+For CLI changes, the installed selector reads `.github/harness-revision` from
 the exact admitted Git commit. It accepts a full lowercase 40-character SHA
 only from an ordinary small Git blob. It then uses bounded, redirect-free
 GitHub reads for the fixed `ejmlabs/ejm-harness` repository. The selected commit
@@ -214,32 +202,60 @@ must equal or be an ancestor of the exact reported protected `main`. Missing,
 malformed, unprotected, inaccessible or divergent authority fails preparation.
 The checkout must match the verified commit and tree. The admitted context
 records that identity, the protected-main authority and source archive SHA-256.
-The existing credential-free quality job builds that exact source archive
-with the admitted CLI source and lockfile. Both independent static reviewers
-receive the same authority context. Their model steps receive no checkout
-credential. IDE selection keeps its trusted-base behavior. Draft release
-invocation and permissions stay unchanged; its generated payload includes the
-updated shared preparation library.
+The credential-free quality job builds that source with the admitted CLI
+source and matching lockfile. Model review steps receive no checkout credential.
+IDE selection keeps its trusted-base behavior.
 
-This change keeps `.github/harness-revision` at
-`4a751c6a3f24d7d143140f79ff53517fb93e3531` and preserves `Cargo.lock`
-byte-for-byte. It changes no product runtime, dependency version, setup action,
-tool pin, credential, permission or admission/approval gate. The owner's
-existing public standards tasks and rollout records remain unchanged.
+Installed-selector acceptance still needs a subsequent admitted CLI change
+that proves the actual selected commit/tree, protected-main authority and
+archive digest used by quality. The later API pin and matching lock update
+remain separate and need their own full gates. No existing task checkbox is
+completed by this source preparation.
 
-Run the normal local gate and exact-head hosted Linux/macOS Quality and
-standards checks for this caller change. Require both actual independent
-reports to state `complete: true`, all aggregate statuses, separate exact-head
-approval and normal protected merge. This PR is admitted through installed C4;
-its results cannot establish hosted execution of b2. After protected adoption,
-a fresh admitted CLI change must confirm that b2 records the actual selected
-commit/tree, protected-main authority and archive digest used by quality.
-Only then claim installed-selector acceptance. Later API pin and matching
-lockfile adoption remain separate from this caller change and may provide
-that execution evidence through their own full gates. Local product gates,
-hosted acceptance, protected adoption and that later installed-selector check
-remain pending in this source preparation. No product page, relay deployment,
-release or site publication changes are part of it.
+## Readable dependency review prerequisite
+
+This caller update starts from that protected CLI main and advances the PR
+caller, draft-release caller and release `standards-ref` together from b2 to
+`40d446bb4c5113216fd05ec5423625b7af473987`. Shared PR #18 protected-merged
+that reviewed implementation as
+`fbe8264f0ab47a4bf9260355dc8129728c13f261`, with matching tree
+`305c9c9be0bd80a36f33044eec9cdff639fb6c61`. Both actual reports stated
+`complete: true` and had no findings. Root verified its exact
+`refs/heads/workflow-pins/40d446bb4c5113216fd05ec5423625b7af473987`
+and active update/delete rule `25369476` with no bypass actors. Recheck that
+retention and protected main before admission. Central acceptance does not
+replace this consumer's normal hook, fresh hosted results or exact-head approval.
+
+The updated shared reviewer setup extracts every prepared source tar with
+Python's maintained `data` filter. The selected harness already archived for
+quality is therefore available to both reviewers as plain files. They must
+still use read-only inspection, with no network or execution of project code.
+A successful wrapper with an incomplete actual report remains unmet review.
+This adoption runs through installed b2, so it cannot by itself prove the new
+reviewer source extraction. Verify that behavior in the next admitted change
+before claiming installed acceptance.
+
+The [canonical manifest](../.github/review-context/manifest.json) binds the
+exact old b2/new 40d pair. The maintained shared exporter records all 16 source
+paths per revision, original modes, Git blobs, byte counts and SHA-256 digests.
+Its 33 files total 722582 bytes, below the 750000-byte context cap. These are
+untrusted review data, not executable consumer code. The separate
+[historical ae903/C4 bundle](ci/shared-workflow-review/README.md) and its MIT
+notice remain exact; the older canonical C4 files are replaced by this pair.
+The retained shared implementation also supports optional owner UI source and
+UI quality checks. This consumer adds no UI metadata or UI checkout selection.
+
+The working harness pin remains
+`4a751c6a3f24d7d143140f79ff53517fb93e3531`, and `Cargo.lock` remains exact.
+The combined change also starts the isolated Linux test Secret Service
+[described above](#what-the-action-prepares), so the existing persistent-account
+fixtures can use their normal secure backend on a headless runner. It changes
+no product runtime, provider, dependency, tool version, permission, credential
+or human admission/approval control; macOS setup is unchanged. It adds no
+plaintext backend, product-vault change, memory-provider flag or test skip.
+Full local gates, Linux service acceptance, hosted results, protected adoption
+and installed reviewer/selector evidence remain pending for this source. No
+product page, relay deployment or release is included.
 
 ## Verification and publication record
 
