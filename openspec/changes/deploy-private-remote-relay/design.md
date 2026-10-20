@@ -331,3 +331,19 @@ memory-only host startup using a test-only offline login transport seam. Prove
 input acknowledgments precede observer release or timeout. Fresh normal and hosted
 gates remain required; all eleven tasks stay open. The separate certificate
 duplicate allegation is not accepted evidence against the passing dependency gate.
+
+## Native pairing and recovery review correction
+
+Run `39344263873` passed Linux/macOS quality, but both complete f66 reviews
+blocked adoption on four defects; its admission was revoked. Correct them as follows:
+
+- Draw each new confirmation, purge buffered input, then accept a fresh key.
+  Remove confirmations whose existing oneshot receiver has closed.
+- Pass cancellation to public vault locks; use a child-token drop guard at the
+  existing blocking-worker boundary. Native key calls remain uninterruptible.
+- Feed server gaps into existing snapshot recovery before enabling work.
+  Missing events never establish Idle.
+- Decode against share lifetime; retain host enrollment deadlines and pinned keys.
+
+Use real terminal, network/Noise and memory-vault contention regressions, covering
+cancelled and dropped callers. Keep the harness, lock, dependencies and caps exact.

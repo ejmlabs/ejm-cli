@@ -11,9 +11,9 @@ Changes follow [Semantic Versioning](https://semver.org/). Each repository is ve
 
 ### Fixed
 
-- Prepare responsive local revocation during completion observers, signal cleanup before protected host startup, and trusted local stop of retained cleanup and queued successors. Corrected lifecycle gates remain pending.
+- Prepare fresh approval after each displayed pairing confirmation, cancelled vault lock waits, snapshot recovery after server gaps and enrolled-controller restarts until share expiry. Both f66 reviews blocked adoption on these four defects; successor verification remains separate.
+- Retain responsive local revocation during completion observers, signal cleanup before protected startup, trusted local stop and real-command SIGTERM restoration. The f66 normal and Linux/macOS quality gates passed; fresh successor gates remain required.
 - Adopt the retained 40d shared reviewer source context and isolated Linux CI Secret Service through protected PR #9. Its baseline Linux/macOS gates passed; installed 40d readable harness review and the native vault gate remain separate.
-- Prepare SIGTERM cancellation and terminal restoration for real remote commands; the corrected combined gate remains pending.
 - Keep display recovery ordered through acknowledged journal catch-up, suppressing newer live events until recovery completes.
 - Prepare immutable exact-run completion waits for accepted remote prompts, discard local-successor handoffs and reject text above 16 KiB of UTF-8 before acknowledgement. Focused regressions passed and protected API merge 42e is selected; combined native gates and adoption remain pending.
 - Adopt the shared review-completion guard through protected PR #4 while preserving the CLI setup hook and harness pin; retain its dated evidence in the CI guide.

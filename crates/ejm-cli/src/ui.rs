@@ -93,8 +93,9 @@ pub(crate) async fn run_app(
         tokio::select! {
             _ = tick.tick() => {
                 let private_panel = remote.has_panel();
-                remote.poll(&mut app, harness, crate::remote::now_ms()?).await;
-                if private_panel != remote.has_panel() { terminal.reset_input()?; }
+                let confirmation = remote.poll(&mut app, harness, crate::remote::now_ms()?).await;
+                if confirmation { draw_app(&mut terminal, &mut app, args, &remote, harness).await?; }
+                if confirmation || private_panel != remote.has_panel() { terminal.reset_input()?; }
                 for _ in 0..64 {
                     if !terminal.poll_input()? { break; }
                     let input = terminal.read_input()?;

@@ -53,7 +53,7 @@ impl HostUi {
                 RelayAccount::login(origin, &args.state_dir(), true, false, shutdown.clone())
                     .await?
             } else {
-                RelayAccount::load(origin, &args.state_dir()).await?
+                RelayAccount::load(origin, &args.state_dir(), &shutdown).await?
             })
         } else {
             None
@@ -84,7 +84,7 @@ impl HostUi {
         let origin = super::origin(args)?;
         let account = match self.account.clone() {
             Some(account) => account,
-            None => RelayAccount::load(origin.clone(), &args.state_dir()).await?,
+            None => RelayAccount::load(origin.clone(), &args.state_dir(), &self.shutdown).await?,
         };
         let storage = if args.memory_only {
             IdentityStorage::MemoryOnly
@@ -92,7 +92,8 @@ impl HostUi {
             IdentityStorage::SecretStore
         };
         let identity =
-            EndpointIdentity::load_or_create(&origin, &args.state_dir(), storage).await?;
+            EndpointIdentity::load_or_create(&origin, &args.state_dir(), storage, &self.shutdown)
+                .await?;
         let invite = Invitation::new(origin, identity.public_key(), role, super::now_ms()?)?;
         let body = invite.protected_text()?;
         backend
@@ -141,7 +142,17 @@ impl HostUi {
         Ok(())
     }
 
-    pub async fn poll(&mut self, app: &mut App, backend: &LocalBackend, now: u64) {
+    pub async fn poll(&mut self, app: &mut App, backend: &LocalBackend, now: u64) -> bool {
+        let mut confirmation = false;
+        if self
+            .panel
+            .as_ref()
+            .and_then(|panel| panel.answer.as_ref())
+            .is_some_and(oneshot::Sender::is_closed)
+        {
+            self.panel = None;
+            app.dirty = true;
+        }
         if let Some(task) = &self.task
             && now >= task.expires_at_ms
             && self.session.is_some()
@@ -168,6 +179,9 @@ impl HostUi {
                     fingerprint,
                     answer,
                 } => {
+                    if answer.is_closed() {
+                        continue;
+                    }
                     self.panel = Some(Panel {
                         title: "Confirm controller identity".into(),
                         body: Zeroizing::new(format!(
@@ -176,6 +190,7 @@ impl HostUi {
                         )),
                         answer: Some(answer),
                     });
+                    confirmation = true;
                 }
                 HostNotice::Connected => {
                     self.connected = true;
@@ -224,6 +239,7 @@ impl HostUi {
                 }
             ),
         });
+        confirmation
     }
 
     pub fn draw(&self, frame: &mut Frame<'_>) {

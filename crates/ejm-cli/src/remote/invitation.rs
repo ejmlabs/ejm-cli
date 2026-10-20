@@ -119,7 +119,7 @@ impl Invitation {
         )))
     }
 
-    /// Parse only an initial local pairing. Reconnect keeps the parsed invitation in memory.
+    /// The host enforces first enrollment; a pinned controller may restart during the share.
     pub fn decode(input: &str, configured: &RelayOrigin, now_ms: u64) -> Result<Self> {
         ensure!(input.len() <= MAX_INVITATION_BYTES, "invalid invitation");
         let encoded = input
@@ -159,7 +159,7 @@ impl Invitation {
             enrollment_expires_at_ms: raw.enrollment_expires_at_ms,
             share_expires_at_ms: raw.share_expires_at_ms,
         };
-        invitation.validate_initial(now_ms)?;
+        invitation.validate_share(now_ms)?;
         Ok(invitation)
     }
 
@@ -346,9 +346,7 @@ mod tests {
             )
             .is_err()
         );
-        assert!(
-            Invitation::decode(&text, invite.origin(), invite.enrollment_expires_at_ms()).is_err()
-        );
+        assert!(Invitation::decode(&text, invite.origin(), invite.share_expires_at_ms()).is_err());
         assert!(
             Invitation::decode(&text.replacen(":v1:", ":v0:", 1), invite.origin(), 1001).is_err()
         );
@@ -377,10 +375,16 @@ mod tests {
     #[test]
     fn first_enrollment_requires_local_confirmation_and_cannot_change_peer() {
         let mut enrollment = Enrollment::new(invitation());
+        let text = enrollment.invitation().protected_text().unwrap();
+        let after_invite = enrollment.invitation().enrollment_expires_at_ms() + 1;
+        let parsed =
+            Invitation::decode(&text, enrollment.invitation().origin(), after_invite).unwrap();
+        let mut late = Enrollment::new(parsed);
+        assert!(late.validate_handshake(after_invite).is_err());
+        assert!(late.authorize([1; 32], true, after_invite).is_err());
         assert!(enrollment.authorize([1; 32], false, 1001).is_err());
         assert!(!enrollment.is_enrolled());
         enrollment.authorize([1; 32], true, 1001).unwrap();
-        let after_invite = enrollment.invitation().enrollment_expires_at_ms() + 1;
         enrollment.authorize([1; 32], false, after_invite).unwrap();
         assert!(enrollment.authorize([2; 32], true, after_invite).is_err());
         let share_end = enrollment.invitation().share_expires_at_ms();

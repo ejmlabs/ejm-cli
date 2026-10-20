@@ -57,21 +57,30 @@ impl RelayAccount {
         })
     }
 
-    pub async fn load(origin: RelayOrigin, state: &Path) -> Result<Self> {
+    pub async fn load(
+        origin: RelayOrigin,
+        state: &Path,
+        cancel: &CancellationToken,
+    ) -> Result<Self> {
         let state = state.to_path_buf();
-        tokio::task::spawn_blocking(move || Self::load_blocking(origin, &state))
-            .await
-            .context("relay credential operation interrupted")?
+        super::vault::blocking(cancel, move |cancel| {
+            Self::load_blocking(origin, &state, cancel)
+        })
+        .await
     }
 
-    fn load_blocking(origin: RelayOrigin, state: &Path) -> Result<Self> {
+    fn load_blocking(
+        origin: RelayOrigin,
+        state: &Path,
+        cancel: &CancellationToken,
+    ) -> Result<Self> {
         let metadata =
             metadata(state)?.context("no saved relay account; run ejm-cli remote login")?;
         ensure!(
             metadata.origin == origin.as_str(),
             "saved relay account belongs to another origin; sign in to the configured relay"
         );
-        let token = super::vault::load_account(state, &origin, &metadata)?;
+        let token = super::vault::load_account(state, &origin, &metadata, cancel)?;
         Ok(Self {
             origin,
             device_id: metadata.device_id,
@@ -120,7 +129,7 @@ impl RelayAccount {
             token,
             client,
         };
-        account.register_device(cancel).await?;
+        account.register_device(cancel.clone()).await?;
         if !memory_only {
             let state = state.to_path_buf();
             let metadata = CachedAccount {
@@ -129,17 +138,16 @@ impl RelayAccount {
                 device_id: account.device_id.clone(),
             };
             let token = account.token.clone();
-            tokio::task::spawn_blocking(move || -> Result<()> {
+            super::vault::blocking(&cancel, move |cancel| -> Result<()> {
                 std::fs::create_dir_all(&state)?;
-                super::vault::save_account(&state, &metadata, &token)?;
+                super::vault::save_account(&state, &metadata, &token, cancel)?;
                 std::fs::write(
                     state.join("relay-account.json"),
                     serde_json::to_vec(&metadata)?,
                 )?;
                 Ok(())
             })
-            .await
-            .context("relay credential operation interrupted")??;
+            .await?;
         }
         Ok(account)
     }
@@ -248,7 +256,7 @@ impl RelayAccount {
         Ok(SecretString::new(ticket))
     }
 
-    pub async fn logout(&self, state: &Path) -> Result<bool> {
+    pub async fn logout(&self, state: &Path, cancel: &CancellationToken) -> Result<bool> {
         let revoked = self
             .json(
                 reqwest::Method::POST,
@@ -259,16 +267,15 @@ impl RelayAccount {
             .is_ok();
         let state = state.to_path_buf();
         let origin = self.origin.clone();
-        tokio::task::spawn_blocking(move || -> Result<()> {
-            super::vault::remove_account(&state, &origin)?;
+        super::vault::blocking(cancel, move |cancel| -> Result<()> {
+            super::vault::remove_account(&state, &origin, cancel)?;
             let path = state.join("relay-account.json");
             if path.exists() {
                 std::fs::remove_file(path)?;
             }
             Ok(())
         })
-        .await
-        .context("relay credential operation interrupted")??;
+        .await?;
         Ok(revoked)
     }
 }

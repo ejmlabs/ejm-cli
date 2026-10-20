@@ -19,6 +19,17 @@ const UPGRADE: &str = "persistent relay credentials need controlled preparation 
 const MISSING_IDENTITY: &str =
     "saved relay endpoint key is missing; restore the original vault before pairing again";
 
+pub(super) async fn blocking<T: Send + 'static>(
+    cancel: &CancellationToken,
+    operation: impl FnOnce(&CancellationToken) -> Result<T> + Send + 'static,
+) -> Result<T> {
+    let worker_cancel = cancel.child_token();
+    let _guard = worker_cancel.clone().drop_guard();
+    tokio::task::spawn_blocking(move || operation(&worker_cancel))
+        .await
+        .context("relay credential operation interrupted")?
+}
+
 pub(super) fn open(state: &Path) -> Result<SecretVault> {
     SecretVault::open(state.join("auth")).map_err(|_| unavailable())
 }
@@ -63,11 +74,10 @@ pub(super) fn load_account(
     state: &Path,
     origin: &RelayOrigin,
     metadata: &CachedAccount,
+    cancel: &CancellationToken,
 ) -> Result<SecretString> {
     let vault = open(state)?;
-    let tx = vault
-        .lock_blocking(&CancellationToken::new())
-        .map_err(|_| unavailable())?;
+    let tx = vault.lock_blocking(cancel).map_err(|_| unavailable())?;
     let key = id(origin, TOKEN)?;
     let Some(value) = tx.get(&key) else {
         ensure!(tx.migrated(&key), UPGRADE);
@@ -91,37 +101,44 @@ pub(super) fn save_account(
     state: &Path,
     metadata: &CachedAccount,
     token: &SecretString,
+    cancel: &CancellationToken,
 ) -> Result<()> {
     let origin = RelayOrigin::parse(&metadata.origin)?;
     let vault = open(state)?;
-    let mut tx = vault
-        .lock_blocking(&CancellationToken::new())
-        .map_err(|_| unavailable())?;
+    let mut tx = vault.lock_blocking(cancel).map_err(|_| unavailable())?;
     let key = id(&origin, TOKEN)?;
     tx.set(key.clone(), account_value(metadata, token)?)?;
     tx.mark_migrated(key)?;
     tx.commit().map_err(|_| unavailable())
 }
 
-pub(super) fn remove_account(state: &Path, origin: &RelayOrigin) -> Result<()> {
+pub(super) fn remove_account(
+    state: &Path,
+    origin: &RelayOrigin,
+    cancel: &CancellationToken,
+) -> Result<()> {
     let vault = open(state)?;
-    let mut tx = vault
-        .lock_blocking(&CancellationToken::new())
-        .map_err(|_| unavailable())?;
+    let mut tx = vault.lock_blocking(cancel).map_err(|_| unavailable())?;
     let key = id(origin, TOKEN)?;
     tx.delete(&key);
     tx.mark_migrated(key)?;
     tx.commit().map_err(|_| unavailable())
 }
 
-pub(super) fn identity(state: &Path, origin: &RelayOrigin) -> Result<EndpointIdentity> {
-    load_identity(&open(state)?, origin)
+pub(super) fn identity(
+    state: &Path,
+    origin: &RelayOrigin,
+    cancel: &CancellationToken,
+) -> Result<EndpointIdentity> {
+    load_identity(&open(state)?, origin, cancel)
 }
 
-fn load_identity(vault: &SecretVault, origin: &RelayOrigin) -> Result<EndpointIdentity> {
-    let tx = vault
-        .lock_blocking(&CancellationToken::new())
-        .map_err(|_| unavailable())?;
+fn load_identity(
+    vault: &SecretVault,
+    origin: &RelayOrigin,
+    cancel: &CancellationToken,
+) -> Result<EndpointIdentity> {
+    let tx = vault.lock_blocking(cancel).map_err(|_| unavailable())?;
     let key = id(origin, IDENTITY)?;
     if let Some(value) = tx.get(&key) {
         return EndpointIdentity::from_saved(value.expose_secret().as_bytes());
@@ -135,6 +152,7 @@ pub(super) fn migrate(
     state: &Path,
     origin: &RelayOrigin,
     excluded_old_writers: bool,
+    cancel: &CancellationToken,
 ) -> Result<bool> {
     ensure!(excluded_old_writers, UPGRADE);
     let metadata = super::account::metadata(state)?;
@@ -151,6 +169,7 @@ pub(super) fn migrate(
         metadata.as_ref(),
         &NativeLegacy { origin },
         true,
+        cancel,
     )
 }
 
@@ -224,13 +243,12 @@ fn migrate_into(
     metadata: Option<&CachedAccount>,
     legacy: &impl Legacy,
     excluded_old_writers: bool,
+    cancel: &CancellationToken,
 ) -> Result<bool> {
     ensure!(excluded_old_writers, UPGRADE);
     let token_id = id(origin, TOKEN)?;
     let identity_id = id(origin, IDENTITY)?;
-    let mut tx = vault
-        .lock_blocking(&CancellationToken::new())
-        .map_err(|_| unavailable())?;
+    let mut tx = vault.lock_blocking(cancel).map_err(|_| unavailable())?;
     let existing_identity = tx
         .get(&identity_id)
         .map(|value| EndpointIdentity::from_saved(value.expose_secret().as_bytes()))
@@ -279,9 +297,7 @@ fn migrate_into(
     tx.commit().map_err(|_| unavailable())?;
     drop(tx);
     // Reload after commit before deleting either recoverable legacy record.
-    let verified = vault
-        .lock_blocking(&CancellationToken::new())
-        .map_err(|_| unavailable())?;
+    let verified = vault.lock_blocking(cancel).map_err(|_| unavailable())?;
     for (key, expected) in [
         (&token_id, expected_token),
         (&identity_id, expected_identity),

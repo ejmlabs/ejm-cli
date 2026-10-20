@@ -306,10 +306,20 @@ impl Display {
     async fn publish(&mut self, message: ServerMessage) -> Result<()> {
         match &message {
             ServerMessage::Events {
-                through_sequence, ..
+                through_sequence,
+                gap,
+                ..
             } => {
                 let through = *through_sequence;
-                if !self.ready || self.recovery.is_some() {
+                if gap.is_some() {
+                    self.updates
+                        .send(Update::Notice(
+                            "Remote output was omitted. Refreshing current run state.",
+                        ))
+                        .await
+                        .map_err(|_| anyhow!("controller display ended"))?;
+                }
+                if gap.is_some() || !self.ready || self.recovery.is_some() {
                     self.recover(through);
                     return Ok(());
                 }

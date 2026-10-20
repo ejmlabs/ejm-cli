@@ -1,18 +1,14 @@
 # Remote control
 
 Remote access shares one selected CLI session through an account-gated relay.
-Local CLI use needs no relay account. This publication candidate contains the
-native host and controller source only. Its resolved dependency lock is carried
-unchanged from the reviewed native source. The protected CLI parent is
-`c8e2239392f71df82cbef6166b1827c8e5f5f1c5`. The harness pin selects actual
-protected merge `42e4f9cf33bd3525aec344cfdffabc251271f782`, with the
-completion API and exact 358-file tree `826e0231...`. Its protected prerequisite
-adoption does not replace the final native gate or admission. Earlier and
-focused native passes do not prove this
-combined revision; its full gate remains pending. A compatible account service
-is required; no relay or browser UI is included here. See [candidate status](native-remote-publication.md)
-for the remaining gates. These instructions describe the intended native
-workflow after those prerequisites pass.
+Local use needs no relay account. This prepared native-only successor retains
+protected CLI parent `c8e2239392f71df82cbef6166b1827c8e5f5f1c5`,
+harness merge `42e4f9cf33bd3525aec344cfdffabc251271f782` and its exact
+358-file completion API tree `826e0231...`. The unchanged native lock and prior
+passes do not accept this revision. A compatible account service is required;
+no relay or browser UI is included. See [candidate status](native-remote-publication.md)
+for the blocked f66 reviews and required fresh gates. The workflow below applies
+after those prerequisites pass.
 
 ## Sign in and host
 
@@ -53,9 +49,12 @@ policy apply to all remotely requested work.
 
 The host shows a private invitation on its alternate screen. It stays out of
 arguments, composer history and durable events. Transfer it over a private
-channel. First pairing expires after five minutes. The share lasts at most
-eight hours. Compare the controller's full fingerprint on both endpoints,
-then press Y on the host. Account recovery never replaces this confirmation.
+channel. First enrollment expires after five minutes; the share lasts at most
+eight hours. A previously enrolled controller can restart with its same saved
+identity until share expiry. The host rejects new or replacement keys after the
+enrollment deadline. Compare the current controller fingerprint on both endpoints
+and press a fresh Y after it is displayed; buffered approval from an earlier
+panel cannot approve it. Account recovery never replaces this confirmation.
 
 In a normal local TUI, after endpoint preparation and a saved relay login, use:
 
@@ -118,9 +117,11 @@ vault at the state directory's `auth` root. macOS Keychain, Windows Credential
 Manager or an unlocked Linux Secret Service protects its key. The harness owns
 native access controls, locking, authenticated encryption and atomic writes.
 Linux needs the distribution's libdbus, a session D-Bus and an unlocked Secret
-Service. A locked, denied or corrupt store fails closed. Restore the original
-native key and vault together if key access is lost; do not generate a
-replacement key for an existing encrypted vault. There is no plaintext fallback.
+Service. A locked, denied or corrupt store fails closed. Cancellation or caller
+drop cancels a vault lock wait through the public harness API; it cannot interrupt
+an OS key-store call already in progress. Restore the original native key and
+vault together if key access is lost; do not generate a replacement key for an
+existing encrypted vault. There is no plaintext fallback.
 Without native key access, use an explicit temporary sign-in and identity in the
 foreground process:
 
@@ -217,12 +218,13 @@ safe-integer range. Old request IDs cannot execute again. Oversized output produ
 an explicit gap; the view remains bounded. Event cursors recover retained
 output, not omitted or deleted history.
 
-If the native display falls behind, it pauses newer live event batches and
-recovers retained output from the journal in order. Each full replay page waits
-for the display cursor before the next read. A short or late snapshot cannot
-resume live output while a newer suppressed sequence remains unrecovered.
-Control results still arrive through the bounded channel; recovery never
-resubmits a mutation. Final-source local and hosted checks remain required.
+If the native display falls behind or receives a server event gap, it pauses
+newer live batches and recovers an authoritative snapshot and retained journal
+output. A gap alone never establishes Idle. Each full replay page waits for the
+display cursor before the next read. A short or late snapshot cannot resume live
+output while a newer suppressed sequence remains unrecovered. Control results
+still arrive through the bounded channel; recovery never resubmits a mutation.
+Final-source local and hosted checks remain required.
 
 ## Relay prerequisites and evidence
 

@@ -605,6 +605,56 @@ async fn terminal_observer_loop() -> Result<()> {
     backend.shutdown().await
 }
 
+async fn terminal_pairing_replacement() -> Result<()> {
+    let (_directory, backend, session) = backend().await?;
+    backend
+        .begin_share(&session.id, "pairing".into(), ShareRole::Control, u64::MAX)
+        .await?;
+    let (mut task, sender, _release) = held_task("pairing");
+    task.expires_at_ms = u64::MAX;
+    let mut sharing = host(&session, task);
+    let mut app = App::new(session);
+    let (answer, abandoned) = oneshot::channel();
+    sender
+        .send(HostNotice::Confirm {
+            fingerprint: "original controller fixture".into(),
+            answer,
+        })
+        .await?;
+    sharing.poll(&mut app, &backend, NOW).await;
+    let mut terminal = crate::ui::TerminalGuard::enter()?;
+    terminal.terminal.draw(|frame| sharing.draw(frame))?;
+    // Parse the old approval into the real owned reader without consuming it.
+    tokio::time::timeout(Duration::from_secs(10), async {
+        while !terminal.poll_input()? {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        Result::<()>::Ok(())
+    })
+    .await??;
+    drop(abandoned);
+    let (answer, confirmed) = oneshot::channel();
+    sender
+        .send(HostNotice::Confirm {
+            fingerprint: "replacement controller fixture".into(),
+            answer,
+        })
+        .await?;
+    app.notice("Pairing boundary passed");
+    let args = Args::try_parse_from(["ejm-cli", "--replay"])?;
+    crate::ui::run_app(
+        &backend,
+        &args,
+        &crate::extensions::Extensions::empty()?,
+        sharing,
+        app,
+        terminal,
+    )
+    .await?;
+    anyhow::ensure!(confirmed.await?, "fresh confirmation was rejected");
+    backend.shutdown().await
+}
+
 #[expect(
     clippy::panic,
     reason = "The PTY supervisor verifies private input is discarded before panic restores echo."
@@ -642,6 +692,9 @@ async fn remote_terminal_interaction_fixture() -> Result<()> {
     }
     if mode.starts_with("observer-") {
         return terminal_observer_loop().await;
+    }
+    if mode == "pairing-replacement" {
+        return terminal_pairing_replacement().await;
     }
     #[cfg(unix)]
     let mut panic_signal =

@@ -1,6 +1,6 @@
 //! Native controller contracts use an offline session and bounded in-memory channels.
 #[cfg(test)]
-mod contracts {
+pub(in crate::remote::controller) mod contracts {
     #![expect(
         clippy::unwrap_used,
         reason = "Invalid deterministic fixtures fail the test immediately."
@@ -9,7 +9,9 @@ mod contracts {
     use super::super::*;
     use ejm_harness::{EventKind, SessionStatus};
 
-    fn fixture(role: ShareRole) -> (App, Controls, RemoteBackend, mpsc::Receiver<Command>) {
+    pub(in crate::remote::controller) fn fixture(
+        role: ShareRole,
+    ) -> (App, Controls, RemoteBackend, mpsc::Receiver<Command>) {
         let session = Session {
             id: "session-fixture".into(),
             title: "fixture".into(),

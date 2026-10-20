@@ -13,6 +13,7 @@ The original proposal followed a local relay/browser pass and requested hosted C
 - Bound scheduled database work to the provider's free per-invocation limits and retain retryable work across scheduled invocations.
 - Verify live TLS, authentication, protected assets, device approval, pairing, reconnect and revocation. Publish setup, limits, recovery and actual release evidence in the affected docs.
 - Correct accepted remote queue admission to wait for the harness's exact-run completion barrier, including internally queued local successors. Retain revocation ownership, discard dependent prompts if the target atomically handed off to a local successor, and reject prompt text above 16 KiB before queue acknowledgement.
+- Correct the complete f66 reviews' pairing display/input boundary, cancelled vault waits, authoritative recovery after server event gaps and enrolled-controller restart after the initial pairing deadline. Reuse current terminal cleanup, vault cancellation, snapshots and host key enrollment; retain the share deadline and pinned identities.
 
 ## Capabilities
 

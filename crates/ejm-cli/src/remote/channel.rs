@@ -468,6 +468,7 @@ mod tests {
         let host = EndpointIdentity::memory_only().unwrap();
         let controller = EndpointIdentity::memory_only().unwrap();
         let invitation = invite(&host);
+        let text = invitation.protected_text().unwrap();
         let (h, c) = handshake(&host, &controller, &invitation, 1001);
         let mut old_sender = c.finish_controller(&invitation, 1001).unwrap();
         let mut enrollment = Enrollment::new(invitation);
@@ -478,8 +479,17 @@ mod tests {
             .unwrap();
         let old_ciphertext = old_sender.encrypt(b"old mutation", 1001).unwrap();
         let now = 1001 + ENROLLMENT_LIFETIME_MS;
-        let (h, c) = handshake(&host, &controller, enrollment.invitation(), now);
-        let mut new_sender = c.finish_controller(enrollment.invitation(), now).unwrap();
+        let parsed = Invitation::decode(&text, enrollment.invitation().origin(), now).unwrap();
+        let other = EndpointIdentity::memory_only().unwrap();
+        let (h, _) = handshake(&host, &other, &parsed, now);
+        assert!(
+            h.finish_host()
+                .unwrap()
+                .authorize(&mut enrollment, true, now)
+                .is_err()
+        );
+        let (h, c) = handshake(&host, &controller, &parsed, now);
+        let mut new_sender = c.finish_controller(&parsed, now).unwrap();
         let mut new_receiver = h
             .finish_host()
             .unwrap()

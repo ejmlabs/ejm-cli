@@ -120,8 +120,8 @@ async fn execute(args: &Args, command: &RemoteCommand, cancel: CancellationToken
             }
         }
         RemoteCommand::Logout => {
-            let account = account::RelayAccount::load(origin, &state).await?;
-            if account.logout(&state).await? {
+            let account = account::RelayAccount::load(origin, &state, &cancel).await?;
+            if account.logout(&state, &cancel).await? {
                 println!(
                     "Relay login removed and server revocation confirmed. Existing leases expire within 15 minutes."
                 );
@@ -132,7 +132,7 @@ async fn execute(args: &Args, command: &RemoteCommand, cancel: CancellationToken
             }
         }
         RemoteCommand::Devices { revoke } => {
-            let account = account::RelayAccount::load(origin, &state).await?;
+            let account = account::RelayAccount::load(origin, &state, &cancel).await?;
             let result = if let Some(id) = revoke {
                 anyhow::ensure!(account::valid_id(id), "invalid device ID");
                 account
@@ -158,14 +158,15 @@ async fn execute(args: &Args, command: &RemoteCommand, cancel: CancellationToken
                 account::RelayAccount::login(origin.clone(), &state, true, false, cancel.clone())
                     .await?
             } else {
-                account::RelayAccount::load(origin.clone(), &state).await?
+                account::RelayAccount::load(origin.clone(), &state, &cancel).await?
             };
             let storage = if args.memory_only {
                 IdentityStorage::MemoryOnly
             } else {
                 IdentityStorage::SecretStore
             };
-            let identity = EndpointIdentity::load_or_create(&origin, &state, storage).await?;
+            let identity =
+                EndpointIdentity::load_or_create(&origin, &state, storage, &cancel).await?;
             let text = protected::read_invitation(cancel.clone()).await?;
             let invitation = Invitation::decode(&text, &origin, now_ms()?)?;
             drop(text);
@@ -190,15 +191,16 @@ async fn migrate_credentials(
     );
     let stopped = protected::confirm(
         "Stop every older ejm-cli host and controller that can write this relay's credentials. Confirm only after they have stopped. New vault locks cannot exclude old clients. Downgrade to an older keyring writer is unsupported after cutover. Continue with this controlled upgrade?",
-        cancel,
+        cancel.clone(),
     ).await?;
     anyhow::ensure!(
         stopped,
         "relay migration deferred; both stores remain unchanged; stop older clients and retry, or explicitly choose --memory-only"
     );
-    let cleaned = tokio::task::spawn_blocking(move || vault::migrate(&state, &origin, stopped))
-        .await
-        .map_err(|_| anyhow::anyhow!("relay migration interrupted"))??;
+    let cleaned = vault::blocking(&cancel, move |cancel| {
+        vault::migrate(&state, &origin, stopped, cancel)
+    })
+    .await?;
     if cleaned {
         println!(
             "Relay vault migration verified. Legacy entries were removed. Keep older clients stopped; direct downgrade is unsupported."

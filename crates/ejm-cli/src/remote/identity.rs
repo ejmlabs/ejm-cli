@@ -11,6 +11,7 @@ use snow::{
     params::DHChoice,
     resolvers::{CryptoResolver, DefaultResolver},
 };
+use tokio_util::sync::CancellationToken;
 use url::Url;
 use zeroize::Zeroizing;
 
@@ -125,15 +126,17 @@ impl EndpointIdentity {
         origin: &RelayOrigin,
         state: &std::path::Path,
         storage: IdentityStorage,
+        cancel: &CancellationToken,
     ) -> Result<Self> {
         if storage == IdentityStorage::MemoryOnly {
             return Self::memory_only();
         }
         let state = state.to_path_buf();
         let origin = origin.clone();
-        tokio::task::spawn_blocking(move || super::vault::identity(&state, &origin))
-            .await
-            .map_err(|_| anyhow!("relay identity operation interrupted"))?
+        super::vault::blocking(cancel, move |cancel| {
+            super::vault::identity(&state, &origin, cancel)
+        })
+        .await
     }
 
     pub(super) fn new_persistent() -> Result<Self> {
@@ -303,10 +306,12 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let state = directory.path().join("must-not-exist");
         let origin = RelayOrigin::parse("https://synthetic-relay.example").unwrap();
-        let first = EndpointIdentity::load_or_create(&origin, &state, IdentityStorage::MemoryOnly)
+        let storage = IdentityStorage::MemoryOnly;
+        let cancel = CancellationToken::new();
+        let first = EndpointIdentity::load_or_create(&origin, &state, storage, &cancel)
             .await
             .unwrap();
-        let second = EndpointIdentity::load_or_create(&origin, &state, IdentityStorage::MemoryOnly)
+        let second = EndpointIdentity::load_or_create(&origin, &state, storage, &cancel)
             .await
             .unwrap();
         assert!(

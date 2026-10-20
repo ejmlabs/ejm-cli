@@ -509,7 +509,6 @@ fn restore_draft(pending: Option<Pending>, app: &mut App) {
 }
 
 fn apply_update(message: ServerMessage, app: &mut App, controls: &mut Controls) {
-    app.connection_ready = true;
     match message {
         ServerMessage::Snapshot {
             session,
@@ -520,6 +519,7 @@ fn apply_update(message: ServerMessage, app: &mut App, controls: &mut Controls) 
             role,
             mutation_high_water,
         } => {
+            app.connection_ready = true;
             controls.sequence = controls.sequence.max(mutation_high_water);
             app.session = session;
             apply_events(

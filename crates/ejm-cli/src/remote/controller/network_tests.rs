@@ -9,8 +9,9 @@ mod contracts {
     use super::super::*;
     use crate::app::App;
     use crate::remote::{
-        controller::{Controls, apply_update},
+        controller::{Controls, apply_update, tests::contracts::fixture as control_fixture},
         invitation::ShareRole,
+        protocol::{GapReason, Mutation, MutationAction, ReplayGap},
     };
     use ejm_harness::{Event, EventKind, Session, SessionStatus};
     use std::fmt::Write;
@@ -24,19 +25,15 @@ mod contracts {
 
     impl Fixture {
         fn new() -> Self {
+            let (app, controls, _, _) = control_fixture(ShareRole::Control);
             let (updates, receiver) = mpsc::channel(16);
             let mut display = Display::new(updates);
             display.ready = true;
             Self {
                 display,
                 receiver,
-                app: App::new(session()),
-                controls: Controls {
-                    role: ShareRole::Control,
-                    active: None,
-                    sequence: 0,
-                    pending: None,
-                },
+                app,
+                controls,
             }
         }
 
@@ -51,12 +48,16 @@ mod contracts {
 
         fn drain(&mut self) {
             while let Ok(update) = self.receiver.try_recv() {
-                let message = match update {
-                    Update::Server(message) => Some(message),
-                    _ => None,
+                match update {
+                    Update::Server(message) => {
+                        apply_update(message, &mut self.app, &mut self.controls);
+                    }
+                    Update::Notice(message) => {
+                        self.app.notice(message);
+                        self.app.connection_ready = false;
+                    }
+                    Update::Ended => self.app.connection_ready = false,
                 }
-                .unwrap();
-                apply_update(message, &mut self.app, &mut self.controls);
             }
         }
 
@@ -78,7 +79,7 @@ mod contracts {
 
     fn session() -> Session {
         Session {
-            id: "slow-display".into(),
+            id: "session-fixture".into(),
             title: "fixture".into(),
             cwd: "/tmp".into(),
             created_at_ms: 0,
@@ -89,7 +90,7 @@ mod contracts {
     fn event(sequence: u64) -> Event {
         Event {
             sequence,
-            session_id: "slow-display".into(),
+            session_id: "session-fixture".into(),
             run_id: None,
             timestamp_ms: 0,
             kind: EventKind::TextDelta {
@@ -116,6 +117,54 @@ mod contracts {
             role: ShareRole::Control,
             mutation_high_water: 0,
         }
+    }
+
+    #[tokio::test]
+    async fn server_gap_refreshes_authority_before_an_ordinary_draft_can_submit() {
+        let mut fixture = Fixture::new();
+        fixture.controls.active = Some("finished-run".into());
+        fixture.app.composer.replace("new ordinary draft");
+        let (_, _, backend, mut receiver) = control_fixture(ShareRole::Control);
+        fixture
+            .display
+            .publish(ServerMessage::Events {
+                events: vec![],
+                through_sequence: 900,
+                gap: Some(ReplayGap {
+                    requested_after_sequence: 0,
+                    available_after_sequence: 900,
+                    reason: GapReason::OutputTruncated,
+                }),
+            })
+            .await
+            .unwrap();
+        fixture.drain();
+        assert!(fixture.display.needs_snapshot(fixture.app.last_sequence));
+        assert_eq!(fixture.app.last_sequence, 0);
+        assert_eq!(fixture.controls.active.as_deref(), Some("finished-run"));
+        apply_update(
+            ServerMessage::Error {
+                code: RemoteError::Unavailable,
+                message: "still refreshing".into(),
+            },
+            &mut fixture.app,
+            &mut fixture.controls,
+        );
+        assert!(fixture.controls.enter(&mut fixture.app, &backend).is_err());
+        assert_eq!(fixture.app.composer.text, "new ordinary draft");
+        assert!(receiver.try_recv().is_err());
+        fixture.display.publish(snapshot(901, 900)).await.unwrap();
+        fixture.drain();
+        assert!(!fixture.display.needs_snapshot(fixture.app.last_sequence));
+        fixture.controls.enter(&mut fixture.app, &backend).unwrap();
+        assert!(matches!(
+            receiver.recv().await,
+            Some(Command::Mutation(Mutation {
+                action: MutationAction::Submit { .. },
+                ..
+            }))
+        ));
+        assert!(receiver.try_recv().is_err());
     }
 
     #[tokio::test]

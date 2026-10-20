@@ -271,8 +271,12 @@ mod contracts {
                 device_id: "device".into(),
             })?,
         )?;
-        let result =
-            RelayAccount::load(RelayOrigin::parse("https://new.invalid")?, directory.path()).await;
+        let result = RelayAccount::load(
+            RelayOrigin::parse("https://new.invalid")?,
+            directory.path(),
+            &CancellationToken::new(),
+        )
+        .await;
         let message = result
             .err()
             .map(|error| error.to_string())

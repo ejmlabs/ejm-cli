@@ -39,3 +39,35 @@ Native text mutations SHALL reject blank text and text above 16 KiB of UTF-8 byt
 
 - **WHEN** nonblank text contains multibyte characters and is exactly 16,384 UTF-8 bytes
 - **THEN** the byte limit permits the request while the remaining host authority checks still apply
+
+### Requirement: Pairing confirmation and restart authority
+
+Each new pairing confirmation SHALL be displayed before accepting a fresh approval key. An enrolled controller SHALL be able to reconnect until share expiry with its pinned identity; this SHALL NOT extend initial enrollment or permit replacement identities.
+
+#### Scenario: A confirmation replaces another panel
+
+- **WHEN** a new candidate replaces an invitation or abandoned confirmation
+- **THEN** buffered approval input is purged after displaying that candidate and a fresh key is required
+
+#### Scenario: A paired controller restarts after initial enrollment closes
+
+- **WHEN** the original controller reconnects after the initial enrollment deadline but before share expiry
+- **THEN** the host accepts its pinned key and rejects unenrolled or replacement keys
+
+### Requirement: Credential wait cancellation
+
+Vault lock waits SHALL observe operation cancellation and the end of the awaiting caller, using the public vault cancellation contract.
+
+#### Scenario: Shutdown while another writer holds the vault
+
+- **WHEN** the credential operation is cancelled or its awaiting future is dropped during lock contention
+- **THEN** the blocking lock waiter exits without waiting for the vault's contention deadline
+
+### Requirement: Authoritative recovery after missing events
+
+A delivered event gap SHALL initiate the existing snapshot recovery barrier. Missing events SHALL NOT establish a run's current authority.
+
+#### Scenario: A gap omits run completion
+
+- **WHEN** the controller misses RunFinished in a server-truncated batch
+- **THEN** it requests and applies authoritative run state before enabling subsequent work

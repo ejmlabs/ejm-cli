@@ -152,6 +152,16 @@ def check(binary: Path, terminate: bool, remote_case: str | None = None, remote_
                     return re.sub(rb"\x1b\[[0-?]*[ -/]*[@-~]", b"", output[mark:])
 
         def check_remote_flow() -> None:
+            if remote_case == "pairing-replacement":
+                read_until(b"original controller fixture")
+                os.write(master, b"y")
+                # A resize paint proves the replacement remains visible after
+                # the old key was parsed and its confirmation was abandoned.
+                repaint_until(b"replacement controller fixture")
+                os.write(master, b"y")
+                repaint_until(b"Pairing boundary passed")
+                os.write(master, b"/quit\r")
+                return
             if remote_case == "host-signal":
                 read_until(b"Relay sign-in")
                 flags = termios.tcgetattr(slave)[3]
@@ -275,7 +285,7 @@ def check(binary: Path, terminate: bool, remote_case: str | None = None, remote_
 
 
 REMOTE_TEST = "remote::host_ui::tests::remote_terminal_interaction_fixture"
-REMOTE_CASES = ("flow", "queued-complete", "queued-partial", "cancel", "interrupt", "error", "signal", "panic", "host-signal", "observer-stop", "observer-switch", "observer-quit", "observer-signal")
+REMOTE_CASES = ("flow", "queued-complete", "queued-partial", "cancel", "interrupt", "error", "signal", "panic", "host-signal", "observer-stop", "observer-switch", "observer-quit", "observer-signal", "pairing-replacement")
 
 
 def native_fixture(messages: Path) -> Path:
