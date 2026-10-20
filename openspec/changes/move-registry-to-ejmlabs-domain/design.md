@@ -4,88 +4,75 @@
 
 See proposal.md for why the registry host is moving. This design covers how ejm-cli follows that move. It does not edit `ejm-harness`.
 
-On 2026-10-20 the harness branch `openspec/move-registry-to-ejmlabs-domain` was not on GitHub yet. Coordination below is against public `ejmlabs/ejm-harness` main `8d3dc39b8bf38e0b54ef4315fd6c5c58a4f304e0`, which is nine commits ahead of the CLI pin `.github/harness-revision` (`4a751c6a3f24d7d143140f79ff53517fb93e3531`).
+Everett approved the host on 2026-10-20: the default registry is `https://registry.ejmlabs.com`. Retired sessions are discarded locally, not imported. Harness pull request [#19](https://github.com/ejmlabs/ejm-harness/pull/19) is implemented at `6c90a0d297861b78d83b958697c7e7aed9304409` and is not on harness main. That commit exports `DISCARD_RETIRED_REGISTRY_COMMAND` as `ejm-cli package discard-retired-session`. The CLI provides that command. Same-origin legacy handoff stays the harness function `migrate_registry_token`. There is no `package migrate-credentials` command.
 
-At the pin, `save_registry_token` and `load_registry_token` still read and write plaintext `registry-session.json`. Current main has moved those sessions into the encrypted vault (`ejm-harness-packages` / `registry-session`, keyed by the normalized origin). It exports `delete_registry_token` and `migrate_registry_token`. `save` and `load` refuse to continue when a legacy file exists and that origin is not marked migrated. The error tells the user to run `ejm-cli package migrate-credentials --old-clients-stopped`. The CLI has no such command. `migrate_registry_token` imports the file only when its `origin` matches the origin argument, then deletes the file. A file whose origin is `https://harness.meetgerry.ai/` does not import into the new default.
+The CLI pin `.github/harness-revision` is `4a751c6a3f24d7d143140f79ff53517fb93e3531`. At that commit `DEFAULT_REGISTRY` is still `https://harness.meetgerry.ai`, and `save_registry_token` / `load_registry_token` read and write plaintext `registry-session.json`. `RegistryClient::new` allows HTTP only when the host string is `localhost`, `127.0.0.1`, or `[::1]`. It does not reject `meetgerry.ai`. `delete_registry_token` is not in that commit. Harness main `8d3dc39b8bf38e0b54ef4315fd6c5c58a4f304e0` has the vault and `delete_registry_token`, and it still defaults to `harness.meetgerry.ai` and still tells users to run the missing migrate command. The discard API and the new default are not on harness main, so this implementation does not move the pin.
 
-`package logout` in `crates/ejm-cli/src/packages.rs` loads a token, asks that origin to revoke it, then `remove_file`s `registry-session.json`. It never calls `delete_registry_token`. After the vault move, a signed-in user with no legacy file fails logout on the missing file, and the vault record remains. There is a separate top-level `logout` for model-provider accounts. This change does not alter that command.
-
-`RegistryClient::new` is the only origin check. It allows HTTPS, and HTTP only for `localhost`, `127.0.0.1`, and `[::1]`. It requires a plain origin. It still accepts `https://harness.meetgerry.ai`. The auth Worker origin and the GitHub OAuth callback are set in the harness registry config and README, not in this repo.
-
-Everett chooses the new host. The candidates are `harness.ejmlabs.com` and `registry.ejmlabs.com`. This repo's public page already links `https://harness.ejmlabs.com/` as the harness product page.
+`https://harness.ejmlabs.com` stays the harness product page in this repo's site. It is not the registry.
 
 ## Goals / Non-Goals
 
 **Goals:**
 
-- Package commands and `doctor` use one registry origin: `--registry`, then `EJM_CLI_REGISTRY_URL`, then the harness `DEFAULT_REGISTRY`.
-- Reject unsafe and retired origins before any request or session load, using the harness rules.
-- Keep each session bound to the origin that issued it. Logout removes that origin's vault record.
-- Give the blocked user the command the harness already names, and make that command discard a retired-origin session locally.
-- Document the new default, the override, the vault, and the upgrade. Leave every other Gerry string unchanged.
+- Package commands and `doctor` use `--registry`, then `EJM_CLI_REGISTRY_URL`, then `https://registry.ejmlabs.com`.
+- Reject `meetgerry.ai` and its subdomains, non-loopback HTTP, `0.0.0.0`, and LAN hosts before any request or session load. No fallback to another origin.
+- Keep each saved session bound to its origin. Logout removes the local session and does not fail when the legacy file is already gone.
+- Discard leftover meetgerry sessions locally, without importing them and without a network request.
+- Document the default, the override, and the discard command.
 
 **Non-Goals:**
 
-- Choosing the host, changing `DEFAULT_REGISTRY`, editing Worker config, or renaming `gerry-registry` / `gerry-registry-auth`. Those belong to the harness change.
-- Renaming `gerry.package.json`, rewriting "Gerry platform" in `docs/contributing.md`, or retargeting the harness product links on the CLI site.
-- A registry config file, a second host string in the CLI, or remote revocation of tokens issued by `harness.meetgerry.ai`.
+- Editing `../ejm-harness`, deploying the registry, or moving `.github/harness-revision` before the needed harness commit is on main.
+- Renaming `gerry.package.json`, the `gerry-*` Worker warning, or the harness product links.
+- A registry config file, or remote revocation of tokens issued by `meetgerry.ai`.
+- Importing an old session into `https://registry.ejmlabs.com`.
 
 ## Decisions
 
-1. **The host is the harness constant.** The CLI passes `DEFAULT_REGISTRY` into `RegistryClient::new` and does not declare its own host. Docs and `--help` quote that constant's value once Everett has picked it and the harness change has set it. `https://registry.ejmlabs.com` stays the Product Manager's recommendation in proposal.md. It is not a second constant. The auth Worker `REGISTRY_ORIGIN` and the OAuth callback `https://<host>/api/auth/callback/github` move with the same constant on the harness side.
+1. **The default origin is `https://registry.ejmlabs.com`.** Decided by Everett. The CLI passes that value to `RegistryClient::new` and does not read `DEFAULT_REGISTRY` while that constant is still `https://harness.meetgerry.ai`. Using the constant today would select the retired host and then fail the CLI's own rejection. When harness main publishes the same URL in `DEFAULT_REGISTRY`, a later pin bump can switch the CLI to the constant. Until then the CLI literal is the default users get. Docs and `--help` quote this URL.
 
-2. **Implement `ejm-cli package migrate-credentials --old-clients-stopped`.** The harness error and `docs/packages.md` already tell the user to run that command, and `migrate_registry_token` is the public handoff for a legacy file whose origin matches the selected registry. Renaming the command, or deleting the sentence, would leave that handoff with no CLI entry. The flag is required. Without it the process exits non-zero and does not open either credential store. The command makes no HTTP request and never prints a token.
+2. **Discard retired sessions. Do not import them.** The command is `ejm-cli package discard-retired-session`, the value of `DISCARD_RETIRED_REGISTRY_COMMAND` at harness `6c90a0d`. The pinned crate does not export that constant, so `args.rs` owns the same string until the pin moves. The command reads `registry-session.json` only to see the origin host, removes the file when that host is `meetgerry.ai` or a subdomain, prints no token, and opens no connection. A session for any other host is left in place. This build does not call `discard_retired_registry_sessions`, so a vault record from a newer sibling checkout stays until the pin includes that function.
 
-   The same command is the retired-origin discard. `package logout --retired` would sound like the remote revoke `package logout` already performs, and the user who is blocked never sees that name. Automatic deletion on startup would skip the "older clients have stopped" confirmation the vault uses, because an older client does not honor the vault lock.
+   `package login` checks that file first. When the origin is retired, login exits non-zero before the device flow. The message matches the harness text at `6c90a0d`: the meetgerry.ai registry is retired, the default is `https://registry.ejmlabs.com`, the old session is not sent or reused, and the user discards it with `ejm-cli package discard-retired-session` and signs in again.
 
-   Current `migrate_registry_token(root, new_origin, true)` returns an origin mismatch for a meetgerry legacy file and leaves the user blocked. The harness change needs one public local operation the CLI can call after the flag is set:
+   Same-origin legacy handoff stays `migrate_registry_token`. The CLI does not call it. On this pin, `save_registry_token` and `load_registry_token` still use the plaintext file, so a session for the origin in effect does not need that handoff.
 
-   - It takes the selected registry origin and the confirmation flag.
-   - It performs no HTTP and returns no token.
-   - When the legacy file's origin is the selected origin, it keeps today's import behavior.
-   - When the legacy file's origin is the retired host, it removes that file with the existing privacy checks and deletes the vault record for the retired origin. The migration marker stays, so a later leftover file cannot restore the bearer.
-   - It does not copy the retired bearer into the new origin.
-   - When the legacy file is already gone and a vault record for the retired origin remains, it deletes that record the same way.
-   - Any other legacy origin is left in place and reported. The CLI prints that error.
+3. **Logout removes the pinned store's session.** On this pin the stored session is `registry-session.json`. Logout loads that file only when its origin is the origin in effect, asks that origin to revoke the token, then deletes the file. A missing file is not an error: logout reports that there is no session for the origin. A file for another origin is not sent and not deleted. Harness main has `delete_registry_token` and still has no discard API. `6c90a0d` adds `discard_retired_registry_sessions`, and it is not on main. The pin stays. A vault record from a newer sibling checkout is left until that pin move.
 
-   The CLI does not open `registry-session.json`. Mode, owner, link count, and size checks stay in the harness.
+4. **`--registry` is global, and only package commands and `doctor` read it.** `doctor` has to say whether the origin came from the flag. The flag is not given to clap's env injector, so the CLI can tell a flag from `EJM_CLI_REGISTRY_URL`. Precedence is flag, then env, then the default. An empty env var is not an override. `run` and the other model commands ignore the value, including when it is invalid. `discard-retired-session` ignores it too, so a retired value in the environment cannot block the cleanup and cannot cause a request.
 
-   Retirement must not be enforced inside the parser that builds storage identity. Today `identity()` calls `parse_origin`. If that function rejects `https://harness.meetgerry.ai`, local delete can no longer name the stored record. `RegistryClient::new` rejects the retired origin for every network client. Storage delete for that origin stays possible inside the harness operation above. The CLI never passes the retired host as `--registry`.
+5. **The CLI validates the registry URL before `RegistryClient::new`.** The predicate `host_is_loopback` matches the rule in ejm-cli pull request [#11](https://github.com/ejmlabs/ejm-cli/pull/11) and ejm-ide: ASCII case-insensitive `localhost`, IPv4 `is_loopback()` (`127.0.0.0/8`), IPv6 `is_loopback()` (`::1`). `0.0.0.0`, LAN addresses, `::`, and `::ffff:127.0.0.1` are not loopback. That helper lives in `args.rs` so the base-URL change can call it instead of copying it. Pull request 11 has not landed, so this change does not edit `api_base_url()`.
 
-   A second public query reports whether a retired-origin vault record or legacy file exists, without returning a token or contacting a host. `doctor` uses it.
+   `meetgerry.ai` and any subdomain are rejected with a message that the meetgerry registry is retired and that the default is `https://registry.ejmlabs.com`. `notmeetgerry.ai` is a normal HTTPS origin. The process does not retry the default. Plain-origin failures (path, userinfo, query, fragment, other schemes) are rejected in the CLI as well.
 
-3. **Logout removes the vault record and does not touch the legacy path.** For the origin in effect, `package logout` validates the origin, loads that origin's token, asks that origin to revoke it, and calls `delete_registry_token` for that origin. Local deletion still happens when remote revocation fails, and the error says the local session was removed and remote revocation failed. A missing `registry-session.json` is not an error. There is no `remove_file` of that path. No session means a non-zero exit that tells the user to sign in, with no file-not-found text. Logout never runs against the retired host, so the old bearer is not posted to `harness.meetgerry.ai`.
+   The pinned `RegistryClient::new` still rejects `http://127.0.0.2` even though this predicate accepts it. `doctor` uses the CLI predicate, so it can show that origin. A package command that must open a client still calls `RegistryClient::new` and surfaces the harness error. `127.0.0.1`, `localhost`, and `[::1]` work on the pin. Widening the harness loopback set is a harness change and is not on main.
 
-4. **`--registry` is global, and only package commands and `doctor` read it.** The spec requires `doctor` to say when the origin came from `--registry`. `doctor` is a top-level command, so a flag that exists only under `package` cannot reach it. The flag follows `--base-url`: global, environment `EJM_CLI_REGISTRY_URL`, flag wins, then env, then `DEFAULT_REGISTRY`. An empty env var is not an override. Model commands ignore it. A bad value does not fail `ejm-cli run`. Help text says the flag selects the package registry for `package` and `doctor`, and that model endpoints are unchanged. This resolves the proposal's package-only recommendation.
+6. **`doctor` prints the choice and keeps going.** A valid origin is `Registry: <origin> (default|EJM_CLI_REGISTRY_URL|--registry)`. A rejected override is marked rejected, names the reason, and the rest of the report still prints. `doctor` then exits non-zero. It does not open a registry connection. When a retired session file is present, `doctor` names `ejm-cli package discard-retired-session` and does not print the token.
 
-5. **Validation is the harness check, and it runs first.** Every `package` subcommand and `doctor` resolve the origin before session load, registry HTTP, or other package work. `RegistryClient::new` is the check. The CLI does not copy the loopback set or the retired-host comparison. Failure exits non-zero, names `--registry` or `EJM_CLI_REGISTRY_URL` according to which one supplied the value, and includes the harness error. For the retired host that error says the meetgerry registry is retired and names the current default. No flag disables the rules. When the origin is not the default, registry commands print it before any request. `doctor` prints `Registry: <origin> (default|EJM_CLI_REGISTRY_URL|--registry)`. A rejected override is printed as rejected, the rest of the doctor report still prints, and the process exits non-zero. `doctor` makes no registry request.
-
-6. **Sessions stay origin-scoped.** `login` saves with `save_registry_token` for the origin in effect. `whoami`, `publisher`, `publish`, and `logout` load only that origin. A missing session exits non-zero, says there is no session for that origin, and sends no token. The CLI never accepts a token as an argument and never prints one.
-
-7. **The pin moves only with protected harness main.** This planning change does not edit `.github/harness-revision` or `Cargo.lock`. Implementation sets the pin to the full lowercase SHA of the harness change after that commit is on protected `ejmlabs/ejm-harness` main. The selector accepts a commit only when it equals or is an ancestor of that main. A feature-branch SHA will fail CI. `Cargo.toml` keeps the `../ejm-harness` path dependencies. Refresh `Cargo.lock` from a sibling checkout of the pinned commit, then `cargo check --locked --all-targets -p ejm-cli`. The current pin cannot build this design: it does not export `delete_registry_token` or `migrate_registry_token`.
-
-8. **Tests stay local.** No test contacts `harness.meetgerry.ai`, the new host, or a paid provider. Argument and doctor cases run the real binary. Cases that need a registry use a loopback HTTP fixture in `crates/ejm-cli/tests/cli.rs` and record method, path, and whether `Authorization` was present. Session cases use the OS key service. Linux CI already prepares Secret Service for persistent-account fixtures. Tests do not skip when it is missing, and the CLI does not grow a test-only key store. A legacy fixture is a private owner-only regular file in the temp package root, the same shape the harness reader accepts. Assert the fixture token never appears on stdout or stderr. `package publish` is not called. The retired URL may appear in tests as a rejected value. It must not appear as the live default in docs, `--help`, or default `doctor` output.
+7. **Tests stay local.** No test contacts `registry.ejmlabs.com`, `meetgerry.ai`, or a paid provider. The default origin is asserted as a string. Live registry calls use a loopback fixture. The fixture token must not appear on stdout or stderr.
 
 ## Risks / Trade-offs
 
-- The harness PR can choose a different function name. The CLI calls whatever public function implements decision 2. If that PR rejects the retired origin inside `parse_origin`, or leaves the origin-mismatch error in place, stop and update this change before writing CLI code.
-- `EJM_CLI_REGISTRY_URL` can point package commands at another registry. The process prints a non-default origin and `doctor` shows the source. Digests still come from that origin, and install stays disabled until `--trust`.
-- Discard deletes the only local copy of a meetgerry session. An older CLI cannot reconstruct `registry-session.json` afterward. That is the point of retiring the host. Document it in the upgrade note.
-- A vault-only retired session does not block `package login` on the new origin, because the storage key changed. `doctor` is what tells that user to run the discard command.
-- `harness.ejmlabs.com` is already the harness product page in this repo's site. Selecting it as the registry host collides with that page. The CLI plan does not retarget those links.
+- The CLI default and `DEFAULT_REGISTRY` differ until harness PR 19 is on main. Package commands in this CLI use the CLI literal, so they do not follow the constant back to meetgerry.
+- `http://127.0.0.2` passes the CLI rule and fails inside `RegistryClient::new` on the pin. The harness loopback set has to grow before that host works as a registry.
+- Logout on this pin deletes `registry-session.json`. It does not call `delete_registry_token`. A vault record created against harness main is left for the harness discard API.
+- A hostile `EJM_CLI_REGISTRY_URL` can point package commands at another HTTPS registry. The process prints that origin, and `doctor` shows the source. Install stays disabled until `--trust`.
 
 ## Migration Plan
 
-After the new CLI is installed, registry commands use the new default. Sessions saved for `https://harness.meetgerry.ai/` are not sent anywhere.
+After this CLI is installed, registry commands use `https://registry.ejmlabs.com` unless `--registry` or `EJM_CLI_REGISTRY_URL` is set.
 
-- A user with a legacy `registry-session.json`, or with a vault record for the retired origin, stops older clients and runs `ejm-cli package migrate-credentials --old-clients-stopped`. That removes the retired material locally.
-- The user then runs `ejm-cli package login` and approves a new session for the new origin.
-- `package logout` on the new origin revokes and deletes only that new session.
+- A user with `registry-session.json` for `meetgerry.ai` or a subdomain runs `ejm-cli package discard-retired-session`. That deletes the file locally and does not send the token.
+- The user runs `ejm-cli package login` and approves a new session for the new origin.
+- `package logout` on that origin revokes it and deletes the local file. A second logout, with the file already gone, does not fail.
 
-There is no remote revoke of the old bearer and no copy of it onto the new host. Rolling the CLI back to the pinned plaintext build does not restore a discarded legacy file. Users who never signed in to the registry have nothing to migrate.
+There is no copy of the old bearer onto the new host. Rollback does not restore a discarded file.
 
-The harness deploys the new host, the auth Worker origin, and the OAuth callback together. This CLI release depends on that commit being on protected main so the pin can move. Shipping the CLI first would still point CI at the old plaintext pin.
+Harness `6c90a0d` sets `DEFAULT_REGISTRY` to `https://registry.ejmlabs.com`, rejects `meetgerry.ai` and its subdomains, and names `ejm-cli package discard-retired-session`. Its `RegistryClient::new` still allows HTTP only for `localhost`, `127.0.0.1`, and `[::1]`, so `http://127.0.0.2` still fails inside the client. Harness pull request [#18](https://github.com/ejmlabs/ejm-harness/pull/18) (`f8ffd3a3075e52dd40b7d639aec956f40e640953`, HTTPS provider endpoints) is also open. Neither commit is on harness main `8d3dc39b8bf38e0b54ef4315fd6c5c58a4f304e0`. `.github/harness-revision` stays at `4a751c6a3f24d7d143140f79ff53517fb93e3531` until both are on main.
 
-## Open Questions
+## Resolved questions
 
-- Which host Everett picks. The candidates are `harness.ejmlabs.com` and `registry.ejmlabs.com`. Implementation quotes `DEFAULT_REGISTRY` after that pick. The Product Manager recommends `registry.ejmlabs.com`. The CLI site links to `harness.ejmlabs.com` are the harness product page and stay as they are in this change. If Everett picks that same host for the registry, the product page and the registry Worker need a separate decision before either side assumes the host.
+- The host is `https://registry.ejmlabs.com`.
+- Retired sessions are discarded, not imported. The command is `ejm-cli package discard-retired-session`.
+- Same-origin legacy handoff stays `migrate_registry_token`. This CLI does not call it.
+- `--registry` is global. Model commands ignore it.

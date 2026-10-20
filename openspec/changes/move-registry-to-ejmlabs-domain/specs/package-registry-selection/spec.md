@@ -7,11 +7,11 @@ Let ejm-cli users rely on the ejmlabs registry by default, optionally point pack
 ## ADDED Requirements
 
 ### Requirement: Registry origin selection
-The CLI MUST choose the registry origin for `package` commands in this order: `--registry`, then `EJM_CLI_REGISTRY_URL`, then the harness default registry origin. When the origin in effect is not the default, registry commands MUST print it before making network requests.
+The CLI MUST choose the registry origin for `package` commands in this order: `--registry`, then `EJM_CLI_REGISTRY_URL`, then `https://registry.ejmlabs.com`. When the origin in effect is not the default, registry commands MUST print it before making network requests.
 
 #### Scenario: No override
 - **WHEN** the user runs `ejm-cli package search QUERY` with no flag or env override
-- **THEN** the CLI queries the harness default registry origin
+- **THEN** the CLI queries `https://registry.ejmlabs.com`
 
 #### Scenario: Environment override
 - **WHEN** `EJM_CLI_REGISTRY_URL` is `http://127.0.0.1:8787` and no flag is given
@@ -22,15 +22,15 @@ The CLI MUST choose the registry origin for `package` commands in this order: `-
 - **THEN** the CLI uses the `--registry` value
 
 ### Requirement: Registry overrides are validated before use
-The CLI MUST reject a registry override that fails the harness registry origin rules. That includes insecure non-loopback HTTP, a path, credentials, a query or fragment, another scheme, and the retired `meetgerry.ai` origin. The rejection MUST happen before any network request or session lookup, exit non-zero, and name `--registry` / `EJM_CLI_REGISTRY_URL`. No flag or env var MAY disable these rules.
+The CLI MUST reject a registry override that is not a plain origin, uses a scheme other than https, or uses http for a host other than loopback. Loopback is `localhost`, `127.0.0.0/8`, or `::1`. The CLI MUST reject `0.0.0.0`, LAN hosts, and any host that is `meetgerry.ai` or a subdomain of it. Rejection MUST happen before any network request or session lookup, exit non-zero, and name `--registry` or `EJM_CLI_REGISTRY_URL`. No flag or env var disables these rules.
 
 #### Scenario: Insecure remote registry
 - **WHEN** the user passes `--registry http://registry.example.com`
 - **THEN** the CLI exits non-zero with an HTTPS-required error and sends nothing
 
 #### Scenario: Retired registry
-- **WHEN** `EJM_CLI_REGISTRY_URL` is `https://harness.meetgerry.ai`
-- **THEN** the CLI exits non-zero, says the meetgerry registry is retired, and names the current default
+- **WHEN** `EJM_CLI_REGISTRY_URL` is `https://harness.meetgerry.ai` or `https://other.meetgerry.ai`
+- **THEN** the CLI exits non-zero, says the meetgerry registry is retired, and names `https://registry.ejmlabs.com`
 
 #### Scenario: Path-based registry
 - **WHEN** the user passes `--registry https://ejmlabs.com/registry`
@@ -43,20 +43,20 @@ The CLI MUST reject a registry override that fails the harness registry origin r
 - **WHEN** the user is signed in to the default registry and runs `package whoami --registry http://127.0.0.1:8787`
 - **THEN** the CLI reports that there is no session for that origin and sends no token
 
-#### Scenario: Logout removes the vault session
+#### Scenario: Logout removes the stored session
 - **WHEN** the user runs `package logout` while signed in to the origin in effect
-- **THEN** the CLI asks that origin to revoke the session, removes its local record even if no legacy session file exists, and a later `whoami` reports no session
+- **THEN** the CLI asks that origin to revoke the session, removes the local session, and does not fail when no legacy session file remains
 
 ### Requirement: Retired-origin sessions can be discarded
-When a saved session for the retired `meetgerry.ai` origin exists, the CLI MUST NOT send it anywhere. A blocked `package login` MUST explain how to discard the session. The CLI MUST offer a command that discards it locally without any network request.
+When a saved session for the retired `meetgerry.ai` origin exists, the CLI MUST NOT send it anywhere. A blocked `package login` MUST name `ejm-cli package discard-retired-session`. That command MUST discard the retired session locally with no network request and MUST leave a session for any other origin in place. Same-origin legacy handoff stays harness `migrate_registry_token`, which this CLI does not call.
 
 #### Scenario: Login blocked by a retired session
 - **WHEN** a legacy session for `https://harness.meetgerry.ai` exists and the user runs `package login`
-- **THEN** the CLI makes no request with the old token and prints the command that discards it
+- **THEN** the CLI makes no request with the old token and prints `ejm-cli package discard-retired-session`
 
 #### Scenario: Discard the retired session
-- **WHEN** the user runs the discard command
-- **THEN** the retired session is removed locally with no network request, and `package login` to the default registry can proceed
+- **WHEN** the user runs `ejm-cli package discard-retired-session`
+- **THEN** the retired session is removed locally with no network request, and `package login` is no longer blocked by that session
 
 ### Requirement: Doctor reports the registry origin
 `ejm-cli doctor` MUST show the registry origin in effect and whether it came from the default, `EJM_CLI_REGISTRY_URL`, or `--registry`. An invalid override MUST be shown as rejected.

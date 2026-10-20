@@ -16,6 +16,7 @@ Changes follow [Semantic Versioning](https://semver.org/). Each repository is ve
 
 ### Changed
 
+- Package commands default to `https://registry.ejmlabs.com`. `--registry` and `EJM_CLI_REGISTRY_URL` select another plain origin. `https` is required except on loopback. `ejm-cli package discard-retired-session` deletes a leftover meetgerry.ai session locally. The harness pin is unchanged.
 - Consolidate source setup, local checks, and site-migration limits in the CI guide, replacing the obsolete publication prelude note and its inbound links.
 
 ## [0.1.0] - 2026-10-18

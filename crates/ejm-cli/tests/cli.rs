@@ -9,15 +9,27 @@ use std::{
 };
 
 fn cli(state: &Path, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_ejm-cli"))
+    cli_env(state, args, &[])
+}
+
+fn cli_env(state: &Path, args: &[&str], env: &[(&str, &str)]) -> Output {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_ejm-cli"));
+    command
         .arg("--state-dir")
         .arg(state)
         .arg("--replay")
         .args(args)
         .env_remove("EJM_CLI_API_KEY")
         .env_remove("OPENAI_API_KEY")
-        .output()
-        .unwrap()
+        .env_remove("EJM_CLI_REGISTRY_URL");
+    for (key, value) in env {
+        command.env(key, value);
+    }
+    command.output().unwrap()
+}
+
+fn output_text(bytes: &[u8]) -> String {
+    String::from_utf8_lossy(bytes).into_owned()
 }
 
 fn json_events(output: &Output) -> Vec<serde_json::Value> {
@@ -180,4 +192,406 @@ fn native_model_discovery_rejects_endpoint_overrides_before_accessing_credential
         assert!(String::from_utf8_lossy(&output.stderr).contains("fixed official endpoint"));
         assert!(!state.path().join("auth").exists());
     }
+}
+
+fn write_session(state: &Path, origin: &str, token: &str) -> std::path::PathBuf {
+    let packages = state.join("packages");
+    std::fs::create_dir_all(&packages).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&packages, std::fs::Permissions::from_mode(0o700)).unwrap();
+    }
+    let path = packages.join("registry-session.json");
+    std::fs::write(
+        &path,
+        serde_json::json!({"origin": origin, "token": token}).to_string(),
+    )
+    .unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+    }
+    path
+}
+
+fn quiet_listener(host: &str) -> std::net::TcpListener {
+    let listener = std::net::TcpListener::bind((host, 0)).unwrap();
+    listener.set_nonblocking(true).unwrap();
+    listener
+}
+
+fn assert_no_connection(listener: &std::net::TcpListener) {
+    let idle = listener
+        .accept()
+        .is_err_and(|error| error.kind() == std::io::ErrorKind::WouldBlock);
+    assert!(idle, "registry command opened a connection");
+}
+
+fn spawn_registry(status: u16, body: &'static str) -> (String, std::sync::mpsc::Receiver<String>) {
+    let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+    let origin = format!("http://{}", listener.local_addr().unwrap());
+    let (sender, receiver) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let request = read_http_request(&mut stream);
+        let reason = if status == 200 { "OK" } else { "Error" };
+        let response = format!(
+            "HTTP/1.1 {status} {reason}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        );
+        std::io::Write::write_all(&mut stream, response.as_bytes()).unwrap();
+        sender.send(request).unwrap();
+    });
+    (origin, receiver)
+}
+
+fn read_http_request(stream: &mut std::net::TcpStream) -> String {
+    use std::io::Read;
+    stream
+        .set_read_timeout(Some(std::time::Duration::from_secs(2)))
+        .unwrap();
+    let mut data = Vec::new();
+    let mut buf = [0u8; 1024];
+    loop {
+        if data.len() > 16_384 {
+            break;
+        }
+        match stream.read(&mut buf) {
+            Ok(0) => break,
+            Ok(n) => {
+                data.extend_from_slice(&buf[..n]);
+                if let Some(end) = data.windows(4).position(|window| window == b"\r\n\r\n") {
+                    let end = end + 4;
+                    let headers = String::from_utf8_lossy(&data[..end]);
+                    let length = content_length(&headers);
+                    if data.len() >= end + length {
+                        break;
+                    }
+                }
+            }
+            Err(error)
+                if error.kind() == std::io::ErrorKind::WouldBlock
+                    || error.kind() == std::io::ErrorKind::TimedOut =>
+            {
+                break;
+            }
+            Err(_) => break,
+        }
+    }
+    String::from_utf8_lossy(&data).into_owned()
+}
+
+fn content_length(headers: &str) -> usize {
+    headers
+        .lines()
+        .find_map(|line| {
+            let (name, value) = line.split_once(':')?;
+            if name.eq_ignore_ascii_case("content-length") {
+                value.trim().parse().ok()
+            } else {
+                None
+            }
+        })
+        .unwrap_or(0)
+        .min(8192)
+}
+
+fn hidden(output: &Output, secret: &str) {
+    assert!(
+        !output_text(&output.stdout).contains(secret)
+            && !output_text(&output.stderr).contains(secret),
+        "registry token appeared in command output"
+    );
+}
+
+#[test]
+fn registry_help_names_the_override_and_discard_command() {
+    let state = tempfile::tempdir().unwrap();
+    for command in [
+        ["package", "--help"],
+        ["doctor", "--help"],
+        ["run", "--help"],
+    ] {
+        let output = cli(state.path(), &command);
+        assert!(output.status.success(), "{}", output_text(&output.stderr));
+        let text = output_text(&output.stdout);
+        assert!(text.contains("--registry"));
+        assert!(text.contains("EJM_CLI_REGISTRY_URL"));
+        assert!(text.contains("Does not change model endpoints"));
+    }
+    let output = cli(state.path(), &["package", "--help"]);
+    assert!(output_text(&output.stdout).contains("discard-retired-session"));
+}
+
+#[test]
+fn doctor_reports_the_registry_choice_without_connecting() {
+    let state = tempfile::tempdir().unwrap();
+    let output = cli(state.path(), &["doctor"]);
+    assert!(output.status.success(), "{}", output_text(&output.stderr));
+    let text = output_text(&output.stdout);
+    assert!(text.contains("Registry: https://registry.ejmlabs.com (default)"));
+    assert!(!text.contains("EJM_CLI_REGISTRY_URL"));
+    assert!(!text.contains("--registry"));
+
+    let output = cli_env(state.path(), &["doctor"], &[("EJM_CLI_REGISTRY_URL", "")]);
+    assert!(output.status.success());
+    assert!(
+        output_text(&output.stdout).contains("Registry: https://registry.ejmlabs.com (default)")
+    );
+
+    let output = cli_env(
+        state.path(),
+        &["doctor"],
+        &[("EJM_CLI_REGISTRY_URL", "http://127.0.0.1:8787")],
+    );
+    assert!(output.status.success(), "{}", output_text(&output.stderr));
+    assert!(
+        output_text(&output.stdout)
+            .contains("Registry: http://127.0.0.1:8787 (EJM_CLI_REGISTRY_URL)")
+    );
+
+    let output = cli_env(
+        state.path(),
+        &["doctor"],
+        &[("EJM_CLI_REGISTRY_URL", "https://harness.meetgerry.ai")],
+    );
+    assert_eq!(output.status.code(), Some(1));
+    let text = output_text(&output.stdout);
+    assert!(text.contains("Registry: rejected"));
+    assert!(text.contains("meetgerry.ai registry is retired"));
+    assert!(text.contains("https://registry.ejmlabs.com"));
+    assert!(text.contains("EJM_CLI_REGISTRY_URL"));
+    assert!(text.contains("Grants:"));
+    assert!(text.contains("not a security sandbox"));
+    assert!(!output_text(&output.stderr).contains("ejm-cli:"));
+
+    let secret = "doctor-retired-token";
+    write_session(state.path(), "https://harness.meetgerry.ai/", secret);
+    let output = cli(state.path(), &["doctor"]);
+    assert!(output.status.success(), "{}", output_text(&output.stderr));
+    let text = output_text(&output.stdout);
+    assert!(text.contains("ejm-cli package discard-retired-session"));
+    assert!(text.contains("not sent or reused"));
+    hidden(&output, secret);
+}
+
+#[test]
+fn package_commands_validate_registry_overrides_before_any_request() {
+    let state = tempfile::tempdir().unwrap();
+    let (origin, requests) = spawn_registry(200, r#"{"packages":[]}"#);
+    let output = cli_env(
+        state.path(),
+        &["--registry", &origin, "package", "search", "hello"],
+        &[("EJM_CLI_REGISTRY_URL", "https://harness.meetgerry.ai")],
+    );
+    assert!(output.status.success(), "{}", output_text(&output.stderr));
+    let text = output_text(&output.stdout);
+    assert!(text.contains(&format!("Registry: {origin} (--registry)")));
+    assert!(text.contains("\"packages\""));
+    let request = requests
+        .recv_timeout(std::time::Duration::from_secs(5))
+        .unwrap();
+    assert!(request.contains("GET /v1/packages"));
+    assert!(request.contains("hello"));
+
+    let listener = quiet_listener("127.0.0.1");
+    let output = cli(
+        state.path(),
+        &[
+            "--registry",
+            "http://registry.example.com",
+            "package",
+            "search",
+            "hello",
+        ],
+    );
+    assert!(!output.status.success());
+    let error = output_text(&output.stderr);
+    assert!(error.contains("https"));
+    assert!(error.contains("--registry"));
+    assert!(error.contains("EJM_CLI_REGISTRY_URL"));
+    assert_no_connection(&listener);
+
+    for raw in ["https://harness.meetgerry.ai", "https://other.meetgerry.ai"] {
+        let output = cli_env(
+            state.path(),
+            &["package", "search", "hello"],
+            &[("EJM_CLI_REGISTRY_URL", raw)],
+        );
+        assert!(!output.status.success());
+        let error = output_text(&output.stderr);
+        assert!(
+            error.contains("meetgerry.ai registry is retired"),
+            "{error}"
+        );
+        assert!(error.contains("https://registry.ejmlabs.com"), "{error}");
+        assert!(error.contains("EJM_CLI_REGISTRY_URL"), "{error}");
+    }
+
+    let output = cli(
+        state.path(),
+        &[
+            "--registry",
+            "https://ejmlabs.com/registry",
+            "package",
+            "search",
+            "hello",
+        ],
+    );
+    assert!(!output.status.success());
+    assert!(output_text(&output.stderr).contains("plain origin"));
+
+    for raw in ["http://0.0.0.0:9", "http://192.168.1.10:9"] {
+        let output = cli(
+            state.path(),
+            &["--registry", raw, "package", "search", "hello"],
+        );
+        assert!(!output.status.success());
+        assert!(output_text(&output.stderr).contains("https"), "{raw}");
+    }
+}
+
+#[test]
+fn pinned_registry_client_still_rejects_other_loopback_addresses() {
+    let state = tempfile::tempdir().unwrap();
+    let listener = quiet_listener("127.0.0.2");
+    let origin = format!("http://{}", listener.local_addr().unwrap());
+    let output = cli(
+        state.path(),
+        &["--registry", &origin, "package", "search", "hello"],
+    );
+    assert!(!output.status.success());
+    assert!(output_text(&output.stdout).contains(&format!("Registry: {origin} (--registry)")));
+    assert!(output_text(&output.stderr).contains("registry requires HTTPS"));
+    assert_no_connection(&listener);
+}
+
+#[test]
+fn logout_removes_only_the_session_for_the_origin_in_effect() {
+    let state = tempfile::tempdir().unwrap();
+    let (origin, requests) = spawn_registry(200, "{}");
+    let secret = "logout-token-do-not-print";
+    let path = write_session(state.path(), &format!("{origin}/"), secret);
+    let output = cli(state.path(), &["--registry", &origin, "package", "logout"]);
+    assert!(output.status.success(), "{}", output_text(&output.stderr));
+    assert!(output_text(&output.stdout).contains("Registry session revoked and removed."));
+    hidden(&output, secret);
+    assert!(!path.exists());
+    let request = requests
+        .recv_timeout(std::time::Duration::from_secs(5))
+        .unwrap();
+    assert!(request.contains("POST /api/auth/sign-out"));
+    assert!(
+        request
+            .to_ascii_lowercase()
+            .contains(&format!("bearer {secret}"))
+    );
+
+    let output = cli(state.path(), &["--registry", &origin, "package", "logout"]);
+    assert!(output.status.success(), "{}", output_text(&output.stderr));
+    assert!(output_text(&output.stdout).contains(&format!("No registry session for {origin}.")));
+
+    let (origin, requests) = spawn_registry(500, "{}");
+    let secret = "logout-failed-token";
+    let path = write_session(state.path(), &format!("{origin}/"), secret);
+    let output = cli(state.path(), &["--registry", &origin, "package", "logout"]);
+    assert!(!output.status.success());
+    assert!(
+        output_text(&output.stderr).contains("local session removed; remote revocation failed")
+    );
+    hidden(&output, secret);
+    assert!(!path.exists());
+    let request = requests
+        .recv_timeout(std::time::Duration::from_secs(5))
+        .unwrap();
+    assert!(request.contains("POST /api/auth/sign-out"));
+
+    let listener = quiet_listener("127.0.0.1");
+    let origin = format!("http://{}", listener.local_addr().unwrap());
+    let secret = "other-origin-token";
+    let path = write_session(state.path(), "https://registry.ejmlabs.com/", secret);
+    let output = cli(state.path(), &["--registry", &origin, "package", "logout"]);
+    assert!(output.status.success(), "{}", output_text(&output.stderr));
+    assert!(output_text(&output.stdout).contains(&format!("No registry session for {origin}.")));
+    hidden(&output, secret);
+    assert!(path.exists());
+    assert_no_connection(&listener);
+
+    let output = cli(state.path(), &["--registry", &origin, "package", "whoami"]);
+    assert!(!output.status.success());
+    assert!(output_text(&output.stderr).contains(&format!("no registry session for {origin}")));
+    hidden(&output, secret);
+    assert_no_connection(&listener);
+}
+
+#[test]
+fn discard_retired_session_is_local_and_login_stays_blocked_until_then() {
+    let state = tempfile::tempdir().unwrap();
+    let listener = quiet_listener("127.0.0.1");
+    let origin = format!("http://{}", listener.local_addr().unwrap());
+    let secret = "legacy-token-do-not-send";
+    let path = write_session(state.path(), "https://harness.meetgerry.ai/", secret);
+
+    let output = cli(
+        state.path(),
+        &["--registry", &origin, "package", "login", "--no-browser"],
+    );
+    assert!(!output.status.success());
+    let error = output_text(&output.stderr);
+    assert!(error.contains("the meetgerry.ai registry is retired"));
+    assert!(error.contains("not sent or reused"));
+    assert!(error.contains("ejm-cli package discard-retired-session"));
+    hidden(&output, secret);
+    assert!(path.exists());
+    assert_no_connection(&listener);
+
+    let output = cli_env(
+        state.path(),
+        &["package", "discard-retired-session"],
+        &[("EJM_CLI_REGISTRY_URL", "https://other.meetgerry.ai")],
+    );
+    assert!(output.status.success(), "{}", output_text(&output.stderr));
+    assert!(output_text(&output.stdout).contains("No request was sent."));
+    hidden(&output, secret);
+    assert!(!path.exists());
+
+    let (origin, requests) = spawn_registry(200, "{}");
+    let output = cli(
+        state.path(),
+        &["--registry", &origin, "package", "login", "--no-browser"],
+    );
+    assert!(!output.status.success());
+    assert!(!output_text(&output.stderr).contains("was not sent"));
+    let request = requests
+        .recv_timeout(std::time::Duration::from_secs(5))
+        .unwrap();
+    assert!(request.contains("POST /api/auth/device/code"));
+    assert!(!request.contains(secret));
+
+    let kept = write_session(state.path(), "https://registry.ejmlabs.com/", secret);
+    let output = cli(state.path(), &["package", "discard-retired-session"]);
+    assert!(output.status.success(), "{}", output_text(&output.stderr));
+    assert!(output_text(&output.stdout).contains("Left it in place."));
+    hidden(&output, secret);
+    assert!(kept.exists());
+
+    std::fs::remove_file(&kept).unwrap();
+    let output = cli(state.path(), &["package", "discard-retired-session"]);
+    assert!(output.status.success());
+    assert!(output_text(&output.stdout).contains("No leftover registry session file."));
+}
+
+#[test]
+fn invalid_registry_environment_does_not_block_replay() {
+    let state = tempfile::tempdir().unwrap();
+    let output = cli_env(
+        state.path(),
+        &["run", "registry must not matter", "--json"],
+        &[("EJM_CLI_REGISTRY_URL", "https://harness.meetgerry.ai")],
+    );
+    assert!(output.status.success(), "{}", output_text(&output.stderr));
+    assert!(!output_text(&output.stderr).contains("meetgerry"));
+    assert!(output_text(&output.stdout).contains("run_finished"));
 }
