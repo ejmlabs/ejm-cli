@@ -82,6 +82,29 @@ ejm-cli doctor
 
 See [the full CLI guide](docs/ejm-cli.md) for controls, configuration, and limits.
 
+### Native remote access
+
+This native candidate builds on protected CLI PR #20 merge
+`9e3f8ef11dc083c31b651b9dae15a98e086e3359`. Exact-source local and hosted
+acceptance are required before adoption. It uses the locked native graph and selects
+protected harness merge `42e4f9cf33bd3525aec344cfdffabc251271f782`, the exact
+358-file completion API tree `826e0231...`. A compatible separately operated
+relay account service is required. Local use still needs no relay account.
+
+Before first persistent host or controller use, stop older relay writers and
+run `ejm-cli remote migrate-credentials`, including on fresh installations.
+Confirm locally only after those processes have stopped. Then sign in with
+`remote login`. `remote host` shares one session read-only; `remote host
+--control` grants prompt, steer, queue and cancel actions. `remote connect`
+reads the private invitation in a protected terminal. Compare the fingerprint on
+both screens, then confirm pairing on the host. The host's tool grants still apply.
+
+See [remote setup and recovery](docs/remote-control.md),
+[dependency choices](docs/remote-dependencies.md) and the
+[candidate's remaining gates](docs/native-remote-publication.md). This layer
+contains no Worker, browser UI or deployment. It claims no formal crypto audit
+or performance improvement.
+
 ### Resource limits
 
 Ratatui and Crossterm render the TUI. Rust and Tokio drive the harness directly.
@@ -110,14 +133,14 @@ dependency policy, release builds, and real PTY checks run through one command:
 - [Development guide](docs/contributing.md): tools, ownership and the required gate.
 - [Release policy](RELEASING.md): versions and publication requirements.
 
-### Planned remote control
+### Native remote guides
 
-These guides describe planned source. Remote functionality is not available in
-the current protected C8 baseline:
+These guides describe this native candidate. Protected adoption, binary
+distribution and live acceptance remain pending:
 
-- [Remote control](docs/remote-control.md): planned setup, controls, trust and recovery.
+- [Remote control](docs/remote-control.md): setup, controls, trust and recovery.
 - [Remote dependencies](docs/remote-dependencies.md): package choices and dependency review.
-- [Native remote publication plan](docs/native-remote-publication.md): documentation and shared UI source review prerequisites, native adoption and release gates.
+- [Native remote publication candidate](docs/native-remote-publication.md): documentation and shared UI source review prerequisites, native adoption and release gates.
 
 ## Contributing
 

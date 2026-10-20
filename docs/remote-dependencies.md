@@ -1,22 +1,26 @@
 # Native remote dependencies
 
-This is the planned native dependency record. The docs/spec prerequisite keeps
-C8's existing Cargo manifests, lock and working 4a harness pin unchanged. The
-versions and protected API selection below belong to the following native layer;
-they are not dependency changes or acceptance of that layer in this prerequisite.
+This records the native candidate's dependency graph. The protected docs/UI
+prerequisite kept C8's Cargo manifests, lock and working 4a harness pin unchanged.
+This source builds on its protected CLI merge
+`9e3f8ef11dc083c31b651b9dae15a98e086e3359` and selects the native graph below.
+Exact-source normal and hosted acceptance remain required.
 
-Prepared source snapshot: **2026-10-19 UTC**. The table records exact direct
-versions requested by this candidate's manifest. Its `Cargo.lock` is the exact
-resolved native lock from source tree
-`3c5a8385c1bf7689e6efb83d3f272f1efa3f60c9`, with SHA-256
-`5143432fc0201bedeef680d18ae1c4681e2215fddd6e2fb45cd4cbf0149f7d1b`.
+Original dependency review: **2026-10-19 UTC**. The table records exact direct
+versions requested by this candidate's manifest. After the October 20 TLS
+advisory correction, the current `Cargo.lock` SHA-256 is
+`02ba0f0097754444a40e106d683ce530886ec7c31d30009f0c5cc43750d6118b`.
+The earlier `5143432fc0201bedeef680d18ae1c4681e2215fddd6e2fb45cd4cbf0149f7d1b`
+lock from tree `3c5a8385c1bf7689e6efb83d3f272f1efa3f60c9` is historical.
 The pin selects actual protected harness merge
 `42e4f9cf33bd3525aec344cfdffabc251271f782`, whose 358-file tree
 `826e02310f1097e13806ca5ca1bf5cc00d71e966` supplies the completion API.
-The actual protected CLI parent is `c8e2239392f71df82cbef6166b1827c8e5f5f1c5`,
-with the same D49 tree as approved PR #9. Preserve the lock and run this final
-pair's exact-source locked gate and hosted checks. The earlier [local pass](native-remote-publication.md#historical-local-pass)
-is historical. No new build or runtime result is claimed here.
+Native preparation began at protected CLI
+`c8e2239392f71df82cbef6166b1827c8e5f5f1c5`, with the same D49 tree as approved
+PR #9. Preserve the lock and run the final restack's exact-source locked gate
+and hosted checks. The [corrected d8 local result](native-remote-publication.md)
+and [earlier passes](native-remote-publication.md#historical-local-pass) do not
+establish this source's acceptance. No new build or runtime result is claimed here.
 
 Existing Tokio, Serde, URL, harness and terminal packages remain shared. The
 versioned links below are primary API references retained from the source
@@ -32,7 +36,7 @@ Apache-2.0` means either license may be chosen.
 | [dbus-secret-service-keyring-store](https://docs.rs/dbus-secret-service-keyring-store/1.0.1/dbus_secret_service_keyring_store/) | 1.0.1 | MIT / Apache-2.0 | Unix Secret Service through dbus-secret-service `4.1.0`. The `crypto-rust` feature encrypts local Secret Service traffic; `vendored` is disabled. |
 | [oauth2](https://docs.rs/oauth2/5.0.0/oauth2/) | 5.0.0 | MIT / Apache-2.0 | Owns device authorization polling and protocol responses. Upstream documents its supported HTTP adapter interface and Rust compatibility policy. |
 | [reqwest](https://docs.rs/reqwest/0.13.5/reqwest/) | 0.13.5 | MIT / Apache-2.0 | Certificate-verified HTTPS, bounded streamed responses and request timeouts. Default features are disabled; the CLI selects rustls, JSON and streaming. |
-| [tokio-tungstenite](https://docs.rs/tokio-tungstenite/0.30.0/tokio_tungstenite/) | 0.30.0 | MIT | Tokio WebSockets with rustls and WebPKI roots, using the existing async runtime. Default features are disabled. |
+| [tokio-tungstenite](https://docs.rs/tokio-tungstenite/0.30.0/tokio_tungstenite/) | 0.30.0 | MIT | Tokio WebSockets with rustls and native root loading, using the existing async runtime. Default features are disabled. |
 | [futures-util](https://docs.rs/futures-util/0.3.34/futures_util/) | 0.3.34 | MIT / Apache-2.0 | Sink and stream adapters for that transport; only `sink` and `std` are selected. |
 | [getrandom](https://docs.rs/getrandom/0.4.3/getrandom/) | 0.4.3 | MIT / Apache-2.0 | Operating-system random bytes for native invitation and identity material. |
 | [zeroize](https://docs.rs/zeroize/1.9.1/zeroize/) | 1.9.1 | MIT / Apache-2.0 | Clears reachable secret buffers. It does not promise erasure of every allocator, library or browser copy. |
@@ -58,11 +62,20 @@ No comparative package size, CPU or latency benchmark has been run here.
 
 Reqwest owns HTTPS with rustls, JSON, streamed bodies and timeout support;
 default features are disabled. Tokio-tungstenite owns WebSockets with the
-`connect` and `rustls-tls-webpki-roots` features. Native policy bounds the origin,
+`connect` and `rustls-tls-native-roots` features. Native policy bounds the origin,
 headers, redirects, response body and transport frames. OAuth2 owns device
 polling and response parsing. Its built-in HTTP adapter would select another
 Reqwest series, so the CLI supplies the documented HTTP bridge for its pinned
 Reqwest version. There is no custom TLS verifier or OAuth polling protocol.
+
+WSS reuses `rustls-native-certs 0.8.5` to load OS trust anchors; Rustls still
+verifies certificate chains and hostnames. This is root loading, not the full
+OS platform verifier. Empty loaded roots fail closed. Local
+[`SSL_CERT_FILE` or `SSL_CERT_DIR` overrides](https://docs.rs/rustls-native-certs/0.8.5/rustls_native_certs/fn.load_native_certs.html)
+replace the platform roots. The corrected lock updates `rustls-webpki` from
+0.103.15 to 0.103.16 and `webpki-root-certs` from 1.0.9 to 1.0.10, removes
+both `webpki-roots` versions (0.26.11 and 1.0.9) and reduces packages from 469 to 467
+without a new package. Fresh normal and advisory gates remain required.
 
 ## Persistent secrets and controlled import
 
@@ -106,12 +119,11 @@ files do not meet the vault requirement.
 `async-trait = 0.1.92` supports the offline test tool. `tokio-rustls = 0.26.6`
 with only `aws_lc_rs` supplies the real local TLS fixture. Its checked-in
 self-signed certificate and key are public, test-only material; see the
-[test-data notice](../crates/ejm-cli/src/remote/testdata/README.md). The fixture
-checks untrusted-certificate rejection and a narrowly trusted control without
-provider calls or the native credential store. These regressions passed in the
-[corrected local macOS gate](native-remote-publication.md). The final native
-source after the protected docs/UI prerequisite still needs its normal gate,
-hosted platform acceptance and release checks.
+[test-data notice](../crates/ejm-cli/src/remote/testdata/README.md). The existing
+fixture now checks that an untrusted peer receives neither HTTP bearer/OAuth
+data nor a WSS ticket, with a narrowly trusted HTTP control. Earlier HTTP-only
+coverage passed in the [d8 gate](native-remote-publication.md); the extension
+requires fresh checks. No provider calls or native credential store are used.
 
 The preceding [terminal slice](terminal-input.md) owns Termwiz, Rustix,
 Crossterm and WinSafe input adaptation, including input resets before private

@@ -7,8 +7,11 @@ command parsing, completion, and Help selection for implemented built-ins and
 granted package commands. Clap parses command names and argument counts;
 Ratatui renders the picker and Help. These remain CLI interaction and bounded
 view state. `ejm-harness` owns provider transport, authentication mechanics,
-tools, and run policy through its public APIs. Remote control and provider or
-account switching inside the TUI belong to later source layers.
+tools, and run policy through its public APIs. The
+[native remote candidate](native-remote-publication.md) adds host and controller
+interaction through those APIs on protected CLI PR #20. It requires its own
+normal and hosted gates. Worker/browser source and provider or account switching inside
+the TUI belong to later source layers.
 
 Use the reviewed harness revision in `.github/harness-revision` and the locked
 dependency graph. Review any dependency or lock change with its owning source;
@@ -73,17 +76,20 @@ implementation is retained at
 active update/delete rule `25369476`, with no bypass actors. Protected main
 rules were unchanged in that receipt. CLI PR #3 completed the setup-hook adoption.
 PR #4 installed the completion guard, but its adoption run still used the old
-schema. Fresh installed-guard execution remains pending; see the
-[adoption receipt](#cli-pr-4-adoption-receipt). The earlier
-caller revision was `5fae851502c2e3c31d4df9a44f8d56c2cb49e098`. Keep the
-working harness pin unchanged at
+schema. Fresh installed-guard execution remained pending at that cutoff; the
+[PR #7 receipt](#cli-pr-7-selector-adoption-receipt) records later complete
+reports through installed C4. See the [PR #4 receipt](#cli-pr-4-adoption-receipt)
+for the earlier run. The earlier
+caller revision was `5fae851502c2e3c31d4df9a44f8d56c2cb49e098`. That caller-only
+adoption kept the working harness pin unchanged at
 `4a751c6a3f24d7d143140f79ff53517fb93e3531`.
 
 The [deployment change](../openspec/changes/deploy-private-remote-relay/proposal.md)
 tracks the full release. All its tasks remain open in this source preparation.
-The caller update adds no product code or new harness API consumer. The action,
-locks, provider composition, account storage and CLI arguments match protected
-main. See the [source scope and local checks](#source-scope-and-local-checks) and
+At that caller-only cutoff, the update added no product code or new harness API
+consumer. Its action, locks, provider composition, account storage and CLI
+arguments matched its protected parent. See the
+[source scope and local checks](#source-scope-and-local-checks) and
 [terminal boundary](terminal-input.md) for the earlier source layers.
 
 ## What the action prepares
@@ -114,13 +120,14 @@ The prior `5fae851502c2e3c31d4df9a44f8d56c2cb49e098` caller did not invoke
 this action. The `ae903129564926a14287f75d2012610c59cccb65` caller
 added its exact local-action step only for the admitted `ejm-cli` profile in the
 credential-free quality job, after Rust setup and before `./scripts/check`.
-The installed b2 and proposed 40d implementations retain that exact hook.
+Both the historical b2 and protected 40d implementations retain that exact hook.
 The source release continues to use the same central release workflow, with
 its `uses` and `standards-ref` pointing to the same revision. Product permissions,
 triggers, secret forwarding and human controls are unchanged.
 
-The CLI gate at this cutoff uses Rust and Python and keeps the working harness
-pin. It does not yet contain the native API consumers or Worker/browser source.
+The caller-only cutoff used Rust and Python and kept the working harness pin.
+The native candidate adds public API consumers and their PTY gate; it
+still excludes Worker/browser source.
 The hook installs Linux D-Bus build prerequisites before the later API pin
 adoption; the browser install step skips only when the relay manifest is absent.
 A manifest without its lock still fails.
@@ -160,12 +167,12 @@ review a fresh clean-checkout gate for each proposed source snapshot.
 Readiness may be posted under the maintainer's explicit delegation. Approval
 of each exact head requires its separate explicit human answer. Admission is
 tied to a non-draft PR targeting `main`; each new head needs fresh decisions.
-The installed C4 workflow reads `.github/harness-revision` from trusted base
-`main`. Until selector adoption, a passing pin-only PR does not prove the new
-API consumer pair. After adoption, the selector can test an admitted pin and
+At that cutoff, the installed C4 workflow read `.github/harness-revision` from
+trusted base `main`. Before selector adoption, a passing pin-only PR did not
+prove the new API consumer pair. After adoption, the selector can test an admitted pin and
 matching lockfile together, subject to the protected-source checks below.
 
-The prepare job exports `product.tar` under `product/` and the selected private
+The prepare job exports `product.tar` under `product/` and the selected
 harness under `ejm-harness/`, preserving the workspace's `../ejm-harness` paths.
 The quality job receives source archives and has no provider credentials or
 write token. A private dependency checkout needs a dedicated, expiring Contents:
@@ -175,8 +182,8 @@ separately through protected secret handling. Keep broad workstation credentials
 local.
 
 The current central review bounds are 200 changed files, 12,000 added plus
-deleted lines, and 1,000,000 diff bytes per PR. Measure this caller prerequisite
-against protected main and remeasure every later committed diff.
+deleted lines, and 1,000,000 diff bytes per PR. Measure each proposed source
+against its actual protected parent and remeasure every later committed diff.
 Keep generated build output, dependency caches, private environment files and
 the separate site migration out of these source changes.
 
@@ -206,15 +213,16 @@ The credential-free quality job builds that source with the admitted CLI
 source and matching lockfile. Model review steps receive no checkout credential.
 IDE selection keeps its trusted-base behavior.
 
-Installed-selector acceptance still needs a subsequent admitted CLI change
-that proves the actual selected commit/tree, protected-main authority and
-archive digest used by quality. The later API pin and matching lock update
-remain separate and need their own full gates. No existing task checkbox is
-completed by this source preparation.
+At that selector-only cutoff, acceptance still needed a subsequent admitted
+change binding the selected commit/tree, protected-main authority and archive
+digest used by quality. The [later native record](native-remote-publication.md)
+retains 061's source binding and revoked admission; this native candidate
+still needs its own final proof. No existing task checkbox is completed by this
+source preparation.
 
 ## Readable dependency review prerequisite
 
-This caller update starts from that protected CLI main and advances the PR
+That caller-only adoption started from protected CLI main and advanced the PR
 caller, draft-release caller and release `standards-ref` together from b2 to
 `40d446bb4c5113216fd05ec5423625b7af473987`. Shared PR #18 protected-merged
 that reviewed implementation as
@@ -231,9 +239,9 @@ Python's maintained `data` filter. The selected harness already archived for
 quality is therefore available to both reviewers as plain files. They must
 still use read-only inspection, with no network or execution of project code.
 A successful wrapper with an incomplete actual report remains unmet review.
-This adoption runs through installed b2, so it cannot by itself prove the new
-reviewer source extraction. Verify that behavior in the next admitted change
-before claiming installed acceptance.
+That adoption ran through installed b2, so it could not by itself prove the new
+reviewer source extraction. Its [dated receipt](#cli-pr-9-readable-source-adoption-receipt)
+records that boundary and the later native source evidence.
 
 The [canonical manifest](../.github/review-context/manifest.json) binds the
 exact old b2/new 40d pair. The maintained shared exporter records all 16 source
@@ -246,21 +254,53 @@ The retained shared implementation also supports optional owner UI source and
 UI quality checks. At this caller-only cutoff, the consumer added no UI metadata
 or UI checkout selection. The later source prerequisite is described below.
 
-The working harness pin remains
-`4a751c6a3f24d7d143140f79ff53517fb93e3531`, and `Cargo.lock` remains exact.
-The combined change also starts the isolated Linux test Secret Service
+That caller-only source kept the working harness pin at
+`4a751c6a3f24d7d143140f79ff53517fb93e3531` and its `Cargo.lock` exact.
+The caller change also starts the isolated Linux test Secret Service
 [described above](#what-the-action-prepares), so the existing persistent-account
 fixtures can use their normal secure backend on a headless runner. It changes
 no product runtime, provider, dependency, tool version, permission, credential
 or human admission/approval control; macOS setup is unchanged. It adds no
 plaintext backend, product-vault change, memory-provider flag or test skip.
-Full local gates, Linux service acceptance, hosted results, protected adoption
-and installed reviewer/selector evidence remain pending for this source. No
-product page, relay deployment or release is included.
+Its protected acceptance is recorded below. The separate native history and
+this restack's pending gates are recorded in the
+[native publication candidate](native-remote-publication.md). No product page,
+relay deployment or release is included in that caller adoption.
+
+### CLI PR #9 readable-source adoption receipt
+
+On 2026-10-19, [CLI PR #9](https://github.com/ejmlabs/ejm-cli/pull/9) passed
+[run 39329367008](https://github.com/ejmlabs/ejm-cli/actions/runs/39329367008)
+for exact head `7b5dc84632e79498e6cabc45a425595b9ac867a3`. Linux and
+macOS each passed 58 unit and 5 integration tests plus the unchanged strict
+gate, release/docs/dependency and ordinary PTY checks. Both actual AI reports
+were complete with no findings. The isolated pinned Linux keyring setup ran
+successfully against the baseline 4a harness. Exact approval preceded protected
+squash merge `c8e2239392f71df82cbef6166b1827c8e5f5f1c5`, tree
+`d49abd3f2881f8a2328063bc45d9ded4a078e00f`, sole parent the
+[PR #7 merge below](#cli-pr-7-selector-adoption-receipt), with unchanged
+protection. That run used installed b2. The [later 061 record](native-remote-publication.md)
+binds installed 40d and plain harness source, but its complete review blocked
+native adoption. Neither run accepts this native candidate.
+
+### CLI PR #7 selector adoption receipt
+
+On 2026-10-19, [CLI PR #7](https://github.com/ejmlabs/ejm-cli/pull/7)
+protected-squash merged approved head
+`dd0b1fb72e399623458debef8bc28554407c789a` as
+`61aa4b4b137180ba6d76210b2cb5321cdc59658c`, tree
+`504892783c5b2b49db490582f4a11a782b8542df`, with sole parent
+`e1efe7b5c05d090ccfb164bef70456429030b9d0` and unchanged protection.
+[Fresh run 39317164563](https://github.com/ejmlabs/ejm-cli/actions/runs/39317164563)
+passed Ubuntu/macOS quality, standards and required technical statuses; both
+actual independent reports state `complete: true` with no findings. Exact-head
+human approval and native approval then passed before protected merge.
+That caller source still used harness `4a751c6a...`; it does not prove the
+native API pair. This successor still needs its own source-bound gates.
 
 ## UI source review prerequisite
 
-The docs/UI prerequisite retains protected C8's runtime, working harness pin,
+The protected docs/UI prerequisite retained C8's runtime, working harness pin,
 lock, tools, installed 40d callers and canonical workflow review context. Shared
 UI PR #7 and [Relay asset PR #10](https://github.com/ejmlabs/ejm-ui/pull/10) merged
 through protection. This prerequisite selects actual protected commit
@@ -269,6 +309,15 @@ through protection. This prerequisite selects actual protected commit
 A commit pin selects source; package publication and product deployment remain
 separate.
 
+On 2026-10-20, [CLI PR #20](https://github.com/ejmlabs/ejm-cli/pull/20) reviewed
+head `de443c4ff97b5acf3d81abf061d3496019757203` passed
+[run 39477869493](https://github.com/ejmlabs/ejm-cli/actions/runs/39477869493):
+Linux/macOS each passed the normal gate with 58 unit and 5 integration tests;
+standards and both complete reviews passed with no findings. Exact approval
+preceded protected squash merge `9e3f8ef11dc083c31b651b9dae15a98e086e3359`,
+tree `7bd83dafd128ec5755d766b37cad6d7cf43e1a2d`, with sole parent
+`c8e2239392f71df82cbef6166b1827c8e5f5f1c5`.
+
 The separate [UI install review context](../review/dependency-sources/ejm-ui/README.md)
 contains complete original license, root manifest, lockfile and every workspace
 manifest. Its provenance records bind the source commit, tree, paths, modes,
@@ -276,16 +325,33 @@ blobs, sizes and SHA-256 values. Recheck the chosen source's workspace closure
 and tracked npm configuration before export. These ordinary nonexecutable
 snapshots are review data, never imported, executed or packaged as product code.
 
-The shared selector reads the pin from protected BASE. The installation PR's
-old base has no UI pin, so that run cannot prove the new checkout or install.
+The shared selector reads the pin from protected BASE. PR #20 used C8 and the
+working 4a harness; C8 had no UI pin, so its run selected no UI archive or install.
 The next native PR must bind the installed pin and exact UI archive, inspect
 the credential-free `npm ci --ignore-scripts` step, and pass the normal platform
 gates, both complete reviews and separate final approval. Keep the current
-file, line and byte admission limits. Planned native behavior and the remaining
-release checks are in the [native publication plan](native-remote-publication.md).
+file, line and byte admission limits. Native candidate behavior and the remaining
+release checks are in the [native publication candidate](native-remote-publication.md).
 This prerequisite adds no remote command, browser controller, release or site
 deployment. Public guide publication through the separately reviewed site
 migration remains pending.
+
+## Native source candidate
+
+This preparation combines corrected staged tree
+`d8dc3fd3e1f1e24deb04c75f70e0f0562f7145d1` with protected parent
+`9e3f8ef11dc083c31b651b9dae15a98e086e3359` above. It preserves
+the 40d caller context, Linux setup and concurrent owner changes, and selects
+protected harness merge `42e4f9cf33bd3525aec344cfdffabc251271f782`, tree
+`826e02310f1097e13806ca5ca1bf5cc00d71e966`. Preserve the native lock and
+refresh exact source bindings for this final source. The recorded
+d8 local pass and revoked earlier reviews establish no result for this restack.
+Its normal gate, installed UI source proof and fresh hosted acceptance remain
+required. This layer contains no Worker or browser source.
+
+The [historical C8 qualification](../openspec/changes/deploy-private-remote-relay/design.md#earlier-c8-native-correction-composition)
+records the 22:46 UTC post-cutover authority readback. It establishes no current
+authority or acceptance for this candidate; recheck both before admission.
 
 ## Verification and publication record
 
@@ -331,12 +397,15 @@ hosted enforcement of the installed `complete: true` contract.
 
 ### Fresh installed-guard acceptance
 
-Task 4.4 in the existing
+The following plan records the C4 cutoff. The
+[PR #7 receipt](#cli-pr-7-selector-adoption-receipt) later recorded complete
+reports through installed C4. Task 4.4 in the existing
 [OpenSpec change](../openspec/changes/public-repository-standards/tasks.md)
-remains open. Use a fresh PR containing only this adoption receipt and acceptance
-record, based on protected main with the installed `c4f2873e...` callers. No
-workflow, setup action, harness pin, runtime, dependency or canonical review
-source changes are needed.
+remains open for its own acceptance record. Its original plan called for a fresh
+receipt-only PR based on then-protected main with `c4f2873e...` callers and no
+workflow, setup, harness pin, runtime, dependency or canonical context changes.
+The revision-specific steps below remain historical; any new admission must use
+the current retained implementation and fresh decisions for its exact head.
 
 1. After ownership review of its exact head, obtain separate human readiness
    and approval for that full SHA through the existing admission process. A new

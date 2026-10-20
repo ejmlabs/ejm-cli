@@ -1,13 +1,16 @@
-# Native remote publication plan
+# Native remote publication candidate
 
-This docs/UI source prerequisite on protected CLI C8 adds no native remote commands,
-runtime, tests, fixture binaries or local gates. Its harness pin remains the working
-`4a751c6a3f24d7d143140f79ff53517fb93e3531`, with C8's existing lock.
-The following guide describes the planned native source, which is not released
-or protected on CLI main. Publish that implementation and the main spec only
-after this prerequisite, its corrections, normal checks and fresh review.
+This native candidate builds on protected CLI PR #20 merge
+`9e3f8ef11dc083c31b651b9dae15a98e086e3359`; its
+[adoption record](ci-bootstrap.md#ui-source-review-prerequisite) binds the reviewed
+head, tree and parent. The prerequisite selects
+protected UI merge `24935aa85355ea99f49bdbecc4186a5e95049393`, reviewed tree
+`2d8bde67c8b5fe851b70ae90a3a2787091397780`, with complete
+[install review context](../review/dependency-sources/ejm-ui/README.md).
+The normal gate and fresh hosted acceptance remain required for this source.
+This layer includes no Worker or browser UI.
 
-This preparation starts from `06154b18137eb376bef986a520904381b8744b9d`
+Earlier native preparation started from `06154b18137eb376bef986a520904381b8744b9d`
 on protected PR #9 merge `c8e2239392f71df82cbef6166b1827c8e5f5f1c5`,
 preserving 40d caller context, Linux setup, owner work and PR #6 consolidation/deletion.
 The 061 normal gate passed 129 unit tests, 6 integration tests and all 14 private
@@ -24,9 +27,20 @@ release build, Rust documentation, dependency checks and PTY interaction and
 restoration. One private terminal fixture remains ignored in the unit runner
 because the PTY supervisor drives it. The source includes a test-only injected
 clock with a conditional, reasoned lint expectation for the production helper.
-This local source is unpublished. Reconcile it onto the actual protected
-docs/UI prerequisite, then pass the normal gate and fresh hosted acceptance
-for that final source. The earlier admission remains revoked.
+That local result applies only to d8. This candidate requires its own normal
+gate and fresh hosted acceptance, recorded against its exact source. The earlier
+admission remains revoked.
+
+## Account persistence correction
+
+Native PR #21 head `45a8d3da23f8f2a17096f2de1f626c7d5c822760` passed its
+normal local gate, but its second complete hosted review found linked JSON
+writes and split credential/metadata publication. The correction stores both
+in the existing public vault, preserves newer logins during logout and retains
+bounded legacy input only for controlled migration. Fourteen vault and four
+account HTTP/TLS cases passed locally. Four valid negative controls caught missing
+index publication, stale metadata, stale tokens and missing migration index repair.
+The corrected normal gate and fresh admission remain required.
 
 ## Earlier review corrections
 
@@ -59,13 +73,13 @@ contracts cover completion during snapshot construction, a following ordinary
 Submit and expiry at both wait boundaries. The local source result above does
 not establish final-source or hosted acceptance.
 
-The planned docs/UI prerequisite keeps C8's existing runtime, harness pin and local gates.
-Native code and the main spec follow its actual protected adoption; preparing a
-tree or splitting the review scope does not establish ancestry or acceptance.
+The protected docs/UI prerequisite kept C8's existing runtime, harness pin and
+local gates. This native source and main spec still need their own protected
+adoption. Preparing a tree or splitting review scope establishes no acceptance.
 
 ## Included source
 
-The planned native layer contains account/device HTTP and TLS rejection coverage, endpoint
+This native candidate contains account/device HTTP and TLS rejection coverage, endpoint
 identity and vault migration, invitations, Snow Noise, bounded version-1 messages,
 exact-session/run authority, host lifecycle and the native controller.
 `LocalBackend`, readiness and `RemoteBadge` share existing App/UI paths.
@@ -77,8 +91,14 @@ implemented commands only, and slash status adds metadata only.
 
 ## Dependency integration
 
-The exact native lock SHA-256 remains
+The current native lock SHA-256 is
+`02ba0f0097754444a40e106d683ce530886ec7c31d30009f0c5cc43750d6118b`.
+The historical d8 lock was
 `5143432fc0201bedeef680d18ae1c4681e2215fddd6e2fb45cd4cbf0149f7d1b`.
+On October 20, the normal hook stopped at Deny's TLS advisory check after
+131 unit and six integration tests, release/Rustdoc and Machete passed; no
+commit was made. The corrected graph and extended WSS rejection fixture require
+a fresh full gate. No earlier pass accepts them.
 Versions and package evidence are in [remote dependencies](remote-dependencies.md).
 The pin selects protected harness merge
 `42e4f9cf33bd3525aec344cfdffabc251271f782`, tree

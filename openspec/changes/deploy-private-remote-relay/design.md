@@ -2,29 +2,67 @@
 
 ## Context
 
-This docs/spec and UI source prerequisite retains protected C8's existing runtime,
-tests, gates, working 4a harness pin and lock. It publishes planned guides, delta
-requirements and static install review data. It selects actual protected UI
+CLI PR #20 merged normally as protected docs/UI prerequisite P
+`9e3f8ef11dc083c31b651b9dae15a98e086e3359`, tree
+`7bd83dafd128ec5755d766b37cad6d7cf43e1a2d`, at `2026-10-20T19:27:08Z`.
+Its sole parent is C8; it retains C8's runtime, tests, gates, working 4a harness
+pin and lock. It publishes planned guides, delta requirements and static install
+review data, selecting actual protected UI
 merge M `24935aa85355ea99f49bdbecc4186a5e95049393`, tree
 `2d8bde67c8b5fe851b70ae90a3a2787091397780`, in `.github/ui-source.json`.
 This owner merge includes the shared UI and Relay artwork changes; it is distinct
-from the future protected CLI prerequisite P. Keep complete original license, root manifest, lockfile
+from CLI prerequisite P. Keep complete original license, root manifest, lockfile
 and all ten workspace manifests under `review/dependency-sources/ejm-ui/`, with
 commit, tree, path, mode, blob, size and SHA-256 provenance. Recheck the actual
 workspace closure and tracked npm configuration before export. These are ordinary
 nonexecutable review files, never imported, executed or packaged as product code.
 
-The installation PR's old protected base has no UI source pin. Its checks cannot
-prove the proposed checkout or install. The following native PR must bind the
+This native layer now starts on protected P and carries corrections from native tree
+`d8dc3fd3e1f1e24deb04c75f70e0f0562f7145d1`. It selects protected harness merge
+`42e4f9cf33bd3525aec344cfdffabc251271f782`, tree
+`826e02310f1097e13806ca5ca1bf5cc00d71e966`, with historical native lock SHA-256
+`5143432fc0201bedeef680d18ae1c4681e2215fddd6e2fb45cd4cbf0149f7d1b`.
+The d8 local macOS result remains a result for that earlier source, not this
+composition. Preserve P's UI pin and complete static context, then pass the final
+source's normal gate and hosted acceptance. No new gate result or deployment is
+claimed here.
+
+The installation PR's old protected base had no UI source pin. Its checks could not
+prove the selected checkout or install. This native PR must bind the
 installed pin, exact UI source archive and credential-free lifecycle-disabled
 install, alongside the harness and product source, both complete reviews and all
 protected checks. Keep installed callers and canonical `.github/review-context`
-unchanged. Native implementation, main-spec adoption and release verification
-follow separately; no task is completed by this source preparation.
+unchanged. Protected native and main-spec adoption and release verification
+follow actual P; no task is completed by this source preparation.
 
-See proposal.md for scope. At the start of this change, the local relay gate had passed on macOS, but the trusted shared workflow did not install the relay prerequisites. The later native CLI layer needs reviewed vault, Claude and registry APIs beyond the current trusted harness pin. The publication prelude retains that working pin and consumes no new harness API. Retain human admission and protected merge regardless of the separately owned public rollout. The concurrent public-site migration is separate and uses unpublished ejm-ui packages.
+See proposal.md for scope. At the start of this change, the local relay gate had passed on macOS, but the trusted shared workflow did not install the relay prerequisites. The native CLI layer needs reviewed vault, Claude and registry APIs beyond PR #20's working 4a harness pin. That docs/UI prerequisite retains its working pin and consumes no new harness API; this prepared native layer selects protected 42e. Retain human admission and protected merge regardless of the separately owned public rollout. The concurrent public-site migration is separate and uses unpublished ejm-ui packages.
 
-At the initial Cloudflare inspection, Wrangler could access the account, but no ejm-cli-relay Worker or matching D1 database existed and custom domains did not include relay.ejmlabs.com. That inspection did not expose billing subscription details; it reported the standard usage model. The initial relay config had placeholder deployment values and closed admission. The D1 database has since been created and migrations applied. This caller-only layer contains no relay config and does not establish current deployment acceptance. Do not upgrade or downgrade the account; release and authenticated deployment checks remain open.
+At the initial Cloudflare inspection, Wrangler could access the account, but no ejm-cli-relay Worker or matching D1 database existed and custom domains did not include relay.ejmlabs.com. That inspection did not expose billing subscription details; it reported the standard usage model. The initial relay config had placeholder deployment values and closed admission. The D1 database has since been created and migrations applied. This prepared native layer contains no relay config and does not establish current deployment acceptance. Do not upgrade or downgrade the account; release and authenticated deployment checks remain open.
+
+## Native advisory correction
+
+The P-based normal gate passed 131 unit and six integration tests, release,
+Rustdoc and Machete, then Cargo Deny rejected RUSTSEC-2026-0381/0382/0383.
+No commit or full-gate pass resulted. The selected graph uses rustls-webpki 0.103.16,
+webpki-root-certs 1.0.10 and tokio-tungstenite 0.30.0 with its public
+`rustls-tls-native-roots` feature and existing rustls-native-certs 0.8.5. It drops
+both webpki-roots versions and contains 467 packages, previously 469. Lock SHA-256:
+`02ba0f0097754444a40e106d683ce530886ec7c31d30009f0c5cc43750d6118b`.
+Retain historical 514343 and WSS fake-ticket coverage in the existing TLS fixture.
+The unchanged normal gate and fresh exact-source hosted checks and reviews remain
+required. No acceptance is claimed, and advisory checks stay enforced.
+
+## Account persistence correction
+
+Native PR #21 review found linked metadata writes and split credential/cache
+publication. Store the existing account record and a fixed current-account
+metadata index in one public vault transaction. Load each origin's record and
+list the encrypted index under that lock; never write the old JSON cache.
+Keep bounded legacy JSON reads only for controlled migration, and rebuild the
+index from the verified credential even when its migration marker exists.
+Logout deletes only the exact saved account it revoked, preserving a newer login.
+Reuse existing cancellation and storage APIs, with no new dependency or TLS graph
+change. Require persistence regressions, the normal gate and fresh admission.
 
 ## Goals / Non-Goals
 
@@ -235,9 +273,9 @@ ignored caches. Its actual ordinary protected merge is
 `42e4f9cf33bd3525aec344cfdffabc251271f782`, selected by the updated pin.
 Root verified matching reviewed 826e source and unchanged checks at 22:44 UTC;
 fresh post-cutover qualification at 22:46 UTC confirmed public CLI main C8, harness
-main 42e, restored Actions/callers and unchanged protection. Preserve native lock
+main 42e, restored Actions/callers and unchanged protection. Preserve historical native lock receipt
 SHA-256 `5143432fc0201bedeef680d18ae1c4681e2215fddd6e2fb45cd4cbf0149f7d1b`;
-pass locked resolution and the unchanged normal gate on this final source. All eleven
+pass locked resolution and the unchanged normal gate on the patched final source. All eleven
 release tasks remain open. The following successor record is historical.
 
 ## Earlier native source successor
@@ -389,9 +427,8 @@ exercise contention and the refresh boundary deterministically; production adds
 no clock service, task or dependency. Cover completion during real snapshot
 construction, a subsequent ordinary Submit, and expiry while a request waits.
 
-First publish the planned remote guides and delta contract as a bounded docs
-prerequisite on C8, retaining its working pin, runtime, tests and gates. Keep the
-main spec with the native implementation. Measure native scope against the actual
-prepared prerequisite tree, then reconcile its real protected merge without
-rewriting PR history. No prerequisite publication verifies native behavior or
-closes any of the eleven release tasks.
+Protected P published the planned remote guides and delta contract on C8, retaining
+its working pin, runtime, tests and gates. Keep the main spec with the native
+implementation and measure native scope against P without rewriting PR history.
+Prerequisite publication verifies no native behavior and closes none of the eleven
+release tasks.
