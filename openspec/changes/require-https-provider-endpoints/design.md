@@ -18,7 +18,7 @@ Observed on ejm-harness:
 - CI pin `.github/harness-revision` is `4a751c6a3f24d7d143140f79ff53517fb93e3531`. Local builds use the path dependency `../ejm-harness/crates/ejm-harness`.
 - At that pin, and on audited harness main `8d3dc39`, private `endpoint()` in `crates/ejm-harness/src/provider.rs` accepts scheme `http` or `https` for any host. It already rejects embedded userinfo, query, and fragment. `OpenAiProvider::stream` sends `bearer_auth(api_key)`. `AnthropicProvider::stream` sends `x-api-key`. The HTTP client uses `redirect::Policy::none()`.
 - `endpoint()` is private. The public constructors take `base_url: String` and call `endpoint()` only after the key is already inside the config value. A harness error still drops that config before a request is sent, but only when `endpoint()` rejects the URL. Today a remote `http://` URL is not rejected.
-- No branch, pull request, or `openspec/changes/` entry named `require-https-provider-endpoints` was on `ejmlabs/ejm-harness` when this design was written. The sibling change is in draft elsewhere. This CLI change cannot pin a commit that does not exist.
+- Harness pull request [#18](https://github.com/ejmlabs/ejm-harness/pull/18), branch `openspec/require-https-provider-endpoints`, is the sibling design. It keeps validation inside private `endpoint()`, uses this same loopback predicate, and adds no public type. Its stable rejection text is `provider URL must use HTTPS, or HTTP on a loopback host`. Parse failure stays `invalid provider base URL`. That design also asks the CLI not to re-parse the URL. The CLI spec in this change still requires a local check. See Cross-repo dependency.
 
 Observed on ejm-ide at `0309cb7`:
 
@@ -28,15 +28,16 @@ Observed on ejm-ide at `0309cb7`:
 
 `docs/ejm-cli.md` and the README show only `https://api.deepseek.com/v1`. The public page row for OpenAI-compatible access says "Any Chat Completions endpoint" (`site/dist/index.html`). Nothing in the docs promises remote `http://`.
 
-Proposal and delta specs are intentionally absent. The product manager owns those files.
+`proposal.md` and `specs/provider-endpoint-security/spec.md` are the product manager's text. This design follows them. `.openspec.yaml` keeps `created: 2026-10-20`, the day this change was opened on the branch. The product manager draft of that file had the same schema and `created: 2026-10-19`.
 
 ## Goals / Non-Goals
 
 **Goals:**
 
-- Stop ejm-cli from accepting a non-loopback `http://` provider base URL on the OpenAI-compatible and Anthropic paths, including `doctor`, before the API key is read and before `OpenAiProvider` or `AnthropicProvider` is constructed.
-- Use the same loopback predicate as ejm-ide `validate_endpoint`.
-- Report a stable configuration error on stderr with exit code 1, without echoing the supplied URL.
+- Stop ejm-cli from accepting a non-loopback `http://` provider base URL on the OpenAI-compatible and Anthropic paths, before the API key is read and before `OpenAiProvider` or `AnthropicProvider` is constructed.
+- Use the loopback predicate in the spec, which is the same predicate as ejm-ide `validate_endpoint` and harness PR 18.
+- On `run` and the TUI, report a stable configuration error on stderr with exit code 1. The error names `--base-url` / `EJM_CLI_BASE_URL`, states the HTTPS rule, and does not include the API key or the raw URL.
+- On `doctor`, print an endpoint line that includes the disallowed URL, marks it rejected, and states that HTTPS is required except for loopback hosts, then exit 1. Do not print that URL as a usable endpoint, and do not print the API key.
 - Keep the existing `responses` / `chatgpt` fixed-endpoint error ahead of this rule.
 - Document the rule in `--help`, `docs/ejm-cli.md`, the README, and the site row that describes `EJM_CLI_BASE_URL`.
 - Leave the harness pin and lockfile unchanged, and state how the sibling harness change is adopted later.
@@ -56,7 +57,9 @@ Proposal and delta specs are intentionally absent. The product manager owns thos
 
 ### 1. Validate in the CLI before the key is read, and keep the harness as the sender-side control
 
-**Choice:** `Args::api_base_url()` becomes fallible and enforces the rule. `provider()` calls it before `required_api_key()` and before either provider constructor. `doctor()` calls it before it writes stdout when the provider is OpenAI-compatible or Anthropic. Both failures use the existing `Err` path: stderr `ejm-cli: ...`, exit code 1.
+**Choice:** `Args::api_base_url()` becomes fallible and enforces the rule. `provider()` calls it before `required_api_key()` and before either provider constructor. A failure there uses the existing `Err` path: stderr `ejm-cli: ...`, exit code 1, and the message does not contain the URL or the API key.
+
+`doctor()` calls the same check for OpenAI-compatible and Anthropic providers. An accepted URL is printed as the usable endpoint. A URL rejected by the HTTPS rule still produces an `Endpoint:` line. That line contains the configured URL, marks it rejected, and carries the same HTTPS-required explanation. `doctor` then exits 1. The API key is not printed. An invalid URL exits 1 with the invalid-URL error. The spec's doctor scenario is the HTTPS-rule case, and the endpoint line is what satisfies it.
 
 The harness change remains necessary. It is the only check that runs for every caller that can put a key on a request. This CLI check is the early, user-facing gate for `--base-url` and `EJM_CLI_BASE_URL`. It does not replace `endpoint()`.
 
@@ -71,16 +74,18 @@ The harness change remains necessary. It is the only check that runs for every c
 
 - Clap `value_parser` on `base_url`. This fails while arguments are parsed, including for `sessions`, package commands, login, and `--replay`, whenever the environment variable is set. Clap then exits 2 via its own process exit, with clap's usage format, before the `ejm-cli:` error path. A cleartext URL on `responses` or `chatgpt` would also surface this parser error before the existing "fixed official endpoint" message.
 - Rely on the harness and do nothing in the CLI until the pin moves. `doctor` would keep displaying a remote `http://` endpoint, the missing-key error could win over the URL error depending on order, and the CLI would stay vulnerable for as long as the pin stays on `4a751c6a`.
-- A new public harness helper that the CLI calls. Worth adopting later if the sibling change exports one. It is not available on the current pin, and this fix should not wait on a new API for a predicate the CLI can apply to a string it already owns.
+- A new public harness helper that the CLI calls. Harness PR 18 does not add one. It keeps `endpoint()` private and asks the CLI to pass the string through. This change still parses locally, because the CLI spec requires a flag-named error before the key is read. The predicate is copied from that PR so the two checks allow and reject the same hosts.
 
 ### 2. Match ejm-ide's loopback predicate, using the `url` crate already in the CLI
 
-**Choice:** Parse with `url::Url::parse`. Do not resolve DNS and do not open a socket.
+**Choice:** Parse with `url::Url::parse`. Do not resolve DNS and do not open a socket. The parser lowercases the scheme, so `HTTPS://` and `HTTP://` follow the same rules as lowercase.
 
-- If the value does not parse, or the parsed URL has no host, fail with: `invalid provider base URL. Change --base-url or EJM_CLI_BASE_URL.`
-- If the scheme is `https` and a host is present, accept it. The parser lowercases the scheme, so `HTTPS://` is the same.
+- If the value does not parse, the parsed URL has no host, the value has no scheme, or the scheme is anything other than `http` or `https`, fail with: `invalid provider base URL. Change --base-url or EJM_CLI_BASE_URL.`
+- If the scheme is `https` and a host is present, accept it.
 - If the scheme is `http` and the host is loopback, accept it.
-- Otherwise fail with: `provider base URL must use https, or http on a loopback host (localhost, 127.0.0.0/8, or ::1). Change --base-url or EJM_CLI_BASE_URL.`
+- If the scheme is `http` and the host is not loopback, fail with: `provider base URL must use https, or http on a loopback host (localhost, 127.0.0.0/8, or ::1). Change --base-url or EJM_CLI_BASE_URL.`
+
+`ftp`, `file`, `ws`, and a value with no scheme use the invalid-URL sentence. The spec groups those four as one scenario. A remote `http://` URL uses the HTTPS sentence, which names `--base-url` / `EJM_CLI_BASE_URL` and states the loopback exception. The stderr text for that failure does not include the raw URL. The `doctor` endpoint line does include it, marked rejected.
 
 Loopback, taken from `url::Host` after parsing:
 
@@ -88,13 +93,13 @@ Loopback, taken from `url::Host` after parsing:
 - `Host::Ipv4`: `Ipv4Addr::is_loopback()` (`127.0.0.0/8`).
 - `Host::Ipv6`: `Ipv6Addr::is_loopback()` (`::1` only).
 
-The error text must not contain the supplied URL, its userinfo, the query, or the fragment. `render::safe_text` still wraps the final line, which strips terminal control sequences. That wrapper is not a substitute for omitting the URL: a credential in the URL would still be a secret on stderr.
+The stderr error does not contain the supplied URL, its userinfo, the query, the fragment, or the API key. `render::safe_text` still wraps that line and strips terminal control sequences. The `doctor` endpoint line is the exception the spec requires: it shows the configured URL and marks it rejected. If that URL has userinfo, the printed line omits the userinfo and still shows the host. The spec scenario `http://api.example.com/v1` has no userinfo, so the line shows that whole URL.
 
 `responses` and `chatgpt` keep today's check first, in `responses_credentials()`. An `http://` override there still reports `native Responses uses its fixed official endpoint; remove --base-url and EJM_CLI_BASE_URL` and does not report the new sentence.
 
 **Alternatives:**
 
-- Allow only the three literal hosts named in the audit (`127.0.0.1`, `::1`, `localhost`). That would reject `http://127.0.0.2`, which ejm-ide allows, and it would drift from the predicate the harness change is expected to copy.
+- Allow only the three literal hosts named in the audit (`127.0.0.1`, `::1`, `localhost`). That would reject `http://127.0.0.2`, which ejm-ide and harness PR 18 allow.
 - Treat any hostname that resolves to loopback as loopback. That needs DNS at configuration time, and a resolver can answer differently later. It is the wrong place to decide whether a key may leave the machine.
 - Treat IPv4-mapped `::ffff:127.0.0.1` as loopback. `Ipv6Addr::is_loopback()` is false for that address, and ejm-ide rejects it. Allowing it would widen cleartext HTTP beyond the IDE.
 
@@ -108,13 +113,13 @@ Local OpenAI-compatible servers (Ollama, llama.cpp, LM Studio, and similar) are 
 
 ### 4. Keep the current harness pin in this change
 
-**Choice:** Implementation of this design does not edit `.github/harness-revision`, `Cargo.lock`, or `../ejm-harness`. Tests must pass against pin `4a751c6a3f24d7d143140f79ff53517fb93e3531`. On that pin, `endpoint()` still accepts remote `http://`, so a test that reaches `OpenAiProvider::new` with `http://api.example.test/v1` does not prove the CLI check. The CLI test has to fail before that constructor and before `required_api_key()`.
+**Choice:** Implementation of this design does not edit `../ejm-harness` and does not point `.github/harness-revision` at a branch. Tests must pass against the current pin `4a751c6a3f24d7d143140f79ff53517fb93e3531`. On that pin, `endpoint()` still accepts remote `http://`, so a test that reaches `OpenAiProvider::new` with `http://api.example.com/v1` does not prove the CLI check. The CLI test has to fail before that constructor and before `required_api_key()`.
 
-When `require-https-provider-endpoints` is on protected harness main, a separate OpenSpec change advances `.github/harness-revision` to that full commit and refreshes `Cargo.lock` with the locked, at-most-two-job workflow in the harness skill. CI must keep using an immutable commit in the fixed official harness repository. Do not point the pin at a branch.
+The proposal says the CLI and the harness change land together for the coordinated 0.1.0 release. That release needs a harness revision whose `endpoint()` enforces this predicate. When harness PR 18 is on protected main, the pin update uses that full commit and refreshes `Cargo.lock` with the locked, at-most-two-job workflow. If that commit does not exist yet during implementation, the pin stays on `4a751c6a` and the pin update is the follow-up that completes the pair. It is not a second product rule.
 
-After that adoption, keep the CLI's early error. The harness check then covers other callers and any future CLI path that forgets `api_base_url()`. If both fire, the user should still see the CLI sentence, because the CLI returns before the constructor.
+After that adoption, keep the CLI's early error. The harness sentence does not name `--base-url` or `EJM_CLI_BASE_URL`, so a CLI that only printed the harness error would miss the spec. The harness check still covers other callers and any future CLI path that skips `api_base_url()`.
 
-If the harness draft exports a public validator with this same predicate, a later CLI change may call it and delete the local copy. Until that function exists and is on the pin, duplicating the predicate in `args.rs` is the public-interface-safe option. The CLI must not reach into private harness items.
+Harness PR 18 does not export a public validator. The CLI copies the predicate and does not reach into private harness items. A later public helper can replace the copy.
 
 ## Edge cases
 
@@ -127,11 +132,11 @@ Accepted:
 
 Rejected with the https sentence:
 
-- `http://api.example.test`, `http://example.com:443`, `http://0.0.0.0`, `http://[::]`, `http://[::ffff:127.0.0.1]`, `http://localhost.localdomain`, `http://localhost.`, and any other domain that is not exactly `localhost`.
-- `file://`, `ws://`, and `ftp://` when the value parses and is not `https` or loopback `http`.
+- `http://api.example.com/v1`, `http://example.com:443`, `http://0.0.0.0`, `http://[::]`, `http://[::ffff:127.0.0.1]`, `http://localhost.evil.com/v1`, `http://127.0.0.1.nip.io/v1`, `http://192.168.1.10:11434/v1`, `http://localhost.localdomain`, `http://localhost.`, and any other domain that is not exactly `localhost`.
 
 Rejected with the invalid-URL sentence:
 
+- `ftp://`, `file://`, `ws://`, and a value with no scheme, including `api.example.com/v1`.
 - The empty string, a value `url::Url::parse` rejects, and a parsed URL with no host.
 - The CLI does not trim. A trailing space that fails parsing uses the invalid-URL sentence.
 
@@ -146,13 +151,13 @@ Commands that must keep working when `EJM_CLI_BASE_URL` is a remote `http://` UR
 - `sessions`, package commands, `login`, `accounts`, and `logout`.
 - `--package-provider` (the extension provider is selected and the base URL is unused).
 
-`doctor` and a non-replay `run` for OpenAI-compatible or Anthropic providers must fail closed on a bad URL even when no API key is set. The URL error is the one the user sees. It must not be preceded by `set EJM_CLI_API_KEY` or by `provider connection failed`.
+`doctor` and a non-replay `run` for OpenAI-compatible or Anthropic providers fail closed on a bad URL even when no API key is set. The user sees the base URL error, not `set EJM_CLI_API_KEY` and not `provider connection failed`. `doctor` also prints the rejected endpoint line for a remote `http://` URL. A planted `EJM_CLI_API_KEY` must not appear in stdout or stderr. No provider connection is opened.
 
 The interactive TUI calls `provider()` before `ui::run`, so a bad URL exits before raw mode and the alternate screen. No terminal-restoration change is required unless a later edit moves the check.
 
 ## Compatibility
 
-This is a behavior change for source checkouts that currently point OpenAI-compatible or Anthropic access at a non-loopback `http://` base URL. The next `run`, TUI launch, or `doctor` for those providers exits 1 with the https sentence. No state directory migration is required. Rollback is reverting the CLI change. The harness pin does not move, so rollback does not involve a dependency downgrade.
+This is a behavior change for source checkouts that currently point OpenAI-compatible or Anthropic access at a non-loopback `http://` base URL. The next `run` or TUI launch exits 1 with the https sentence. `doctor` exits 1 after an endpoint line that marks that URL rejected. No state directory migration is required. Rollback is reverting the CLI change. The harness pin does not move inside this implementation, so rollback does not involve a dependency downgrade.
 
 Unchanged:
 
@@ -171,43 +176,41 @@ Changelog: an Unreleased Fixed entry names the CLI behavior and states that the 
 
 | Item | What this change does |
 | --- | --- |
-| CLI `Args::api_base_url()` | Enforces the IDE predicate before the key is read |
-| ejm-harness `endpoint()` | Still allows remote `http://` on pin `4a751c6a` and on main `8d3dc39`. Sibling draft `require-https-provider-endpoints` is expected to apply the same predicate where the key is attached to the request |
-| `.github/harness-revision` and `Cargo.lock` | Stay on `4a751c6a3f24d7d143140f79ff53517fb93e3531` |
-| Later adoption | Separate OpenSpec change after the harness commit is on protected main. Keep the CLI early error |
-| Public API | No new harness type. `OpenAiConfig.base_url` and `AnthropicConfig.base_url` stay strings |
+| CLI `Args::api_base_url()` | Enforces the shared predicate before the key is read, with an error that names `--base-url` / `EJM_CLI_BASE_URL` |
+| Harness PR 18 `endpoint()` | Private check, same predicate, message `provider URL must use HTTPS, or HTTP on a loopback host`. No new public type. Not on the CLI pin yet |
+| `.github/harness-revision` and `Cargo.lock` | Stay on `4a751c6a3f24d7d143140f79ff53517fb93e3531` until that harness commit is on protected main |
+| Paired release | The proposal says both changes land together for the coordinated 0.1.0 release. The CLI early error stays after the pin moves |
 | ejm-ide | Already enforces the predicate. No IDE edit |
 
-The sibling draft was not on GitHub at design time (no matching branch, pull request, or `openspec/changes/` directory). If that draft picks a different predicate, a public helper, or a different error string, update this design before implementation. Do not guess a harness SHA.
+Open question 1 is resolved. The assumption was a private `endpoint()` check, the IDE loopback predicate, and no new type the CLI must call. Harness PR 18 matches that assumption. It also rejects `http://[::ffff:127.0.0.1]`, exact-only `localhost`, and `foo.localhost`.
+
+The same PR rejects a second parser in the CLI and says the harness error should be authoritative. This change does not follow that part. The CLI spec requires validation before the API key is read, and the error must name `--base-url` / `EJM_CLI_BASE_URL`. The harness sentence does not name them. The CLI therefore keeps its own check and uses the harness predicate so the two cannot disagree on which host is loopback.
+
+Harness PR 18 records the break under `## [Unreleased]` and prefers a later minor `0.2.0`, leaving its dated `0.1.0` notes unchanged. The CLI proposal says L2 blocks the coordinated 0.1.0 release. This change does not edit `VERSION` in either repo. Which release number carries both fixes is unresolved.
 
 ## Risks / Trade-offs
 
-- Two copies of the predicate can drift. The harness copy is private today, so the CLI cannot call it. The drift bound is the written predicate above, the ejm-ide function it mirrors, and unit tests for the host classes. A later public helper can collapse the copies.
+- Two copies of the predicate can drift. Harness PR 18 keeps its copy private and asked the CLI not to re-parse. The CLI spec requires the local check anyway. The drift bound is the shared predicate, the spec scenarios, and the unit tests for the host classes. A later public helper can collapse the copies.
 - Users of a private non-loopback `http://` server lose a path that the binary accepted and the docs did not describe. Loopback HTTP and real TLS remain. No bypass flag is added to soften that.
 - `doctor` for `responses` and `chatgpt` still succeeds when a base URL is set, while `models` and `run` fail. That mismatch is existing behavior and stays. Widening `doctor` would change a path that does not send a key.
 - Accepting every `https` host still sends the key to whatever host the user or the environment named. TLS does not make a hostile host trustworthy. The finding is cleartext, not endpoint identity.
 - `https` URLs with userinfo still reach `required_api_key()` before the harness rejects them. The key is not sent. Closing that order is a separate cleanup.
-- A harness pin bump inside this change would either name a commit that does not contain the check or point CI at an unreviewed branch. Leaving the pin fixed avoids both.
+- A pin bump before harness PR 18 is on protected main would name a commit that does not contain the check, or point CI at a branch. The pin stays on `4a751c6a` until that full SHA exists. The proposal's paired 0.1.0 release is what later moves it.
 - Claiming "the key never leaves the process" needs the call order and the tests below. It does not need a packet capture, and this change must not claim one.
 
 ## Test strategy
 
 No paid provider calls and no network. Cargo jobs stay at most two. The integration helper in `crates/ejm-cli/tests/cli.rs` always inserts `--replay`, which skips `api_base_url()`. New process tests need their own builder, still with a temporary `--state-dir`, and they clear `EJM_CLI_API_KEY`, `OPENAI_API_KEY`, and `ANTHROPIC_API_KEY`.
 
-Unit tests on `Args`:
+Unit tests on `Args` cover the predicate, including `127.0.0.2`, `LOCALHOST`, `http://[::ffff:127.0.0.1]`, and `http://127.1/v1` following `is_loopback()` on the host `url` 2 parses. They also cover every spec URL that does not need a process: the accepted DeepSeek URL, the three loopback URLs, the three lookalike URLs, `ftp`, `file`, `ws`, and a value with no scheme.
 
-- Accept the https defaults, a remote `https` URL, `http://localhost`, `http://LOCALHOST`, `http://127.0.0.1`, `http://127.0.0.2`, and `http://[::1]` with a port and path.
-- Reject remote `http`, `http://0.0.0.0`, `http://[::]`, `http://[::ffff:127.0.0.1]`, `http://localhost.example`, `file://`, the empty string, and a value that does not parse.
-- For `http://user:secret@example.test/v1`, the error is the https sentence and the text does not contain `secret` or the raw URL.
-- Record how `url` 2 classifies `http://127.1/v1` and assert the method follows `is_loopback()` on that parsed host.
+Integration tests use a builder that does not force `--replay`, a temporary `--state-dir`, and a cleared key environment unless the scenario plants a key. Exit status for a rejected URL is exactly 1. A clap exit of 2 fails the test. The scenario list in `tasks.md` is the checklist. In particular:
 
-Integration tests, exit status exactly 1 (a clap exit of 2 fails the test):
-
-- `doctor` and `run`, for both `openai` and `anthropic`, with `--base-url http://api.example.test/v1` and with only `EJM_CLI_BASE_URL` set to that value. Stderr contains `ejm-cli: provider base URL must use https`. Stderr does not contain a fixture key planted in the environment, `set EJM_CLI_API_KEY`, or `provider connection failed`. Stdout does not contain the URL.
-- `doctor --base-url http://127.0.0.1:9/v1` succeeds and prints that endpoint. Port 9 is never contacted. `doctor` does not need a key.
-- `--replay run` with a remote `http` base URL still succeeds.
-- `sessions` with `EJM_CLI_BASE_URL=http://api.example.test/v1` still succeeds.
-- `models` for `responses` and `chatgpt` with an `http://` base URL still reports the fixed official endpoint and does not report the new https sentence. The existing https override test stays.
+- `doctor` with `EJM_CLI_BASE_URL=http://api.example.com/v1` prints an `Endpoint:` line that contains that URL, marks it rejected, and says HTTPS is required except for loopback hosts. The process exits 1. Stdout does not present the URL as a usable endpoint.
+- Accepted `https://api.deepseek.com/v1` from the flag and from the environment is the endpoint `doctor` prints, with no rejection mark. `--provider anthropic` with no base URL prints `https://api.anthropic.com/v1`.
+- The three loopback URLs are accepted. `doctor` prints `http://127.0.0.1:1234/v1` as a usable endpoint and does not connect to that port.
+- A planted API key is absent from stdout and stderr, and the output does not contain `provider connection failed` or `set EJM_CLI_API_KEY`.
+- `--provider chatgpt --base-url https://other.test/v1` still reports the fixed official endpoint. The existing `models` test for `responses` and `chatgpt` stays.
 
 A PTY test is not required while the check stays before `ui::run`.
 
@@ -215,15 +218,21 @@ Implementation verification is `cargo test -p ejm-cli` for the new unit test and
 
 ## Migration Plan
 
-1. Approve this design. The product manager may add `proposal.md` and `specs/` on this branch before implementation.
-2. Implement only the CLI tasks. Do not bump the harness pin.
-3. Tell users, in the changelog and the four doc surfaces, that a non-loopback `http://` base URL now exits 1.
-4. After the harness change is on protected main, adopt that commit in a separate change. Keep this CLI error.
+1. Everett approves this design. `proposal.md` and the delta spec are already on the branch.
+2. Implement the CLI tasks. Leave the harness pin on `4a751c6a` until harness PR 18 is on protected main.
+3. Tell users, in the changelog and the four doc surfaces, that a non-loopback `http://` base URL now exits 1, and that `doctor` marks that endpoint rejected.
+4. When the harness commit is on protected main, adopt that full SHA so the coordinated release in the proposal contains both checks. Keep the CLI error, because the harness sentence does not name the flag or the environment variable.
 
 There is no data migration. Reverting the CLI commit restores the previous acceptance of remote `http://` for as long as the harness pin still allows it.
 
-## Open questions
+## Resolved questions
 
-1. The harness draft is not on `ejmlabs/ejm-harness` yet. If its predicate or public API differs from decision 2, this design should be revised before apply. The assumed harness shape is a private `endpoint()` check with the IDE predicate, and no new type the CLI must call.
-2. `proposal.md` and `specs/` are not in this change. If those files require an escape hatch, a clap-time error, or a pin bump inside this change, revise the design before apply.
-3. IPv4-mapped `http://[::ffff:127.0.0.1]` is rejected, matching ejm-ide. Confirm that local stacks which advertise loopback only in mapped form are an accepted break.
+1. **Harness shape.** Resolved against [ejm-harness PR 18](https://github.com/ejmlabs/ejm-harness/pull/18). Private `endpoint()`, the IDE loopback predicate (`localhost`, `127.0.0.0/8`, `::1`), and no new public type. The assumption holds. The CLI still validates locally because the spec requires a flag-named error before the key is read. See Cross-repo dependency.
+2. **Spec versus the earlier open points.** The spec confirms the loopback set, forbids an opt-out, and requires the CLI check before credentials. It does not require a clap exit 2. It does not require this implementation to invent a harness SHA. The proposal's paired 0.1.0 release is the pin update in migration step 4.
+3. **IPv4-mapped loopback.** `http://[::ffff:127.0.0.1]` is outside the spec's loopback set. Harness PR 18 rejects it. This change rejects it.
+
+## Remaining conflicts
+
+1. **Who parses.** Harness PR 18 decision 1 says the CLI should pass the string through and treat `provider URL must use HTTPS, or HTTP on a loopback host` as authoritative. The CLI spec requires an earlier error that names `--base-url` / `EJM_CLI_BASE_URL`. This design follows the CLI spec and copies the harness predicate. The duplicate parser is intentional.
+2. **Release number.** The CLI proposal says L2 blocks the coordinated 0.1.0 release and that the two changes land together. Harness PR 18 prefers minor `0.2.0` and an unchanged dated `0.1.0` section. This change does not pick the harness version.
+3. **Commands that never use the provider URL.** The spec says every disallowed value is rejected. Its scenarios all use or display a provider endpoint (`doctor`, a selected endpoint, or a fixed-endpoint provider). Replay, session listing, package commands, and account commands do not read the provider base URL, so a stale `EJM_CLI_BASE_URL` does not fail them. A reading that fails every subcommand would need a spec revision. No scenario asks for that.
