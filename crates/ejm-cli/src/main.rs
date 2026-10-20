@@ -42,7 +42,7 @@ use ejm_harness_auth::{CredentialSource, SecretString, StaticCredential};
 use ejm_harness_coding::{CodingConfig, tools};
 use tokio_util::sync::CancellationToken;
 
-use args::{Args, Command, ProviderKind};
+use args::{Args, Command, ProviderKind, RegistryChoice, display_registry_url};
 
 fn main() -> std::process::ExitCode {
     let args = Args::parse();
@@ -413,6 +413,7 @@ fn doctor(args: &Args) -> Result<bool> {
     let governor = Arc::new(ejm_harness_exec::Governor::new(limits.clone())?);
     let executor = ejm_harness_exec::Executor::new(governor, args.state_dir().join("artifacts"))?;
     let cwd = args.cwd()?;
+    let registry_rejected = print_registry(args);
     println!("ejm-cli {}", env!("CARGO_PKG_VERSION"));
     println!("Workspace: {}", cwd.display());
     println!("State: {}", args.state_dir().display());
@@ -450,5 +451,40 @@ fn doctor(args: &Args) -> Result<bool> {
             "macOS: aggregate RAM use is monitored; no hard process-tree RAM ceiling is available."
         );
     }
-    Ok(true)
+    Ok(!registry_rejected)
+}
+
+fn print_registry(args: &Args) -> bool {
+    let rejected = match args.registry_choice() {
+        RegistryChoice::Selected { origin, source } => {
+            println!(
+                "Registry: {} ({})",
+                display_registry_url(&origin),
+                source.label()
+            );
+            false
+        }
+        RegistryChoice::Rejected {
+            raw,
+            source,
+            message,
+        } => {
+            println!(
+                "Registry: rejected ({} from {}): {}",
+                display_registry_url(&raw),
+                source.label(),
+                render::safe_text(&message)
+            );
+            true
+        }
+    };
+    match packages::retired_registry_session_notice(&args.state_dir().join("packages")) {
+        Ok(Some(message)) => println!("{}", render::safe_text(&message)),
+        Ok(None) => {}
+        Err(error) => println!(
+            "Registry session file: {}",
+            render::safe_text(&format!("{error:#}"))
+        ),
+    }
+    rejected
 }

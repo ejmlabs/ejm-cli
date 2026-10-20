@@ -1,15 +1,21 @@
 use std::{path::PathBuf, sync::Arc};
 
-use anyhow::{Context, Result, ensure};
+use anyhow::{Context, Result, bail, ensure};
 use clap::Subcommand;
 use ejm_harness_exec::Governor;
 use ejm_harness_packages::{
-    DEFAULT_REGISTRY, PackageGrants, PackageManager, RegistryClient, install_source,
-    load_registry_token, pack_directory, save_registry_token,
+    PackageGrants, PackageManager, RegistryClient, install_source, load_registry_token,
+    pack_directory, save_registry_token,
 };
 use tokio_util::sync::CancellationToken;
 
-use crate::{args::Args, render::safe_text};
+use crate::{
+    args::{
+        Args, DISCARD_RETIRED_REGISTRY_COMMAND, RegistryChoice, RegistrySource,
+        display_registry_url, host_is_meetgerry, registry_override_error, retired_registry_message,
+    },
+    render::safe_text,
+};
 
 #[derive(Debug, Subcommand)]
 pub enum PackageCommand {
@@ -74,6 +80,8 @@ pub enum PackageCommand {
         #[arg(default_value = ".")]
         directory: PathBuf,
     },
+    /// Unlink a legacy registry-session.json. Sends nothing. Does not delete a directory.
+    DiscardRetiredSession,
 }
 
 pub fn manager(args: &Args) -> Result<PackageManager> {
@@ -82,17 +90,47 @@ pub fn manager(args: &Args) -> Result<PackageManager> {
 
 pub async fn run(args: &Args, command: &PackageCommand) -> Result<bool> {
     let manager = manager(args)?;
-    let registry = RegistryClient::new(DEFAULT_REGISTRY)?;
+    if matches!(command, PackageCommand::DiscardRetiredSession) {
+        discard_retired_session(manager.root())?;
+        return Ok(true);
+    }
+    let registry = open_registry(args)?;
+    dispatch(args, &manager, &registry, command).await?;
+    Ok(true)
+}
+
+fn open_registry(args: &Args) -> Result<RegistryClient> {
+    let choice = args.registry_choice();
+    registry_override_error(&choice)?;
+    let RegistryChoice::Selected { origin, source } = choice else {
+        bail!("registry origin was rejected");
+    };
+    if source != RegistrySource::Default {
+        println!(
+            "Registry: {} ({})",
+            safe_text(&display_registry_url(&origin)),
+            source.label()
+        );
+    }
+    RegistryClient::new(&origin)
+}
+
+async fn dispatch(
+    args: &Args,
+    manager: &PackageManager,
+    registry: &RegistryClient,
+    command: &PackageCommand,
+) -> Result<()> {
     match command {
         PackageCommand::Search { query } => show(&registry.search(query, None).await?)?,
         PackageCommand::Info { name, version } => show(&registry.version(name, version).await?)?,
-        PackageCommand::Install { source } => install(args, &manager, &registry, source).await?,
+        PackageCommand::Install { source } => install(args, manager, registry, source).await?,
         PackageCommand::Update { name, version } => {
             ensure!(
                 manager.list()?.iter().any(|record| &record.name == name),
                 "package is not installed"
             );
-            install(args, &manager, &registry, &format!("{name}@{version}")).await?;
+            install(args, manager, registry, &format!("{name}@{version}")).await?;
         }
         PackageCommand::List => show(&manager.list()?)?,
         PackageCommand::Enable {
@@ -147,19 +185,15 @@ pub async fn run(args: &Args, command: &PackageCommand) -> Result<bool> {
                 safe_text(&output.display().to_string())
             );
         }
-        PackageCommand::Login { no_browser } => login(&manager, &registry, *no_browser).await?,
-        PackageCommand::Logout => {
-            let token = load_registry_token(manager.root(), registry.origin())?;
-            let revoked = registry.logout(&token).await;
-            std::fs::remove_file(manager.root().join("registry-session.json"))?;
-            revoked.context("local session removed; remote revocation failed")?;
-            println!("Registry session revoked and removed.");
+        PackageCommand::Login { no_browser } => login(manager, registry, *no_browser).await?,
+        PackageCommand::Logout => logout(manager, registry).await?,
+        PackageCommand::Whoami => {
+            show(
+                &registry
+                    .me(&require_session(manager, registry.origin())?)
+                    .await?,
+            )?;
         }
-        PackageCommand::Whoami => show(
-            &registry
-                .me(&load_registry_token(manager.root(), registry.origin())?)
-                .await?,
-        )?,
         PackageCommand::Publisher {
             handle,
             display_name,
@@ -168,17 +202,18 @@ pub async fn run(args: &Args, command: &PackageCommand) -> Result<bool> {
                 .claim_publisher(
                     handle,
                     display_name,
-                    &load_registry_token(manager.root(), registry.origin())?,
+                    &require_session(manager, registry.origin())?,
                 )
                 .await?,
         )?,
         PackageCommand::Publish { directory } => {
             let bytes = pack_directory(directory)?;
-            let token = load_registry_token(manager.root(), registry.origin())?;
+            let token = require_session(manager, registry.origin())?;
             show(&registry.publish(bytes, &token).await?)?;
         }
+        PackageCommand::DiscardRetiredSession => {}
     }
-    Ok(true)
+    Ok(())
 }
 
 async fn install(
@@ -208,6 +243,9 @@ async fn login(
     registry: &RegistryClient,
     no_browser: bool,
 ) -> Result<()> {
+    if let Some(message) = retired_registry_session_notice(manager.root())? {
+        bail!("{message}");
+    }
     let code = registry.device_code().await?;
     println!(
         "Open {} and enter {}",
@@ -235,4 +273,210 @@ async fn login(
 fn show(value: &impl serde::Serialize) -> Result<()> {
     println!("{}", safe_text(&serde_json::to_string_pretty(value)?));
     Ok(())
+}
+
+const LEGACY_SESSION: &str = "registry-session.json";
+const MAX_LEGACY_SESSION: u64 = 8192;
+
+async fn logout(manager: &PackageManager, registry: &RegistryClient) -> Result<()> {
+    let origin = registry.origin();
+    if let Some(message) = unusable_session_message(manager.root())? {
+        bail!("{message}");
+    }
+    match usable_origin(manager.root())? {
+        Some(saved) if saved == origin => {
+            let token = load_registry_token(manager.root(), origin)?;
+            let revoked = registry.logout(&token).await;
+            match std::fs::remove_file(manager.root().join(LEGACY_SESSION)) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error).context("remove registry session"),
+            }
+            revoked.context("local session removed; remote revocation failed")?;
+            println!("Registry session revoked and removed.");
+        }
+        _ => {
+            println!(
+                "No registry session for {}.",
+                safe_text(&display_registry_url(origin))
+            );
+        }
+    }
+    Ok(())
+}
+
+fn require_session(
+    manager: &PackageManager,
+    origin: &str,
+) -> Result<ejm_harness_auth::SecretString> {
+    if let Some(message) = unusable_session_message(manager.root())? {
+        bail!("{message}");
+    }
+    match usable_origin(manager.root())? {
+        Some(saved) if saved == origin => load_registry_token(manager.root(), origin),
+        _ => bail!("no registry session for {}", display_registry_url(origin)),
+    }
+}
+
+fn discard_retired_session(root: &std::path::Path) -> Result<()> {
+    match classify_legacy(root)? {
+        LegacyPath::Missing => println!("No leftover registry session file."),
+        LegacyPath::Session { retired: false, .. } => {
+            println!("Saved registry session is not for a meetgerry.ai host. Left it in place.");
+        }
+        LegacyPath::Directory => bail!("{}", directory_session_message(&session_path(root))),
+        LegacyPath::Session { retired: true, .. } | LegacyPath::Remove => {
+            unlink_legacy(root)?;
+            println!("Discarded the legacy registry session path. No request was sent.");
+        }
+    }
+    Ok(())
+}
+
+/// Local equivalent of `ejm_harness_packages::retired_registry_session_notice`.
+///
+/// The pinned harness does not export that function. `package login` and
+/// `doctor` call this instead. The check uses `lstat`, does not follow a
+/// symlink, and does not return a token.
+///
+/// # Errors
+///
+/// Returns an error when the legacy path cannot be inspected.
+pub fn retired_registry_session_notice(packages_root: &std::path::Path) -> Result<Option<String>> {
+    match classify_legacy(packages_root)? {
+        LegacyPath::Session { retired: true, .. } => Ok(Some(retired_registry_message())),
+        LegacyPath::Missing | LegacyPath::Session { retired: false, .. } => Ok(None),
+        LegacyPath::Remove | LegacyPath::Directory => unusable_session_message(packages_root),
+    }
+}
+
+fn unusable_session_message(root: &std::path::Path) -> Result<Option<String>> {
+    let path = session_path(root);
+    Ok(match classify_legacy(root)? {
+        LegacyPath::Remove => Some(unsafe_session_message(&path)),
+        LegacyPath::Directory => Some(directory_session_message(&path)),
+        LegacyPath::Missing | LegacyPath::Session { .. } => None,
+    })
+}
+
+fn usable_origin(root: &std::path::Path) -> Result<Option<String>> {
+    Ok(match classify_legacy(root)? {
+        LegacyPath::Session { origin, .. } => Some(origin),
+        LegacyPath::Missing | LegacyPath::Remove | LegacyPath::Directory => None,
+    })
+}
+
+fn session_path(root: &std::path::Path) -> std::path::PathBuf {
+    root.join(LEGACY_SESSION)
+}
+
+fn unsafe_session_message(path: &std::path::Path) -> String {
+    format!(
+        "{} cannot be used. Delete it with `{DISCARD_RETIRED_REGISTRY_COMMAND}`. Nothing was sent.",
+        path.display()
+    )
+}
+
+fn directory_session_message(path: &std::path::Path) -> String {
+    format!(
+        "{} is a directory. Remove that directory yourself. ejm-cli does not delete directories.",
+        path.display()
+    )
+}
+
+enum LegacyPath {
+    Missing,
+    Session { origin: String, retired: bool },
+    Remove,
+    Directory,
+}
+
+fn classify_legacy(root: &std::path::Path) -> Result<LegacyPath> {
+    let path = session_path(root);
+    let metadata = match std::fs::symlink_metadata(&path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(LegacyPath::Missing);
+        }
+        Err(error) => return Err(error).context("inspect registry session"),
+    };
+    let kind = metadata.file_type();
+    if kind.is_symlink() {
+        return Ok(LegacyPath::Remove);
+    }
+    if kind.is_dir() {
+        return Ok(LegacyPath::Directory);
+    }
+    if !kind.is_file() || !legacy_mode_is_private(&metadata) || metadata.len() > MAX_LEGACY_SESSION
+    {
+        return Ok(LegacyPath::Remove);
+    }
+    match parsed_origin(&path) {
+        Ok(origin) if url::Url::parse(&origin).is_ok() => Ok(LegacyPath::Session {
+            retired: origin_is_retired(&origin),
+            origin,
+        }),
+        _ => Ok(LegacyPath::Remove),
+    }
+}
+
+fn legacy_mode_is_private(metadata: &std::fs::Metadata) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        metadata.permissions().mode().trailing_zeros() >= 6
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = metadata;
+        true
+    }
+}
+
+fn parsed_origin(path: &std::path::Path) -> Result<String> {
+    use std::io::Read;
+    let mut file = std::fs::File::open(path).context("read registry session")?;
+    let mut bytes = Vec::new();
+    let mut buf = [0u8; 1024];
+    let max = usize::try_from(MAX_LEGACY_SESSION).unwrap_or(usize::MAX);
+    loop {
+        let read = file.read(&mut buf).context("read registry session")?;
+        if read == 0 {
+            break;
+        }
+        if bytes.len().saturating_add(read) > max {
+            bail!("registry session exceeds byte limit");
+        }
+        bytes.extend_from_slice(&buf[..read]);
+    }
+    let session: LegacySessionFile =
+        serde_json::from_slice(&bytes).context("invalid registry session")?;
+    drop(session.token);
+    Ok(session.origin)
+}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct LegacySessionFile {
+    origin: String,
+    token: String,
+}
+
+fn unlink_legacy(root: &std::path::Path) -> Result<()> {
+    let path = session_path(root);
+    match std::fs::symlink_metadata(&path) {
+        Ok(metadata) if metadata.file_type().is_dir() => {
+            bail!("{}", directory_session_message(&path))
+        }
+        Ok(_) => std::fs::remove_file(&path).context("remove retired registry session"),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error).context("inspect registry session"),
+    }
+}
+
+fn origin_is_retired(origin: &str) -> bool {
+    url::Url::parse(origin)
+        .ok()
+        .and_then(|url| url.host().map(|host| host_is_meetgerry(&host)))
+        .unwrap_or(false)
 }

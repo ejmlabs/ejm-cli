@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand, ValueEnum};
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, ValueEnum)]
@@ -209,6 +209,67 @@ pub struct Args {
         help = "Show a granted package widget: @publisher/package:widget (at most four)"
     )]
     pub widget: Vec<String>,
+
+    #[arg(
+        long,
+        global = true,
+        value_name = "URL",
+        help = "Package registry origin for package commands and doctor. Overrides EJM_CLI_REGISTRY_URL. Does not change model endpoints. Requires https, or loopback http with HTTP_PROXY, HTTPS_PROXY and ALL_PROXY unset or empty (uppercase and lowercase). NO_PROXY does not bypass this restriction"
+    )]
+    pub registry: Option<String>,
+}
+
+/// Default package registry. Everett approved this host. Do not read
+/// `DEFAULT_REGISTRY` while that harness constant is still `harness.meetgerry.ai`.
+pub const DEFAULT_PACKAGE_REGISTRY: &str = "https://registry.ejmlabs.com";
+
+/// Matches `ejm_harness_packages::DISCARD_RETIRED_REGISTRY_COMMAND` at harness
+/// commit `6c90a0d`. That export is not in the pinned harness, so the CLI owns
+/// the same string until the pin moves.
+pub const DISCARD_RETIRED_REGISTRY_COMMAND: &str = "ejm-cli package discard-retired-session";
+
+/// Shown when `doctor` cannot parse a registry value. Never the raw input.
+pub const INVALID_REGISTRY_URL: &str = "(invalid registry URL)";
+
+/// User-facing retired-registry error. Same wording as the harness message at `6c90a0d`.
+#[must_use]
+pub fn retired_registry_message() -> String {
+    format!(
+        "the meetgerry.ai registry is retired; the default registry is {DEFAULT_PACKAGE_REGISTRY}. The old session is not sent or reused. Discard it with `{DISCARD_RETIRED_REGISTRY_COMMAND}` and sign in again"
+    )
+}
+
+/// Where the registry origin in effect came from.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RegistrySource {
+    Default,
+    Environment,
+    Flag,
+}
+
+impl RegistrySource {
+    #[must_use]
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Default => "default",
+            Self::Environment => "EJM_CLI_REGISTRY_URL",
+            Self::Flag => "--registry",
+        }
+    }
+}
+
+/// Registry origin selected for package commands and `doctor`.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum RegistryChoice {
+    Selected {
+        origin: String,
+        source: RegistrySource,
+    },
+    Rejected {
+        raw: String,
+        source: RegistrySource,
+        message: String,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -336,6 +397,42 @@ impl Args {
         grants.join(" + ")
     }
 
+    /// Resolve `--registry`, then `EJM_CLI_REGISTRY_URL`, then [`DEFAULT_PACKAGE_REGISTRY`].
+    ///
+    /// A rejected URL or proxy configuration is [`RegistryChoice::Rejected`]
+    /// so `doctor` can print it.
+    #[must_use]
+    pub fn registry_choice(&self) -> RegistryChoice {
+        let env = std::env::var("EJM_CLI_REGISTRY_URL")
+            .ok()
+            .filter(|value| !value.is_empty());
+        let choice = registry_choice_from(self.registry.as_deref(), env.as_deref());
+        // The pinned harness predates direct HTTP registry transport. Remove
+        // this adapter after adopting and verifying that public contract.
+        if let RegistryChoice::Selected { origin, source } = &choice
+            && origin.starts_with("http://")
+            && let Some(name) = [
+                "HTTP_PROXY",
+                "http_proxy",
+                "HTTPS_PROXY",
+                "https_proxy",
+                "ALL_PROXY",
+                "all_proxy",
+            ]
+            .into_iter()
+            .find(|name| std::env::var_os(name).is_some_and(|value| !value.is_empty()))
+        {
+            return RegistryChoice::Rejected {
+                raw: origin.clone(),
+                source: *source,
+                message: format!(
+                    "HTTP loopback registry access is blocked while {name} is set. Unset proxy variables for this invocation or use an HTTPS registry. NO_PROXY does not override this restriction on the current harness pin"
+                ),
+            };
+        }
+        choice
+    }
+
     pub fn provider_label(&self) -> &str {
         if let Some(provider) = &self.package_provider {
             provider
@@ -349,6 +446,121 @@ impl Args {
             })
         }
     }
+}
+
+#[must_use]
+pub fn registry_choice_from(flag: Option<&str>, env: Option<&str>) -> RegistryChoice {
+    let (raw, source) = if let Some(flag) = flag {
+        (flag, RegistrySource::Flag)
+    } else if let Some(env) = env.filter(|value| !value.is_empty()) {
+        (env, RegistrySource::Environment)
+    } else {
+        (DEFAULT_PACKAGE_REGISTRY, RegistrySource::Default)
+    };
+    match validate_registry_origin(raw) {
+        Ok(origin) => RegistryChoice::Selected { origin, source },
+        Err(message) => RegistryChoice::Rejected {
+            raw: raw.to_owned(),
+            source,
+            message,
+        },
+    }
+}
+
+/// Loopback host for cleartext HTTP. Shared with provider base URL checks:
+/// `localhost`, `127.0.0.0/8`, or `::1`. DNS is not consulted.
+#[must_use]
+pub fn host_is_loopback(host: &url::Host<&str>) -> bool {
+    match host {
+        url::Host::Domain(domain) => domain.eq_ignore_ascii_case("localhost"),
+        url::Host::Ipv4(address) => address.is_loopback(),
+        url::Host::Ipv6(address) => address.is_loopback(),
+    }
+}
+
+pub(crate) fn host_is_meetgerry(host: &url::Host<&str>) -> bool {
+    let url::Host::Domain(domain) = host else {
+        return false;
+    };
+    let name = domain.trim_end_matches('.').to_ascii_lowercase();
+    name == "meetgerry.ai" || name.ends_with(".meetgerry.ai")
+}
+
+fn validate_registry_origin(raw: &str) -> Result<String, String> {
+    let url = url::Url::parse(raw).map_err(|_| "invalid registry URL".to_owned())?;
+    let Some(host) = url.host() else {
+        return Err("invalid registry URL".to_owned());
+    };
+    if host_is_meetgerry(&host) {
+        return Err(retired_registry_message());
+    }
+    let loopback = host_is_loopback(&host);
+    if url.scheme() != "https" && !(url.scheme() == "http" && loopback) {
+        if url.scheme() == "http" {
+            return Err(
+                "registry URL must use https, or http on a loopback host (localhost, 127.0.0.0/8, or ::1)"
+                    .to_owned(),
+            );
+        }
+        return Err("invalid registry URL".to_owned());
+    }
+    if !url.username().is_empty()
+        || url.password().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+        || !matches!(url.path(), "" | "/")
+    {
+        return Err("a registry must be a plain origin".to_owned());
+    }
+    let mut origin = url;
+    origin.set_path("/");
+    origin.set_query(None);
+    origin.set_fragment(None);
+    Ok(origin.to_string())
+}
+
+/// Printable registry URL for both `doctor` registry lines.
+///
+/// This follows the shape of `display_without_userinfo` on ejm-cli pull request
+/// 11: scheme, host, port, and path, with userinfo, query, and fragment removed.
+/// Control characters are stripped. A value that does not parse is a fixed
+/// placeholder, never the raw input.
+#[must_use]
+pub fn display_registry_url(value: &str) -> String {
+    let Ok(url) = url::Url::parse(value) else {
+        return INVALID_REGISTRY_URL.to_owned();
+    };
+    let Some(host) = url.host_str() else {
+        return INVALID_REGISTRY_URL.to_owned();
+    };
+    let port = match url.port() {
+        Some(port) => format!(":{port}"),
+        None => String::new(),
+    };
+    let path = match url.path() {
+        "" | "/" => "",
+        path => path,
+    };
+    format!("{}://{host}{port}{path}", url.scheme())
+        .chars()
+        .filter(|character| !character.is_control())
+        .collect()
+}
+
+pub fn registry_override_error(choice: &RegistryChoice) -> Result<()> {
+    let RegistryChoice::Rejected {
+        source, message, ..
+    } = choice
+    else {
+        return Ok(());
+    };
+    let hint = match source {
+        RegistrySource::Flag | RegistrySource::Environment => {
+            "Change --registry or EJM_CLI_REGISTRY_URL."
+        }
+        RegistrySource::Default => "The built-in registry origin is invalid.",
+    };
+    bail!("{message}. {hint}");
 }
 
 #[cfg(test)]
@@ -473,6 +685,134 @@ mod tests {
                 "unknown"
             ])
             .is_err()
+        );
+    }
+
+    #[test]
+    fn registry_precedence_is_flag_then_environment_then_default() {
+        let default = registry_choice_from(None, None);
+        assert_eq!(
+            default,
+            RegistryChoice::Selected {
+                origin: "https://registry.ejmlabs.com/".to_owned(),
+                source: RegistrySource::Default,
+            }
+        );
+        let env = registry_choice_from(None, Some("http://127.0.0.1:8787"));
+        assert!(matches!(
+            env,
+            RegistryChoice::Selected {
+                source: RegistrySource::Environment,
+                ..
+            }
+        ));
+        let flag = registry_choice_from(Some("http://localhost:9"), Some("http://127.0.0.1:8787"));
+        assert!(matches!(
+            flag,
+            RegistryChoice::Selected {
+                ref origin,
+                source: RegistrySource::Flag,
+            } if origin == "http://localhost:9/"
+        ));
+        let args =
+            Args::try_parse_from(["ejm-cli", "--registry", "http://127.0.0.2:8787", "doctor"])
+                .unwrap();
+        assert!(matches!(
+            registry_choice_from(args.registry.as_deref(), None),
+            RegistryChoice::Selected {
+                source: RegistrySource::Flag,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn registry_rules_accept_loopback_and_reject_meetgerry_lan_and_paths() {
+        for raw in [
+            "https://registry.ejmlabs.com",
+            "https://notmeetgerry.ai",
+            "http://localhost:8787",
+            "http://LOCALHOST:8787",
+            "http://127.0.0.1:8787",
+            "http://127.0.0.2:8787",
+            "http://[::1]:8787",
+        ] {
+            assert!(
+                matches!(
+                    registry_choice_from(Some(raw), None),
+                    RegistryChoice::Selected { .. }
+                ),
+                "{raw}"
+            );
+        }
+        let retired = registry_choice_from(None, Some("https://other.meetgerry.ai"));
+        assert!(matches!(
+            &retired,
+            RegistryChoice::Rejected { message, .. }
+                if message.contains("meetgerry.ai registry is retired")
+                    && message.contains(DEFAULT_PACKAGE_REGISTRY)
+                    && message.contains(DISCARD_RETIRED_REGISTRY_COMMAND)
+        ));
+        for raw in [
+            "https://harness.meetgerry.ai",
+            "https://meetgerry.ai",
+            "http://registry.example.com",
+            "http://0.0.0.0:8787",
+            "http://192.168.1.10:8787",
+            "http://[::]:8787",
+            "http://[::ffff:127.0.0.1]:8787",
+            "https://ejmlabs.com/registry",
+            "https://user:pw@registry.ejmlabs.com",
+            "ftp://registry.ejmlabs.com",
+        ] {
+            assert!(
+                matches!(
+                    registry_choice_from(Some(raw), None),
+                    RegistryChoice::Rejected { .. }
+                ),
+                "{raw}"
+            );
+        }
+        let error = registry_override_error(&registry_choice_from(
+            Some("http://registry.example.com"),
+            None,
+        ))
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("https"));
+        assert!(error.contains("--registry"));
+        assert!(error.contains("EJM_CLI_REGISTRY_URL"));
+    }
+
+    #[test]
+    fn loopback_predicate_matches_the_provider_rule() {
+        for (raw, expected) in [
+            ("http://127.0.0.2/", true),
+            ("http://[::1]/", true),
+            ("http://0.0.0.0/", false),
+            ("http://192.168.0.1/", false),
+            ("http://[::ffff:127.0.0.1]/", false),
+        ] {
+            let url = url::Url::parse(raw).unwrap();
+            let host = url.host().unwrap();
+            assert_eq!(host_is_loopback(&host), expected, "{raw}");
+        }
+    }
+
+    #[test]
+    fn display_registry_url_drops_secrets_and_rejects_raw_input() {
+        let shown = display_registry_url("https://user:secret@registry.example/index?q=1#frag");
+        assert_eq!(shown, "https://registry.example/index");
+        assert!(!shown.contains("secret"));
+        assert!(!shown.contains('?'));
+        assert!(!shown.contains('#'));
+        let forged = "https://evil.example\nRegistry: https://registry.ejmlabs.com (default)";
+        assert_eq!(display_registry_url(forged), INVALID_REGISTRY_URL);
+        assert_eq!(display_registry_url("not a url"), INVALID_REGISTRY_URL);
+        assert!(!display_registry_url(forged).contains('\n'));
+        assert_eq!(
+            display_registry_url("https://registry.ejmlabs.com/"),
+            "https://registry.ejmlabs.com"
         );
     }
 }

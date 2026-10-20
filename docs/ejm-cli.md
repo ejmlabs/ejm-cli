@@ -185,7 +185,17 @@ Update installs a new exact registry version and clears trust and grants. Inspec
 
 ### Registry and publishing
 
-Registry commands use `https://harness.meetgerry.ai`. The endpoint and live service have their own availability and release requirements. These commands make network requests:
+Package registry commands use `https://registry.ejmlabs.com` unless `--registry` or `EJM_CLI_REGISTRY_URL` is set. The flag wins over the environment variable. An empty environment variable is not an override. `run` and the other model commands ignore both settings, including when the value is invalid. `discard-retired-session` ignores them too, so a retired value cannot block local cleanup.
+
+`ejm-cli doctor` prints the origin and whether it came from the default, `EJM_CLI_REGISTRY_URL`, or `--registry`. A package command prints the same line before it contacts a non-default registry. `doctor` does not open a registry connection. An invalid override is marked rejected, the rest of the doctor report still prints, and the command exits non-zero. Both registry lines use one helper. It prints a parsed URL without userinfo, query, or fragment, and it strips control characters. A value that does not parse is shown as `(invalid registry URL)`, never the raw input.
+
+The value must be a plain origin: no user, password, path, query, or fragment. Use `https`. `http` is accepted only for a loopback host: `localhost`, `127.0.0.0/8`, or `::1`. `0.0.0.0`, LAN addresses, and other cleartext hosts are rejected. `meetgerry.ai` and its subdomains are rejected with no fallback to the default.
+
+On the current harness pin, HTTP loopback access also requires `HTTP_PROXY`, `http_proxy`, `HTTPS_PROXY`, `https_proxy`, `ALL_PROXY`, and `all_proxy` to be unset or empty. The CLI stops before creating a registry client or loading its account token when any of these is nonempty. The error names the variable and never prints its value. `NO_PROXY` and `no_proxy` do not override this temporary restriction, even when they cover the registry host. Unset the six proxy variables for that invocation or use an HTTPS registry. HTTPS keeps proxy support. `doctor` reports this rejection, prints the rest of its report, and exits nonzero. Model commands and local `discard-retired-session` still work with these proxy variables set.
+
+This configuration guard belongs to the CLI until it adopts a reviewed harness commit with direct HTTP loopback transport. The harness owns that transport through `ejm-harness-packages::RegistryClient::new`. Remove the guard only after the committed harness pin passes the direct-route and credential-storage checks. This source change does not bump the pin or announce a release.
+
+The registry service has its own availability and release requirements. These commands make network requests:
 
 ```sh
 ejm-cli package search QUERY
@@ -195,7 +205,16 @@ ejm-cli package whoami
 ejm-cli package logout
 ```
 
-Registry sign-in uses a revocable account session, separate from model-provider accounts. Approve only the request you started. Tokens stay in the private package store's `registry-session.json`; the CLI never accepts or displays them as arguments. Logout removes the local session and reports remote revocation failures.
+Registry sign-in uses a revocable account session, separate from model-provider accounts. Approve only the request you started. The CLI saves that session for the origin in effect and never accepts or displays the token. `whoami`, `publisher`, `publish`, and `logout` use only the session saved for that origin. A session for another origin is not sent. `package logout` asks that origin to revoke the session and then removes the local session. If remote revocation fails, the local session is still removed and the command reports that failure. Logout does not fail when no session file remains.
+
+On this build the session is the private file `registry-session.json` under the package store. A newer harness may keep the same session in the local vault instead. This CLI build removes the file. It does not delete a vault record created by that newer harness.
+
+A session saved for `meetgerry.ai` or a subdomain is not sent and is not copied to `https://registry.ejmlabs.com`. `package login` stops before the device flow and names `ejm-cli package discard-retired-session`. That command unlinks the legacy path and opens no connection. It does not follow a symlink or read a symlink target. A file with loose permissions, malformed JSON, a missing origin, or more than 8192 bytes is removed the same way. When that path is a directory, the command prints the path and does not delete it. `package login`, `package logout`, and `package whoami` print the path and name this command when the file cannot be used. It does not require other clients to be stopped. An older CLI cannot restore the discarded file. Sign in again for the new origin. A private, readable session for any other origin is left in place. Moving that same-origin file into the harness vault is `migrate_registry_token` in ejm-harness. This build still reads the file directly and does not call that function. The pinned harness does not export `retired_registry_session_notice`, so `package login` and `doctor` use the local check of that name.
+
+```sh
+ejm-cli package discard-retired-session
+ejm-cli package login --no-browser
+```
 
 `ejm-cli package pack DIRECTORY --output package.tgz` creates a new local archive and refuses to overwrite an existing file. `package publisher HANDLE --display-name NAME` claims a registry namespace, and `package publish DIRECTORY` uploads a package using the saved registry session. Those last two commands change the remote registry. They are deliberate author actions, separate from installing or running the CLI.
 
