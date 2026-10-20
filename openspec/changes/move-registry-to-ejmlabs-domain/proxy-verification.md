@@ -63,7 +63,8 @@ The five cached library inputs were:
 - `libejm_harness-28b0c984e91941b5.rlib`
 - `libejm_harness_exec-6f482fa1cbe34bf6.rlib`
 
-The new real-binary fixtures in `tests/cli.rs` are not yet run. They cover each
+The new real-binary fixtures in `tests/cli.rs` later passed twice against the
+exact pinned harness. They cover each
 of six proxy variable forms, both registry-selection sources, a covering
 `NO_PROXY`, preservation of a synthetic session, no connection to passive
 registry/proxy listeners, no credential or proxy-value output, doctor reporting,
@@ -73,18 +74,88 @@ Their variable-name assertion ignores ASCII case because Windows environment
 variable names are case-insensitive. This source check does not claim a Windows
 run.
 
-The exact old harness source exists in the local Git object database, but an
-old-pin CLI rebuild was deferred to preserve constrained disk space. A tiny
-Args-module check cannot establish full CLI dispatch, credential, socket,
-platform, or immutable-pin compatibility.
+The exact old harness source was exported from the local Git object database
+after disk space recovered. All 239 CLI and 258 pinned-harness exported blobs
+matched their Git objects. The real proxy fixtures passed before and after the
+assertion-only lint repair. A tiny Args-module check does not establish those
+contracts by itself.
 
-## Unrun gates and documentation
+## Full-gate portability follow-up
 
-`cargo test -p ejm-cli`, the new real-binary fixtures, `./scripts/check`, full
-Clippy, release/PTY/documentation builds, and Linux/Windows acceptance remain
-unrun for this follow-up. Keep task 5.4 open until the exact pinned build passes
-the required checks. The fresh review clone has no installed Git hooks; no
-hook configuration or bypass flag was used.
+The first exact-pin `./scripts/check` run stopped at strict Clippy because a
+new equality assertion used `assert!`. Its repair reads the saved bytes into a
+named buffer and calls `.eq(&original)`, retaining a failure message that does
+not print either buffer.
+
+The next run passed strict Clippy, all 62 unit tests, and 42 of 43 integration
+tests. The existing other-loopback fixture failed before starting the CLI:
+this Mac cannot bind the unconfigured `127.0.0.2` alias. The fixture now uses
+`http://127.0.0.2:0` and keeps the nonzero exit, origin announcement, and precise
+`registry requires HTTPS` checks. On the immutable pin that error is raised
+before HTTP client construction, so this contract needs no listener. Port zero
+cannot name a listening service. No host alias is added and no test is skipped.
+
+Both repairs affect tests only. The public README, CLI guide, help and site
+still describe the same product behavior and need no further edit for these
+fixture repairs.
+
+## Exact-pin full verification
+
+The final run used CLI base `1b198c3b278d47b62fcc70ad951f56e30dab42ca`
+plus the two test-only repairs above. The final `tests/cli.rs` SHA-256 is
+`d3063dc7f277c7d8926c80dda2d4362ff5f885472f14846eaf6f0bc5da548de1`.
+Every product source file stayed at that base. The sibling harness was exported
+from immutable commit `4a751c6a3f24d7d143140f79ff53517fb93e3531`, tree
+`e51a5a478c9a7cc1f93a3fb47aa865fee86f8ba2`. The exported
+`.github/harness-revision` and both Cargo lockfiles stayed unchanged.
+
+The sibling source layout was
+`/private/tmp/ejm-audit-verification-20261020/cli-pinned/`, with `ejm-cli`
+beside `ejm-harness`. Builds used Rust 1.99.1, Cargo jobs two,
+`CARGO_INCREMENTAL=0`, `CARGO_NET_OFFLINE=true`, and the separate
+`CARGO_TARGET_DIR=/private/tmp/ejm-audit-verification-20261020/target`.
+Existing debug and release profiles were preserved. Every native run held
+`fcntl` `LOCK_EX` on `/tmp/ejm-capacity-cargo.lock`. Credential variables were
+omitted; tests used synthetic sessions and replay. No primary target was
+cleaned or copied.
+
+From that exported CLI directory, the commands and results were:
+
+```sh
+cargo test --offline --locked -p ejm-cli --test cli proxy -- --test-threads=1
+cargo test --offline --locked -p ejm-cli --test cli \
+  pinned_registry_client_still_rejects_other_loopback_addresses \
+  -- --exact --test-threads=1
+./scripts/check
+```
+
+- Proxy fixtures after the assertion repair: three passed, zero failed,
+  40 filtered, 1.18 seconds. The final full gate reran them after the separate
+  portability repair.
+- Portable pinned-origin fixture on the final test delta: one passed,
+  zero failed, 42 filtered, 1.02 seconds.
+- Final `./scripts/check`: exit zero on Darwin arm64. Architecture, formatting,
+  strict Clippy, all 62 unit tests and 43 integration tests, the configured
+  release build, rustdoc with warnings denied, cargo-machete, cargo-deny,
+  and real PTY interaction/restoration passed. No test was ignored.
+- The final gate held the shared lock from `2026-10-20T15:58:20Z` through
+  `2026-10-20T16:00:39Z`. It ended with about 27.6 GiB free, above the
+  10 GiB stop threshold.
+
+Raw logs, source archives, commit/tree provenance, archive hashes, exact fixture
+patches and command events are under
+`/private/tmp/ejm-audit-verification-20261020/logs-registry/`. The final logs are
+`cli-pinned-proxy-patched.log`, `cli-pinned-other-loopback-portable.log`, and
+`cli-pinned-full-gate-final.log`. The exported source and owned fixture matched
+before the final checks. Evidence and task updates after the gate do not alter
+that tested source.
+
+## Remaining gates and documentation
+
+Task 5.4 is complete for this Mac. Linux and Windows acceptance, compatible
+harness adoption, human admission, spec archival, and release work remain open.
+The fresh review clone has no installed Git hooks; no hook configuration or
+bypass flag was used.
 
 The README, CLI reference, help source, and changelog describe the temporary
 restriction and recovery. The static public page has no registry origin or

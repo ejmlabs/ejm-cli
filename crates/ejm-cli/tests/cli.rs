@@ -438,7 +438,8 @@ fn http_loopback_registry_rejects_each_proxy_before_connecting() {
                 text.contains("HTTP loopback registry access is blocked"),
                 "{text}"
             );
-            assert!(std::fs::read(&session).unwrap() == original);
+            let saved = std::fs::read(&session).unwrap();
+            assert!(saved.eq(&original), "saved registry session changed");
             assert_no_connection(&registry);
             assert_no_connection(&proxy);
         }
@@ -603,16 +604,14 @@ fn package_commands_validate_registry_overrides_before_any_request() {
 #[test]
 fn pinned_registry_client_still_rejects_other_loopback_addresses() {
     let state = tempfile::tempdir().unwrap();
-    let listener = quiet_listener("127.0.0.2");
-    let origin = format!("http://{}", listener.local_addr().unwrap());
+    let origin = "http://127.0.0.2:0";
     let output = cli(
         state.path(),
-        &["--registry", &origin, "package", "search", "hello"],
+        &["--registry", origin, "package", "search", "hello"],
     );
     assert!(!output.status.success());
     assert!(output_text(&output.stdout).contains(&format!("Registry: {origin} (--registry)")));
     assert!(output_text(&output.stderr).contains("registry requires HTTPS"));
-    assert_no_connection(&listener);
 }
 
 #[test]
