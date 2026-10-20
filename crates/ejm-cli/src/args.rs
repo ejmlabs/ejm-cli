@@ -1,6 +1,16 @@
 use std::path::PathBuf;
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
+
+pub(crate) const INVALID_BASE_URL: &str =
+    "invalid provider base URL. Change --base-url or EJM_CLI_BASE_URL.";
+pub(crate) const CLEARTEXT_BASE_URL: &str = "provider base URL must use https, or http on a loopback host (localhost, 127.0.0.0/8, or ::1). Change --base-url or EJM_CLI_BASE_URL.";
+
+/// Result of checking the provider base URL the user would actually use.
+pub(crate) enum EndpointCheck<'a> {
+    Allowed(&'a str),
+    Rejected(String),
+}
 use clap::{Parser, Subcommand, ValueEnum};
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, ValueEnum)]
@@ -79,7 +89,7 @@ pub struct Args {
         long,
         global = true,
         env = "EJM_CLI_BASE_URL",
-        help = "API base URL for OpenAI compatible or Anthropic API-key access; ChatGPT uses its fixed official endpoint"
+        help = "API base URL for OpenAI compatible or Anthropic API-key access. Use https, or http on localhost, 127.0.0.0/8, or ::1. ChatGPT and Responses use a fixed official endpoint"
     )]
     pub base_url: Option<String>,
 
@@ -277,7 +287,7 @@ impl Args {
         }
     }
 
-    pub fn api_base_url(&self) -> &str {
+    fn effective_base_url(&self) -> &str {
         self.base_url
             .as_deref()
             .unwrap_or(if self.provider == ProviderKind::Anthropic {
@@ -285,6 +295,31 @@ impl Args {
             } else {
                 "https://api.openai.com/v1"
             })
+    }
+
+    /// The provider base URL after the https-or-loopback check.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the effective URL is not `https` and is not `http`
+    /// on a loopback host. The error names `--base-url` and `EJM_CLI_BASE_URL`
+    /// and does not include the supplied URL.
+    pub fn api_base_url(&self) -> Result<&str> {
+        match self.endpoint_check()? {
+            EndpointCheck::Allowed(url) => Ok(url),
+            EndpointCheck::Rejected(_) => bail!("{CLEARTEXT_BASE_URL}"),
+        }
+    }
+
+    pub(crate) fn endpoint_check(&self) -> Result<EndpointCheck<'_>> {
+        let url = self.effective_base_url();
+        match crate::endpoint::require_https_or_loopback(url) {
+            Ok(()) => Ok(EndpointCheck::Allowed(url)),
+            Err(crate::endpoint::HttpsLoopbackError::Invalid) => bail!("{INVALID_BASE_URL}"),
+            Err(crate::endpoint::HttpsLoopbackError::Cleartext) => Ok(EndpointCheck::Rejected(
+                crate::endpoint::display_without_userinfo(url),
+            )),
+        }
     }
 
     pub fn cwd(&self) -> Result<PathBuf> {
@@ -474,5 +509,84 @@ mod tests {
             ])
             .is_err()
         );
+    }
+
+    fn parsed(args: &[&str]) -> Args {
+        Args::try_parse_from(args).unwrap()
+    }
+
+    #[test]
+    fn api_base_url_accepts_https_and_loopback_only() {
+        assert_eq!(
+            parsed(&["ejm-cli"]).api_base_url().unwrap(),
+            "https://api.openai.com/v1"
+        );
+        assert_eq!(
+            parsed(&["ejm-cli", "--provider", "anthropic"])
+                .api_base_url()
+                .unwrap(),
+            "https://api.anthropic.com/v1"
+        );
+        for url in [
+            "https://api.deepseek.com/v1",
+            "http://localhost:11434/v1",
+            "http://LOCALHOST/v1",
+            "http://127.0.0.1:1234/v1",
+            "http://127.0.0.2/v1",
+            "http://[::1]:1234/v1",
+        ] {
+            assert_eq!(
+                parsed(&["ejm-cli", "--base-url", url])
+                    .api_base_url()
+                    .unwrap(),
+                url,
+                "{url}"
+            );
+        }
+        for url in [
+            "http://api.example.com/v1",
+            "http://localhost.evil.com/v1",
+            "http://127.0.0.1.nip.io/v1",
+            "http://192.168.1.10:11434/v1",
+            "http://0.0.0.0/v1",
+            "http://10.1.2.3/v1",
+            "http://172.16.0.1/v1",
+            "http://[::]",
+            "http://[::]/v1",
+            "http://[::ffff:127.0.0.1]/v1",
+            "http://user:secret@example.com/v1",
+        ] {
+            let text = parsed(&["ejm-cli", "--base-url", url])
+                .api_base_url()
+                .unwrap_err()
+                .to_string();
+            assert!(text.contains("must use https"), "{url}: {text}");
+            assert!(
+                text.contains("--base-url") && text.contains("EJM_CLI_BASE_URL"),
+                "{text}"
+            );
+            assert!(!text.contains(url), "{text}");
+            assert!(!text.contains("secret"), "{text}");
+        }
+        for url in [
+            "ftp://files.example.com/v1",
+            "file:///tmp/a",
+            "ws://api.example.com/v1",
+            "api.example.com/v1",
+        ] {
+            let text = parsed(&["ejm-cli", "--base-url", url])
+                .api_base_url()
+                .unwrap_err()
+                .to_string();
+            assert!(text.contains("invalid provider base URL"), "{url}: {text}");
+            assert!(!text.contains("must use https"), "{url}: {text}");
+            assert!(!text.contains(url), "{text}");
+        }
+        let empty = parsed(&["ejm-cli", "--base-url", ""])
+            .api_base_url()
+            .unwrap_err()
+            .to_string();
+        assert!(empty.contains("invalid provider base URL"), "{empty}");
+        assert!(!empty.contains("must use https"), "{empty}");
     }
 }

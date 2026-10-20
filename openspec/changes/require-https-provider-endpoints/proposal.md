@@ -32,12 +32,15 @@ None. `openspec/specs/` in ejm-cli has no main specs (only `.gitkeep`).
 ## Impact
 
 - `crates/ejm-cli/src/args.rs` and `crates/ejm-cli/src/main.rs` (provider setup and `doctor`), plus CLI integration tests in `crates/ejm-cli/tests/cli.rs`.
-- Depends on the harness change of the same name. The CLI builds against the sibling `../ejm-harness` path (`Cargo.toml:18-23`), so the two need to land together for 0.1.0.
+- The CLI check is self-contained and does not require a harness pin bump. `.github/harness-revision` stays at the current commit until harness main contains `require-https-provider-endpoints` ([ejm-harness PR 18](https://github.com/ejmlabs/ejm-harness/pull/18)). That pin bump is a follow-up. The coordinated release still needs both changes.
+- `crates/ejm-cli/src/endpoint.rs` holds the shared https-or-loopback check so a later `--registry` flag (`move-registry-to-ejmlabs-domain`) can reuse it. Messages that name `--base-url` stay with the provider flag.
 - Docs: `README.md:50` and `docs/ejm-cli.md:20-25` should state the HTTPS rule. Their existing examples already use HTTPS.
 - Users with an `http://` remote base URL must switch to HTTPS or a loopback tunnel.
 
-## Open Questions
+## Decisions
 
-1. **Loopback set** (shared with ejm-harness). Recommendation: `localhost`, `127.0.0.0/8` and `::1`, matching ejm-ide. The audit text names only `127.0.0.1`, `::1` and `localhost`.
-2. **Insecure opt-out flag.** Recommendation: **no**. A flag or env override would bring back the hostile-environment risk.
-3. **Should the CLI also validate, or just rely on the harness?** Recommendation: validate in both. The harness is the security boundary. The CLI check gives a clear flag/env-specific error and fails before any credential lookup.
+Everett approved this change with these decisions:
+
+1. **Loopback set.** Plain `http` is allowed only for `localhost` (exact, ASCII case-insensitive), IPv4 `127.0.0.0/8`, and `::1`. `0.0.0.0` and LAN or private addresses are rejected.
+2. **No opt-out.** There is no flag or environment variable that re-enables remote cleartext HTTP.
+3. **CLI check, self-contained.** The CLI validates before it reads an API key. The check does not depend on the harness pin. The harness change remains the sender-side control for other callers. The pin bump waits until that fix is on harness main.

@@ -111,7 +111,11 @@ Remote cleartext is the finding: a typo or a hostile environment variable can po
 
 Local OpenAI-compatible servers (Ollama, llama.cpp, LM Studio, and similar) are the case the exception exists for. They are reached with `http://127.0.0.1`, `http://localhost`, or `http://[::1]`, including a non-default port. A private remote HTTP service can terminate TLS, or sit behind a TLS proxy on one of those loopback hosts. Those are the supported setups.
 
-### 4. Keep the current harness pin in this change
+### 4. Keep the check in a shared helper and leave the harness pin for a follow-up
+
+**Choice:** `crates/ejm-cli/src/endpoint.rs` exports `require_https_or_loopback`. It returns a small error enum and does not name `--base-url`. `Args::api_base_url()` maps that enum to the provider error text. A later `--registry` flag in `move-registry-to-ejmlabs-domain` can call the same function and supply its own message. The helper does not open a socket or resolve DNS.
+
+### 5. Keep the current harness pin in this change
 
 **Choice:** Implementation of this design does not edit `../ejm-harness` and does not point `.github/harness-revision` at a branch. Tests must pass against the current pin `4a751c6a3f24d7d143140f79ff53517fb93e3531`. On that pin, `endpoint()` still accepts remote `http://`, so a test that reaches `OpenAiProvider::new` with `http://api.example.com/v1` does not prove the CLI check. The CLI test has to fail before that constructor and before `required_api_key()`.
 
@@ -132,7 +136,7 @@ Accepted:
 
 Rejected with the https sentence:
 
-- `http://api.example.com/v1`, `http://example.com:443`, `http://0.0.0.0`, `http://[::]`, `http://[::ffff:127.0.0.1]`, `http://localhost.evil.com/v1`, `http://127.0.0.1.nip.io/v1`, `http://192.168.1.10:11434/v1`, `http://localhost.localdomain`, `http://localhost.`, and any other domain that is not exactly `localhost`.
+- `http://api.example.com/v1`, `http://example.com:443`, `http://0.0.0.0`, `http://10.1.2.3`, `http://172.16.0.1`, `http://[::]`, `http://[::ffff:127.0.0.1]`, `http://localhost.evil.com/v1`, `http://127.0.0.1.nip.io/v1`, `http://192.168.1.10:11434/v1`, `http://localhost.localdomain`, `http://localhost.`, and any other domain that is not exactly `localhost`.
 
 Rejected with the invalid-URL sentence:
 
@@ -225,14 +229,20 @@ Implementation verification is `cargo test -p ejm-cli` for the new unit test and
 
 There is no data migration. Reverting the CLI commit restores the previous acceptance of remote `http://` for as long as the harness pin still allows it.
 
+## Implementation notes
+
+The CLI check is `require_https_or_loopback` in `crates/ejm-cli/src/endpoint.rs`. Provider error text stays in `args.rs`, so a later `--registry` flag can call the helper and choose its own sentence.
+
+Sibling design: [ejm-harness PR 18](https://github.com/ejmlabs/ejm-harness/pull/18). Same loopback predicate, private `endpoint()`, message `provider URL must use HTTPS, or HTTP on a loopback host`. The coordinated release adopts that commit after it is on protected harness main. This change leaves `.github/harness-revision` on `4a751c6a3f24d7d143140f79ff53517fb93e3531`. The CLI early error stays after that pin update. The harness `0.2.0` versus CLI `0.1.0` release-number disagreement stays unresolved.
+
 ## Resolved questions
 
 1. **Harness shape.** Resolved against [ejm-harness PR 18](https://github.com/ejmlabs/ejm-harness/pull/18). Private `endpoint()`, the IDE loopback predicate (`localhost`, `127.0.0.0/8`, `::1`), and no new public type. The assumption holds. The CLI still validates locally because the spec requires a flag-named error before the key is read. See Cross-repo dependency.
 2. **Spec versus the earlier open points.** The spec confirms the loopback set, forbids an opt-out, and requires the CLI check before credentials. It does not require a clap exit 2. It does not require this implementation to invent a harness SHA. The proposal's paired 0.1.0 release is the pin update in migration step 4.
 3. **IPv4-mapped loopback.** `http://[::ffff:127.0.0.1]` is outside the spec's loopback set. Harness PR 18 rejects it. This change rejects it.
 
-## Remaining conflicts
+## Approved follow-up
 
-1. **Who parses.** Harness PR 18 decision 1 says the CLI should pass the string through and treat `provider URL must use HTTPS, or HTTP on a loopback host` as authoritative. The CLI spec requires an earlier error that names `--base-url` / `EJM_CLI_BASE_URL`. This design follows the CLI spec and copies the harness predicate. The duplicate parser is intentional.
-2. **Release number.** The CLI proposal says L2 blocks the coordinated 0.1.0 release and that the two changes land together. Harness PR 18 prefers minor `0.2.0` and an unchanged dated `0.1.0` section. This change does not pick the harness version.
-3. **Commands that never use the provider URL.** The spec says every disallowed value is rejected. Its scenarios all use or display a provider endpoint (`doctor`, a selected endpoint, or a fixed-endpoint provider). Replay, session listing, package commands, and account commands do not read the provider base URL, so a stale `EJM_CLI_BASE_URL` does not fail them. A reading that fails every subcommand would need a spec revision. No scenario asks for that.
+Everett approved the CLI check as self-contained. This change does not bump `.github/harness-revision`. After [ejm-harness PR 18](https://github.com/ejmlabs/ejm-harness/pull/18) is on protected harness main, a follow-up adopts that full commit and refreshes `Cargo.lock`. The CLI error stays, because the harness sentence does not name `--base-url` or `EJM_CLI_BASE_URL`.
+
+Commands that never read the provider base URL (replay, session listing, package commands, and account commands) keep working when `EJM_CLI_BASE_URL` is a remote `http` URL. The spec scenarios all use or display a provider endpoint. No scenario fails those commands.

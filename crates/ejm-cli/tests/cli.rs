@@ -20,6 +20,36 @@ fn cli(state: &Path, args: &[&str]) -> Output {
         .unwrap()
 }
 
+/// A real provider command. This helper does not insert `--replay`.
+fn provider_cli(state: &Path) -> Command {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_ejm-cli"));
+    command
+        .arg("--state-dir")
+        .arg(state)
+        .env_remove("EJM_CLI_API_KEY")
+        .env_remove("OPENAI_API_KEY")
+        .env_remove("ANTHROPIC_API_KEY")
+        .env_remove("EJM_CLI_BASE_URL");
+    command
+}
+
+fn text(bytes: &[u8]) -> String {
+    String::from_utf8_lossy(bytes).into_owned()
+}
+
+fn assert_cleartext_rejected(output: &Output, raw_url: &str) {
+    let stderr = text(&output.stderr);
+    assert_eq!(output.status.code(), Some(1), "{stderr}");
+    assert!(
+        stderr.contains("ejm-cli: provider base URL must use https"),
+        "{stderr}"
+    );
+    assert!(stderr.contains("--base-url"), "{stderr}");
+    assert!(stderr.contains("EJM_CLI_BASE_URL"), "{stderr}");
+    assert!(!stderr.contains(raw_url), "{stderr}");
+    assert!(!stderr.contains("secret"), "{stderr}");
+}
+
 fn json_events(output: &Output) -> Vec<serde_json::Value> {
     assert!(
         output.status.success(),
@@ -177,7 +207,270 @@ fn native_model_discovery_rejects_endpoint_overrides_before_accessing_credential
             ],
         );
         assert!(!output.status.success());
-        assert!(String::from_utf8_lossy(&output.stderr).contains("fixed official endpoint"));
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains("fixed official endpoint"), "{stderr}");
+        assert!(!stderr.contains("must use https"), "{stderr}");
+        assert!(!state.path().join("auth").exists());
+        let output = cli(
+            state.path(),
+            &[
+                "--provider",
+                provider,
+                "--base-url",
+                "http://api.example.com/v1",
+                "models",
+            ],
+        );
+        assert!(!output.status.success());
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains("fixed official endpoint"), "{stderr}");
+        assert!(!stderr.contains("must use https"), "{stderr}");
         assert!(!state.path().join("auth").exists());
     }
+}
+
+#[test]
+fn https_base_url_from_the_flag_is_the_usable_endpoint() {
+    let state = tempfile::tempdir().unwrap();
+    let output = provider_cli(state.path())
+        .args(["doctor", "--base-url", "https://api.deepseek.com/v1"])
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", text(&output.stderr));
+    let stdout = text(&output.stdout);
+    assert!(
+        stdout.contains("Endpoint: https://api.deepseek.com/v1\n"),
+        "{stdout}"
+    );
+    assert!(!stdout.contains("rejected"), "{stdout}");
+}
+
+#[test]
+fn https_base_url_from_the_environment_is_the_usable_endpoint() {
+    let state = tempfile::tempdir().unwrap();
+    let output = provider_cli(state.path())
+        .args(["doctor"])
+        .env("EJM_CLI_BASE_URL", "https://api.deepseek.com/v1")
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", text(&output.stderr));
+    let stdout = text(&output.stdout);
+    assert!(
+        stdout.contains("Endpoint: https://api.deepseek.com/v1\n"),
+        "{stdout}"
+    );
+    assert!(!stdout.contains("rejected"), "{stdout}");
+}
+
+#[test]
+fn http_remote_base_url_from_the_flag_exits_before_the_key() {
+    let state = tempfile::tempdir().unwrap();
+    let url = "http://api.example.com/v1";
+    for provider in ["openai", "anthropic"] {
+        for command in [
+            vec!["--provider", provider, "--base-url", url, "run", "hello"],
+            vec!["--provider", provider, "--base-url", url, "doctor"],
+        ] {
+            let output = provider_cli(state.path()).args(&command).output().unwrap();
+            assert_cleartext_rejected(&output, url);
+            if command.last() == Some(&"doctor") {
+                let stdout = text(&output.stdout);
+                assert!(
+                    stdout.contains(&format!(
+                        "Endpoint: {url} (rejected). HTTPS is required except for loopback hosts."
+                    )),
+                    "{stdout}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn http_remote_base_url_from_the_environment_exits_before_the_key() {
+    let state = tempfile::tempdir().unwrap();
+    let url = "http://api.example.com/v1";
+    for provider in ["openai", "anthropic"] {
+        for command in [
+            vec!["--provider", provider, "run", "hello"],
+            vec!["--provider", provider, "doctor"],
+        ] {
+            let output = provider_cli(state.path())
+                .args(&command)
+                .env("EJM_CLI_BASE_URL", url)
+                .output()
+                .unwrap();
+            assert_cleartext_rejected(&output, url);
+        }
+    }
+}
+
+#[test]
+fn http_loopback_base_url_is_usable_and_does_not_connect() {
+    let state = tempfile::tempdir().unwrap();
+    let listener = std::net::TcpListener::bind("127.0.0.1:1234").unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let output = provider_cli(state.path())
+        .args(["doctor", "--base-url", "http://127.0.0.1:1234/v1"])
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", text(&output.stderr));
+    let stdout = text(&output.stdout);
+    assert!(
+        stdout.contains("Endpoint: http://127.0.0.1:1234/v1\n"),
+        "{stdout}"
+    );
+    assert!(!stdout.contains("rejected"), "{stdout}");
+    let accepted = listener.accept();
+    assert!(
+        matches!(accepted, Err(ref error) if error.kind() == std::io::ErrorKind::WouldBlock),
+        "doctor connected to the loopback endpoint: {accepted:?}"
+    );
+}
+
+#[test]
+fn lookalike_and_private_http_hosts_are_rejected() {
+    let state = tempfile::tempdir().unwrap();
+    for url in [
+        "http://localhost.evil.com/v1",
+        "http://127.0.0.1.nip.io/v1",
+        "http://192.168.1.10:11434/v1",
+        "http://0.0.0.0/v1",
+        "http://10.1.2.3/v1",
+        "http://172.16.0.1/v1",
+    ] {
+        let output = provider_cli(state.path())
+            .args(["run", "--base-url", url, "hello"])
+            .output()
+            .unwrap();
+        assert_cleartext_rejected(&output, url);
+    }
+}
+
+#[test]
+fn other_schemes_are_invalid_base_urls() {
+    let state = tempfile::tempdir().unwrap();
+    for url in [
+        "ftp://files.example.com/v1",
+        "file:///tmp/a",
+        "ws://api.example.com/v1",
+        "api.example.com/v1",
+    ] {
+        let output = provider_cli(state.path())
+            .args(["run", "--base-url", url, "hello"])
+            .output()
+            .unwrap();
+        let stderr = text(&output.stderr);
+        assert_eq!(output.status.code(), Some(1), "{url}: {stderr}");
+        assert!(
+            stderr.contains("invalid provider base URL"),
+            "{url}: {stderr}"
+        );
+        assert!(!stderr.contains("must use https"), "{url}: {stderr}");
+        assert!(!stderr.contains(url), "{url}: {stderr}");
+    }
+}
+
+#[test]
+fn insecure_url_with_a_key_present_does_not_print_the_key() {
+    let state = tempfile::tempdir().unwrap();
+    let key = "ejm-cli-test-key-9f3c";
+    let url = "http://api.example.com/v1";
+    let output = provider_cli(state.path())
+        .args(["run", "hello"])
+        .env("EJM_CLI_API_KEY", key)
+        .env("EJM_CLI_BASE_URL", url)
+        .output()
+        .unwrap();
+    assert_cleartext_rejected(&output, url);
+    let combined = format!("{}{}", text(&output.stdout), text(&output.stderr));
+    assert!(!combined.contains(key), "{combined}");
+    assert!(
+        !combined.contains("provider connection failed"),
+        "{combined}"
+    );
+}
+
+#[test]
+fn insecure_url_with_no_key_reports_the_base_url() {
+    let state = tempfile::tempdir().unwrap();
+    let output = provider_cli(state.path())
+        .args(["run", "--base-url", "http://api.example.com/v1", "hello"])
+        .output()
+        .unwrap();
+    assert_cleartext_rejected(&output, "http://api.example.com/v1");
+    assert!(!text(&output.stderr).contains("set EJM_CLI_API_KEY"));
+}
+
+#[test]
+fn doctor_marks_an_insecure_endpoint_rejected() {
+    let state = tempfile::tempdir().unwrap();
+    let url = "http://api.example.com/v1";
+    let output = provider_cli(state.path())
+        .args(["doctor"])
+        .env("EJM_CLI_BASE_URL", url)
+        .output()
+        .unwrap();
+    assert_cleartext_rejected(&output, url);
+    let stdout = text(&output.stdout);
+    assert!(
+        stdout.contains(&format!(
+            "Endpoint: {url} (rejected). HTTPS is required except for loopback hosts."
+        )),
+        "{stdout}"
+    );
+    assert!(!stdout.contains("ejm-cli-test-key"), "{stdout}");
+    let output = provider_cli(state.path())
+        .args(["doctor", "--base-url", "http://user:secret@example.com/v1"])
+        .output()
+        .unwrap();
+    assert_cleartext_rejected(&output, "http://user:secret@example.com/v1");
+    let stdout = text(&output.stdout);
+    assert!(
+        stdout.contains("Endpoint: http://example.com/v1 (rejected)"),
+        "{stdout}"
+    );
+    assert!(!stdout.contains("secret"), "{stdout}");
+}
+
+#[test]
+fn anthropic_without_an_override_uses_the_https_default() {
+    let state = tempfile::tempdir().unwrap();
+    let output = provider_cli(state.path())
+        .args(["doctor", "--provider", "anthropic"])
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", text(&output.stderr));
+    let stdout = text(&output.stdout);
+    assert!(
+        stdout.contains("Endpoint: https://api.anthropic.com/v1\n"),
+        "{stdout}"
+    );
+    assert!(!stdout.contains("rejected"), "{stdout}");
+}
+
+#[test]
+fn replay_and_sessions_ignore_an_unused_cleartext_base_url() {
+    let state = tempfile::tempdir().unwrap();
+    let output = provider_cli(state.path())
+        .args([
+            "--replay",
+            "--base-url",
+            "http://api.example.com/v1",
+            "run",
+            "hello",
+        ])
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", text(&output.stderr));
+    assert!(text(&output.stdout).contains("hello"));
+    let sessions = tempfile::tempdir().unwrap();
+    let output = provider_cli(sessions.path())
+        .args(["sessions"])
+        .env("EJM_CLI_BASE_URL", "http://api.example.com/v1")
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", text(&output.stderr));
+    assert!(text(&output.stdout).contains("No sessions yet"));
+    assert!(!text(&output.stderr).contains("must use https"));
 }

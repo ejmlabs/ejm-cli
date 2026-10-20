@@ -7,7 +7,7 @@ Make sure the CLI never uses a provider API key with a base URL that would send 
 ## ADDED Requirements
 
 ### Requirement: CLI base URL requires HTTPS except for loopback
-The CLI MUST accept a provider base URL from `--base-url` or `EJM_CLI_BASE_URL` only if it uses `https`, or uses `http` with a loopback host. Loopback hosts are `localhost` (exact, ASCII case-insensitive), an IPv4 address in `127.0.0.0/8`, or `::1`. This is the same rule the harness enforces. Every other value MUST be rejected with a non-zero exit, and no flag or environment variable MAY disable the rule.
+The CLI MUST accept a provider base URL from `--base-url` or `EJM_CLI_BASE_URL` only if it uses `https`, or uses `http` with a loopback host. Loopback hosts are `localhost` (exact, ASCII case-insensitive), an IPv4 address in `127.0.0.0/8`, or `::1`. Every other value MUST be rejected with a non-zero exit, and no flag or environment variable MAY disable the rule.
 
 #### Scenario: HTTPS base URL from the flag
 - **WHEN** the user runs the CLI with `--base-url https://api.deepseek.com/v1`
@@ -32,6 +32,17 @@ The CLI MUST accept a provider base URL from `--base-url` or `EJM_CLI_BASE_URL` 
 #### Scenario: Lookalike or non-loopback hosts
 - **WHEN** the base URL is `http://localhost.evil.com/v1`, `http://127.0.0.1.nip.io/v1` or `http://192.168.1.10:11434/v1`
 - **THEN** the CLI exits non-zero with the HTTPS-required error
+
+#### Scenario: Unspecified and private addresses
+- **WHEN** the base URL is `http://0.0.0.0/v1`, `http://10.1.2.3/v1` or `http://172.16.0.1/v1`
+- **THEN** the CLI exits non-zero with the HTTPS-required error
+
+### Requirement: The CLI rejects cleartext without a harness pin bump
+The CLI MUST perform the https-or-loopback check itself. Rejecting cleartext MUST NOT depend on a harness revision.
+
+#### Scenario: Cleartext is rejected on the current pin
+- **WHEN** the pinned harness still accepts a remote `http` provider URL
+- **THEN** the CLI still rejects that URL before it reads the API key
 
 #### Scenario: Other schemes
 - **WHEN** the base URL uses `ftp`, `file`, `ws` or no scheme

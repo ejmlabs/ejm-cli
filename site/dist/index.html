@@ -183,7 +183,7 @@ ejm-cli --allow-write --allow-shell</code></pre></div>
             <caption>Providers and how to use each</caption>
             <thead><tr><th scope="col">Provider</th><th scope="col">How to use it</th></tr></thead>
             <tbody>
-              <tr><th scope="row">OpenAI compatible</th><td>Any Chat Completions endpoint. Set <span class="ejm-mono">EJM_CLI_BASE_URL</span> and <span class="ejm-mono">EJM_CLI_MODEL</span>.</td></tr>
+              <tr><th scope="row">OpenAI compatible</th><td>Chat Completions over https. HTTP is only for localhost, 127.0.0.0/8, or ::1. Set <span class="ejm-mono">EJM_CLI_BASE_URL</span> and <span class="ejm-mono">EJM_CLI_MODEL</span>.</td></tr>
               <tr><th scope="row">OpenAI Responses</th><td>Native Responses access with your API key.</td></tr>
               <tr><th scope="row">ChatGPT</th><td><span class="ejm-mono">ejm-cli login chatgpt</span> signs in through your browser. Tokens never touch arguments, logs or the screen.</td></tr>
               <tr><th scope="row">Anthropic</th><td>Native Anthropic API access with an explicit model.</td></tr>
