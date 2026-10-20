@@ -228,6 +228,9 @@ pub const DEFAULT_PACKAGE_REGISTRY: &str = "https://registry.ejmlabs.com";
 /// the same string until the pin moves.
 pub const DISCARD_RETIRED_REGISTRY_COMMAND: &str = "ejm-cli package discard-retired-session";
 
+/// Shown when `doctor` cannot parse a registry value. Never the raw input.
+pub const INVALID_REGISTRY_URL: &str = "(invalid registry URL)";
+
 /// User-facing retired-registry error. Same wording as the harness message at `6c90a0d`.
 #[must_use]
 pub fn retired_registry_message() -> String {
@@ -491,10 +494,32 @@ fn validate_registry_origin(raw: &str) -> Result<String, String> {
     Ok(origin.to_string())
 }
 
-/// Show a registry origin without a trailing slash.
+/// Printable registry URL for both `doctor` registry lines.
+///
+/// This follows the shape of `display_without_userinfo` on ejm-cli pull request
+/// 11: scheme, host, port, and path, with userinfo, query, and fragment removed.
+/// Control characters are stripped. A value that does not parse is a fixed
+/// placeholder, never the raw input.
 #[must_use]
-pub fn display_registry_origin(origin: &str) -> &str {
-    origin.strip_suffix('/').unwrap_or(origin)
+pub fn display_registry_url(value: &str) -> String {
+    let Ok(url) = url::Url::parse(value) else {
+        return INVALID_REGISTRY_URL.to_owned();
+    };
+    let Some(host) = url.host_str() else {
+        return INVALID_REGISTRY_URL.to_owned();
+    };
+    let port = match url.port() {
+        Some(port) => format!(":{port}"),
+        None => String::new(),
+    };
+    let path = match url.path() {
+        "" | "/" => "",
+        path => path,
+    };
+    format!("{}://{host}{port}{path}", url.scheme())
+        .chars()
+        .filter(|character| !character.is_control())
+        .collect()
 }
 
 pub fn registry_override_error(choice: &RegistryChoice) -> Result<()> {
@@ -747,5 +772,22 @@ mod tests {
             let host = url.host().unwrap();
             assert_eq!(host_is_loopback(&host), expected, "{raw}");
         }
+    }
+
+    #[test]
+    fn display_registry_url_drops_secrets_and_rejects_raw_input() {
+        let shown = display_registry_url("https://user:secret@registry.example/index?q=1#frag");
+        assert_eq!(shown, "https://registry.example/index");
+        assert!(!shown.contains("secret"));
+        assert!(!shown.contains('?'));
+        assert!(!shown.contains('#'));
+        let forged = "https://evil.example\nRegistry: https://registry.ejmlabs.com (default)";
+        assert_eq!(display_registry_url(forged), INVALID_REGISTRY_URL);
+        assert_eq!(display_registry_url("not a url"), INVALID_REGISTRY_URL);
+        assert!(!display_registry_url(forged).contains('\n'));
+        assert_eq!(
+            display_registry_url("https://registry.ejmlabs.com/"),
+            "https://registry.ejmlabs.com"
+        );
     }
 }

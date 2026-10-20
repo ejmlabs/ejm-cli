@@ -1,6 +1,8 @@
 # Tasks
 
-Harness pull requests [#18](https://github.com/ejmlabs/ejm-harness/pull/18) and [#19](https://github.com/ejmlabs/ejm-harness/pull/19) (`6c90a0d297861b78d83b958697c7e7aed9304409`) are open and are not on harness main. Do not move `.github/harness-revision`. The discard command matches `DISCARD_RETIRED_REGISTRY_COMMAND`.
+Harness pull requests [#18](https://github.com/ejmlabs/ejm-harness/pull/18) and [#19](https://github.com/ejmlabs/ejm-harness/pull/19) (`6c90a0d297861b78d83b958697c7e7aed9304409`) are open and are not on harness main. Do not move `.github/harness-revision` in this change. The discard command matches `DISCARD_RETIRED_REGISTRY_COMMAND`.
+
+`discard-retired-session` ships in the same ejm-cli release as the harness pin bump to the merged harness #18 and #19 commit. Neither ships alone. No release note tells users to discard until both are in.
 
 ## 1. Registry origin
 
@@ -12,7 +14,7 @@ Harness pull requests [#18](https://github.com/ejmlabs/ejm-harness/pull/18) and 
 
 - [x] 2.1 `package logout` revokes and removes only the session whose stored origin is the origin in effect. A missing file, or a file for another origin, does not fail and sends nothing. Remote revocation failure still removes the local file and says `local session removed; remote revocation failed`.
 - [x] 2.2 `whoami`, `publisher`, and `publish` load only the session for the origin in effect. A different origin reports that there is no session and sends no token.
-- [x] 2.3 `package discard-retired-session` removes `registry-session.json` when its origin host is `meetgerry.ai` or a subdomain, prints no token, and opens no connection. Any other saved origin stays in place. Do not call `migrate_registry_token`. A retired value of `--registry` or `EJM_CLI_REGISTRY_URL` does not block the command.
+- [x] 2.3 `package discard-retired-session` `lstat`s `registry-session.json` and unlinks that path when the origin is retired or the file cannot be used (symlink, loose mode, malformed JSON, missing origin, or larger than 8192 bytes). It does not follow a symlink or read a symlink target. A directory is not deleted: print its path. A private readable session for another origin stays. Prints no token and opens no connection. Do not call `migrate_registry_token`. A retired override does not block the command. `login`, `logout`, and `whoami` print the path and name this command for those unusable files, and do not send a request.
 - [x] 2.4 `package login` exits before the device flow when that retired file is present, prints `ejm-cli package discard-retired-session`, and sends nothing. After discard, login against a loopback fixture reaches `api/auth/device/code`.
 
 ## 3. Docs
@@ -28,4 +30,5 @@ Harness pull requests [#18](https://github.com/ejmlabs/ejm-harness/pull/18) and 
 
 ## Workflow follow-up
 
+- [ ] Move `.github/harness-revision` to the harness main commit that contains the merged pull requests #18 and #19. Do that in the same ejm-cli release as `discard-retired-session`. Do not ship the command alone, and do not publish a release note that tells users to discard until both are in.
 - Sync the delta into `openspec/specs/` and archive this change only after Everett asks. This implementation does not archive.

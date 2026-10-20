@@ -595,3 +595,411 @@ fn invalid_registry_environment_does_not_block_replay() {
     assert!(!output_text(&output.stderr).contains("meetgerry"));
     assert!(output_text(&output.stdout).contains("run_finished"));
 }
+
+#[test]
+fn doctor_hides_a_registry_userinfo_secret() {
+    let state = tempfile::tempdir().unwrap();
+    let output = cli_env(
+        state.path(),
+        &["doctor"],
+        &[(
+            "EJM_CLI_REGISTRY_URL",
+            "https://user:secret-registry-password@registry.example",
+        )],
+    );
+    assert_eq!(output.status.code(), Some(1));
+    let text = combined(&output);
+    assert!(text.contains("https://registry.example"), "{text}");
+    assert!(!text.contains("(invalid registry URL)"), "{text}");
+    hidden(&output, "secret-registry-password");
+    hidden(&output, "user:secret-registry-password");
+    assert_eq!(registry_lines(&text), 1, "{text}");
+}
+
+#[test]
+fn doctor_rejected_registry_value_cannot_forge_a_second_line() {
+    let state = tempfile::tempdir().unwrap();
+    let output = cli_env(
+        state.path(),
+        &["doctor"],
+        &[(
+            "EJM_CLI_REGISTRY_URL",
+            "https://evil.example\nRegistry: https://registry.ejmlabs.com (default)",
+        )],
+    );
+    assert_eq!(output.status.code(), Some(1));
+    let text = combined(&output);
+    assert_eq!(registry_lines(&text), 1, "{text}");
+    assert!(
+        !text
+            .lines()
+            .any(|line| line.trim() == "Registry: https://registry.ejmlabs.com (default)"),
+        "{text}"
+    );
+    assert!(text.contains("(invalid registry URL)"), "{text}");
+    assert!(!text.contains("evil.example"), "{text}");
+}
+
+#[test]
+fn doctor_rejected_registry_value_drops_query_and_fragment() {
+    let state = tempfile::tempdir().unwrap();
+    let output = cli_env(
+        state.path(),
+        &["doctor"],
+        &[(
+            "EJM_CLI_REGISTRY_URL",
+            "https://registry.example/index?access=query-secret#fragment-secret",
+        )],
+    );
+    assert_eq!(output.status.code(), Some(1));
+    let text = combined(&output);
+    assert!(text.contains("https://registry.example/index"), "{text}");
+    hidden(&output, "query-secret");
+    hidden(&output, "fragment-secret");
+    assert!(!text.contains('?'), "{text}");
+    assert!(!text.contains('#'), "{text}");
+    assert_eq!(registry_lines(&text), 1, "{text}");
+}
+
+#[test]
+fn doctor_unparsed_registry_value_prints_a_placeholder() {
+    let state = tempfile::tempdir().unwrap();
+    let output = cli_env(
+        state.path(),
+        &["doctor"],
+        &[(
+            "EJM_CLI_REGISTRY_URL",
+            "not-a-url sentinel-raw-registry-value",
+        )],
+    );
+    assert_eq!(output.status.code(), Some(1));
+    let text = combined(&output);
+    assert!(text.contains("(invalid registry URL)"), "{text}");
+    assert!(!text.contains("sentinel-raw-registry-value"), "{text}");
+    assert_eq!(registry_lines(&text), 1, "{text}");
+}
+
+fn combined(output: &Output) -> String {
+    format!(
+        "{}{}",
+        output_text(&output.stdout),
+        output_text(&output.stderr)
+    )
+}
+
+fn registry_lines(text: &str) -> usize {
+    text.lines()
+        .filter(|line| line.contains("Registry:"))
+        .count()
+}
+
+#[cfg(unix)]
+#[derive(Clone, Copy)]
+enum SessionHazard {
+    Symlink,
+    Directory,
+    Loose,
+    Malformed,
+    ExtraFields,
+    MissingOrigin,
+    Oversize,
+}
+
+#[cfg(unix)]
+#[derive(Clone, Copy)]
+enum SessionCommand {
+    Discard,
+    Login,
+    Logout,
+    Whoami,
+}
+
+#[cfg(unix)]
+fn assert_session_hazard(hazard: SessionHazard, command: SessionCommand) {
+    let state = tempfile::tempdir().unwrap();
+    let packages = state.path().join("packages");
+    std::fs::create_dir_all(&packages).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&packages, std::fs::Permissions::from_mode(0o700)).unwrap();
+    }
+    let packages = packages.canonicalize().unwrap();
+    let session = packages.join("registry-session.json");
+    let secret = match hazard {
+        SessionHazard::Symlink => "symlink-target-secret",
+        SessionHazard::Directory => "directory-child-secret",
+        SessionHazard::Loose => "loose-mode-secret",
+        SessionHazard::Malformed => "malformed-json-secret",
+        SessionHazard::ExtraFields => "extra-field-secret",
+        SessionHazard::MissingOrigin => "missing-origin-secret",
+        SessionHazard::Oversize => "oversize-session-secret",
+    };
+    let preserved = plant_session(&packages, &session, hazard, secret);
+    let listener = quiet_listener("127.0.0.1");
+    let origin = format!("http://{}", listener.local_addr().unwrap());
+    let output = run_session_command(state.path(), command, &origin);
+    hidden(&output, secret);
+    assert_no_connection(&listener);
+    let text = combined(&output);
+    let session_text = session.display().to_string();
+    match (hazard, command) {
+        (SessionHazard::Directory, _) => {
+            assert!(!output.status.success(), "{text}");
+            assert!(text.contains(&session_text), "{text}");
+            assert!(text.contains("is a directory"), "{text}");
+            assert!(text.contains("does not delete directories"), "{text}");
+            assert!(std::fs::symlink_metadata(&session).unwrap().is_dir());
+        }
+        (_, SessionCommand::Discard) => {
+            assert!(output.status.success(), "{text}");
+            assert!(text.contains("No request was sent."), "{text}");
+            assert!(
+                std::fs::symlink_metadata(&session).is_err(),
+                "legacy path still exists"
+            );
+        }
+        _ => {
+            assert!(!output.status.success(), "{text}");
+            assert!(text.contains(&session_text), "{text}");
+            assert!(
+                text.contains("ejm-cli package discard-retired-session"),
+                "{text}"
+            );
+            assert!(
+                std::fs::symlink_metadata(&session).is_ok(),
+                "legacy path was removed"
+            );
+        }
+    }
+    if let Some((path, bytes)) = preserved {
+        assert_eq!(std::fs::read(&path).unwrap(), bytes);
+    }
+}
+
+#[cfg(unix)]
+fn plant_session(
+    packages: &Path,
+    session: &Path,
+    hazard: SessionHazard,
+    secret: &str,
+) -> Option<(std::path::PathBuf, Vec<u8>)> {
+    use std::os::unix::fs::PermissionsExt;
+    match hazard {
+        SessionHazard::Symlink => {
+            let outside = packages.parent().unwrap().join("outside-secret.txt");
+            let bytes = secret.as_bytes().to_vec();
+            std::fs::write(&outside, &bytes).unwrap();
+            std::os::unix::fs::symlink(&outside, session).unwrap();
+            assert!(!outside.starts_with(packages));
+            Some((outside, bytes))
+        }
+        SessionHazard::Directory => {
+            std::fs::create_dir(session).unwrap();
+            let child = session.join("keep.txt");
+            let bytes = secret.as_bytes().to_vec();
+            std::fs::write(&child, &bytes).unwrap();
+            Some((child, bytes))
+        }
+        SessionHazard::Loose => {
+            std::fs::write(session, secret).unwrap();
+            std::fs::set_permissions(session, std::fs::Permissions::from_mode(0o644)).unwrap();
+            None
+        }
+        SessionHazard::Malformed => {
+            write_private(session, &format!("{{not-json {secret}"));
+            None
+        }
+        SessionHazard::ExtraFields => {
+            write_private(
+                session,
+                &serde_json::json!({
+                    "origin": "https://registry.ejmlabs.com/",
+                    "token": secret,
+                    "extra": 1
+                })
+                .to_string(),
+            );
+            None
+        }
+        SessionHazard::MissingOrigin => {
+            write_private(session, &serde_json::json!({ "token": secret }).to_string());
+            None
+        }
+        SessionHazard::Oversize => {
+            let mut body = secret.as_bytes().to_vec();
+            body.resize(8193, b'x');
+            write_private(session, &String::from_utf8(body).unwrap());
+            None
+        }
+    }
+}
+
+#[cfg(unix)]
+fn write_private(path: &Path, contents: &str) {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::write(path, contents).unwrap();
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600)).unwrap();
+}
+
+#[cfg(unix)]
+fn run_session_command(state: &Path, command: SessionCommand, origin: &str) -> Output {
+    match command {
+        SessionCommand::Discard => cli_env(
+            state,
+            &["package", "discard-retired-session"],
+            &[("EJM_CLI_REGISTRY_URL", origin)],
+        ),
+        SessionCommand::Login => cli(
+            state,
+            &["--registry", origin, "package", "login", "--no-browser"],
+        ),
+        SessionCommand::Logout => cli(state, &["--registry", origin, "package", "logout"]),
+        SessionCommand::Whoami => cli(state, &["--registry", origin, "package", "whoami"]),
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn discard_retired_session_unlinks_a_symlink_without_reading_its_target() {
+    assert_session_hazard(SessionHazard::Symlink, SessionCommand::Discard);
+}
+
+#[cfg(unix)]
+#[test]
+fn discard_retired_session_refuses_to_delete_a_directory() {
+    assert_session_hazard(SessionHazard::Directory, SessionCommand::Discard);
+}
+
+#[cfg(unix)]
+#[test]
+fn discard_retired_session_unlinks_a_loose_session_file() {
+    assert_session_hazard(SessionHazard::Loose, SessionCommand::Discard);
+}
+
+#[cfg(unix)]
+#[test]
+fn discard_retired_session_unlinks_malformed_json() {
+    assert_session_hazard(SessionHazard::Malformed, SessionCommand::Discard);
+    assert_session_hazard(SessionHazard::ExtraFields, SessionCommand::Discard);
+}
+
+#[cfg(unix)]
+#[test]
+fn discard_retired_session_unlinks_a_session_missing_an_origin() {
+    assert_session_hazard(SessionHazard::MissingOrigin, SessionCommand::Discard);
+}
+
+#[cfg(unix)]
+#[test]
+fn discard_retired_session_unlinks_an_oversize_session_file() {
+    assert_session_hazard(SessionHazard::Oversize, SessionCommand::Discard);
+}
+
+#[cfg(unix)]
+#[test]
+fn login_names_discard_for_a_symlink_session() {
+    assert_session_hazard(SessionHazard::Symlink, SessionCommand::Login);
+}
+
+#[cfg(unix)]
+#[test]
+fn login_names_a_directory_session_path() {
+    assert_session_hazard(SessionHazard::Directory, SessionCommand::Login);
+}
+
+#[cfg(unix)]
+#[test]
+fn login_names_discard_for_a_loose_session_file() {
+    assert_session_hazard(SessionHazard::Loose, SessionCommand::Login);
+}
+
+#[cfg(unix)]
+#[test]
+fn login_names_discard_for_malformed_session_json() {
+    assert_session_hazard(SessionHazard::Malformed, SessionCommand::Login);
+}
+
+#[cfg(unix)]
+#[test]
+fn login_names_discard_for_a_session_missing_an_origin() {
+    assert_session_hazard(SessionHazard::MissingOrigin, SessionCommand::Login);
+}
+
+#[cfg(unix)]
+#[test]
+fn login_names_discard_for_an_oversize_session_file() {
+    assert_session_hazard(SessionHazard::Oversize, SessionCommand::Login);
+}
+
+#[cfg(unix)]
+#[test]
+fn logout_names_discard_for_a_symlink_session() {
+    assert_session_hazard(SessionHazard::Symlink, SessionCommand::Logout);
+}
+
+#[cfg(unix)]
+#[test]
+fn logout_names_a_directory_session_path() {
+    assert_session_hazard(SessionHazard::Directory, SessionCommand::Logout);
+}
+
+#[cfg(unix)]
+#[test]
+fn logout_names_discard_for_a_loose_session_file() {
+    assert_session_hazard(SessionHazard::Loose, SessionCommand::Logout);
+}
+
+#[cfg(unix)]
+#[test]
+fn logout_names_discard_for_malformed_session_json() {
+    assert_session_hazard(SessionHazard::Malformed, SessionCommand::Logout);
+}
+
+#[cfg(unix)]
+#[test]
+fn logout_names_discard_for_a_session_missing_an_origin() {
+    assert_session_hazard(SessionHazard::MissingOrigin, SessionCommand::Logout);
+}
+
+#[cfg(unix)]
+#[test]
+fn logout_names_discard_for_an_oversize_session_file() {
+    assert_session_hazard(SessionHazard::Oversize, SessionCommand::Logout);
+}
+
+#[cfg(unix)]
+#[test]
+fn whoami_names_discard_for_a_symlink_session() {
+    assert_session_hazard(SessionHazard::Symlink, SessionCommand::Whoami);
+}
+
+#[cfg(unix)]
+#[test]
+fn whoami_names_a_directory_session_path() {
+    assert_session_hazard(SessionHazard::Directory, SessionCommand::Whoami);
+}
+
+#[cfg(unix)]
+#[test]
+fn whoami_names_discard_for_a_loose_session_file() {
+    assert_session_hazard(SessionHazard::Loose, SessionCommand::Whoami);
+}
+
+#[cfg(unix)]
+#[test]
+fn whoami_names_discard_for_malformed_session_json() {
+    assert_session_hazard(SessionHazard::Malformed, SessionCommand::Whoami);
+}
+
+#[cfg(unix)]
+#[test]
+fn whoami_names_discard_for_a_session_missing_an_origin() {
+    assert_session_hazard(SessionHazard::MissingOrigin, SessionCommand::Whoami);
+}
+
+#[cfg(unix)]
+#[test]
+fn whoami_names_discard_for_an_oversize_session_file() {
+    assert_session_hazard(SessionHazard::Oversize, SessionCommand::Whoami);
+}

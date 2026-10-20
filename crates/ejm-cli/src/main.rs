@@ -42,9 +42,7 @@ use ejm_harness_auth::{CredentialSource, SecretString, StaticCredential};
 use ejm_harness_coding::{CodingConfig, tools};
 use tokio_util::sync::CancellationToken;
 
-use args::{
-    Args, Command, ProviderKind, RegistryChoice, display_registry_origin, retired_registry_message,
-};
+use args::{Args, Command, ProviderKind, RegistryChoice, display_registry_url};
 
 fn main() -> std::process::ExitCode {
     let args = Args::parse();
@@ -461,7 +459,7 @@ fn print_registry(args: &Args) -> bool {
         RegistryChoice::Selected { origin, source } => {
             println!(
                 "Registry: {} ({})",
-                render::safe_text(display_registry_origin(&origin)),
+                display_registry_url(&origin),
                 source.label()
             );
             false
@@ -473,18 +471,16 @@ fn print_registry(args: &Args) -> bool {
         } => {
             println!(
                 "Registry: rejected ({} from {}): {}",
-                render::safe_text(&raw),
+                display_registry_url(&raw),
                 source.label(),
                 render::safe_text(&message)
             );
             true
         }
     };
-    match packages::retired_session_present(&args.state_dir().join("packages")) {
-        Ok(true) => {
-            println!("{}", render::safe_text(&retired_registry_message()));
-        }
-        Ok(false) => {}
+    match packages::retired_registry_session_notice(&args.state_dir().join("packages")) {
+        Ok(Some(message)) => println!("{}", render::safe_text(&message)),
+        Ok(None) => {}
         Err(error) => println!(
             "Registry session file: {}",
             render::safe_text(&format!("{error:#}"))

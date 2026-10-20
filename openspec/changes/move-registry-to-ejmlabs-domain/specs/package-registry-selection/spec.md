@@ -59,7 +59,7 @@ When a saved session for the retired `meetgerry.ai` origin exists, the CLI MUST 
 - **THEN** the retired session is removed locally with no network request, and `package login` is no longer blocked by that session
 
 ### Requirement: Doctor reports the registry origin
-`ejm-cli doctor` MUST show the registry origin in effect and whether it came from the default, `EJM_CLI_REGISTRY_URL`, or `--registry`. An invalid override MUST be shown as rejected.
+`ejm-cli doctor` MUST show the registry origin in effect and whether it came from the default, `EJM_CLI_REGISTRY_URL`, or `--registry`. An invalid override MUST be shown as rejected. Both registry lines MUST use one helper that prints a parsed URL without userinfo, query, or fragment and strips control characters. An unparseable value MUST be `(invalid registry URL)`, never the raw input.
 
 #### Scenario: Doctor with an environment override
 - **WHEN** `EJM_CLI_REGISTRY_URL` is `http://127.0.0.1:8787` and the user runs `doctor`
