@@ -189,7 +189,13 @@ Package registry commands use `https://registry.ejmlabs.com` unless `--registry`
 
 `ejm-cli doctor` prints the origin and whether it came from the default, `EJM_CLI_REGISTRY_URL`, or `--registry`. A package command prints the same line before it contacts a non-default registry. `doctor` does not open a registry connection. An invalid override is marked rejected, the rest of the doctor report still prints, and the command exits non-zero. Both registry lines use one helper. It prints a parsed URL without userinfo, query, or fragment, and it strips control characters. A value that does not parse is shown as `(invalid registry URL)`, never the raw input.
 
-The value must be a plain origin: no user, password, path, query, or fragment. Use `https`. `http` is accepted only for a loopback host: `localhost`, `127.0.0.0/8`, or `::1`. `0.0.0.0`, LAN addresses, and other cleartext hosts are rejected. `meetgerry.ai` and its subdomains are rejected with no fallback to the default. The registry service has its own availability and release requirements. These commands make network requests:
+The value must be a plain origin: no user, password, path, query, or fragment. Use `https`. `http` is accepted only for a loopback host: `localhost`, `127.0.0.0/8`, or `::1`. `0.0.0.0`, LAN addresses, and other cleartext hosts are rejected. `meetgerry.ai` and its subdomains are rejected with no fallback to the default.
+
+On the current harness pin, HTTP loopback access also requires `HTTP_PROXY`, `http_proxy`, `HTTPS_PROXY`, `https_proxy`, `ALL_PROXY`, and `all_proxy` to be unset or empty. The CLI stops before creating a registry client or loading its account token when any of these is nonempty. The error names the variable and never prints its value. `NO_PROXY` and `no_proxy` do not override this temporary restriction, even when they cover the registry host. Unset the six proxy variables for that invocation or use an HTTPS registry. HTTPS keeps proxy support. `doctor` reports this rejection, prints the rest of its report, and exits nonzero. Model commands and local `discard-retired-session` still work with these proxy variables set.
+
+This configuration guard belongs to the CLI until it adopts a reviewed harness commit with direct HTTP loopback transport. The harness owns that transport through `ejm-harness-packages::RegistryClient::new`. Remove the guard only after the committed harness pin passes the direct-route and credential-storage checks. This source change does not bump the pin or announce a release.
+
+The registry service has its own availability and release requirements. These commands make network requests:
 
 ```sh
 ejm-cli package search QUERY

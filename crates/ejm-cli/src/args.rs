@@ -214,7 +214,7 @@ pub struct Args {
         long,
         global = true,
         value_name = "URL",
-        help = "Package registry origin for package commands and doctor. Overrides EJM_CLI_REGISTRY_URL. Does not change model endpoints. https is required, except http on a loopback host (localhost, 127.0.0.0/8, or ::1)"
+        help = "Package registry origin for package commands and doctor. Overrides EJM_CLI_REGISTRY_URL. Does not change model endpoints. Requires https, or loopback http with HTTP_PROXY, HTTPS_PROXY and ALL_PROXY unset or empty (uppercase and lowercase). NO_PROXY does not bypass this restriction"
     )]
     pub registry: Option<String>,
 }
@@ -399,13 +399,38 @@ impl Args {
 
     /// Resolve `--registry`, then `EJM_CLI_REGISTRY_URL`, then [`DEFAULT_PACKAGE_REGISTRY`].
     ///
-    /// A rejected URL is [`RegistryChoice::Rejected`] so `doctor` can print it.
+    /// A rejected URL or proxy configuration is [`RegistryChoice::Rejected`]
+    /// so `doctor` can print it.
     #[must_use]
     pub fn registry_choice(&self) -> RegistryChoice {
         let env = std::env::var("EJM_CLI_REGISTRY_URL")
             .ok()
             .filter(|value| !value.is_empty());
-        registry_choice_from(self.registry.as_deref(), env.as_deref())
+        let choice = registry_choice_from(self.registry.as_deref(), env.as_deref());
+        // The pinned harness predates direct HTTP registry transport. Remove
+        // this adapter after adopting and verifying that public contract.
+        if let RegistryChoice::Selected { origin, source } = &choice
+            && origin.starts_with("http://")
+            && let Some(name) = [
+                "HTTP_PROXY",
+                "http_proxy",
+                "HTTPS_PROXY",
+                "https_proxy",
+                "ALL_PROXY",
+                "all_proxy",
+            ]
+            .into_iter()
+            .find(|name| std::env::var_os(name).is_some_and(|value| !value.is_empty()))
+        {
+            return RegistryChoice::Rejected {
+                raw: origin.clone(),
+                source: *source,
+                message: format!(
+                    "HTTP loopback registry access is blocked while {name} is set. Unset proxy variables for this invocation or use an HTTPS registry. NO_PROXY does not override this restriction on the current harness pin"
+                ),
+            };
+        }
+        choice
     }
 
     pub fn provider_label(&self) -> &str {
@@ -693,7 +718,7 @@ mod tests {
             Args::try_parse_from(["ejm-cli", "--registry", "http://127.0.0.2:8787", "doctor"])
                 .unwrap();
         assert!(matches!(
-            args.registry_choice(),
+            registry_choice_from(args.registry.as_deref(), None),
             RegistryChoice::Selected {
                 source: RegistrySource::Flag,
                 ..

@@ -21,7 +21,16 @@ fn cli_env(state: &Path, args: &[&str], env: &[(&str, &str)]) -> Output {
         .args(args)
         .env_remove("EJM_CLI_API_KEY")
         .env_remove("OPENAI_API_KEY")
-        .env_remove("EJM_CLI_REGISTRY_URL");
+        .env_remove("EJM_CLI_REGISTRY_URL")
+        .env_remove("HTTP_PROXY")
+        .env_remove("http_proxy")
+        .env_remove("HTTPS_PROXY")
+        .env_remove("https_proxy")
+        .env_remove("ALL_PROXY")
+        .env_remove("all_proxy")
+        .env_remove("NO_PROXY")
+        .env_remove("no_proxy")
+        .env_remove("REQUEST_METHOD");
     for (key, value) in env {
         command.env(key, value);
     }
@@ -375,6 +384,144 @@ fn doctor_reports_the_registry_choice_without_connecting() {
     assert!(text.contains("ejm-cli package discard-retired-session"));
     assert!(text.contains("not sent or reused"));
     hidden(&output, secret);
+}
+
+#[test]
+fn http_loopback_registry_rejects_each_proxy_before_connecting() {
+    let state = tempfile::tempdir().unwrap();
+    let registry = quiet_listener("127.0.0.1");
+    let proxy = quiet_listener("127.0.0.1");
+    let origin = format!("http://{}", registry.local_addr().unwrap());
+    let token = "proxy-guard-synthetic-account-token";
+    let proxy_secret = "proxy-guard-synthetic-password";
+    let proxy_url = format!(
+        "http://fixture-user:{proxy_secret}@{}",
+        proxy.local_addr().unwrap()
+    );
+    let session = write_session(state.path(), &format!("{origin}/"), token);
+    let original = std::fs::read(&session).unwrap();
+    for name in [
+        "HTTP_PROXY",
+        "http_proxy",
+        "HTTPS_PROXY",
+        "https_proxy",
+        "ALL_PROXY",
+        "all_proxy",
+    ] {
+        for from_environment in [false, true] {
+            let args = if from_environment {
+                vec!["package", "whoami"]
+            } else {
+                vec!["--registry", &origin, "package", "whoami"]
+            };
+            let output = cli_env(
+                state.path(),
+                &args,
+                &[
+                    ("EJM_CLI_REGISTRY_URL", &origin),
+                    (name, &proxy_url),
+                    ("NO_PROXY", "127.0.0.1"),
+                    ("no_proxy", "127.0.0.1"),
+                ],
+            );
+            hidden(&output, token);
+            hidden(&output, proxy_secret);
+            hidden(&output, &proxy_url);
+            let text = combined(&output);
+            assert_eq!(output.status.code(), Some(1), "{text}");
+            assert!(
+                text.to_ascii_lowercase()
+                    .contains(&name.to_ascii_lowercase()),
+                "{text}"
+            );
+            assert!(
+                text.contains("HTTP loopback registry access is blocked"),
+                "{text}"
+            );
+            assert!(std::fs::read(&session).unwrap() == original);
+            assert_no_connection(&registry);
+            assert_no_connection(&proxy);
+        }
+    }
+}
+
+#[test]
+fn doctor_reports_proxy_rejection_and_keeps_https_and_empty_proxy_support() {
+    let state = tempfile::tempdir().unwrap();
+    let registry = quiet_listener("127.0.0.1");
+    let proxy = quiet_listener("127.0.0.1");
+    let origin = format!("http://{}", registry.local_addr().unwrap());
+    let proxy_url = format!("http://{}", proxy.local_addr().unwrap());
+    let output = cli_env(
+        state.path(),
+        &["doctor"],
+        &[
+            ("EJM_CLI_REGISTRY_URL", &origin),
+            ("HTTPS_PROXY", &proxy_url),
+            ("NO_PROXY", "127.0.0.1"),
+        ],
+    );
+    assert_eq!(output.status.code(), Some(1));
+    let text = output_text(&output.stdout);
+    assert!(text.contains("Registry: rejected"), "{text}");
+    assert!(text.contains("HTTPS_PROXY"), "{text}");
+    assert!(text.contains("EJM_CLI_REGISTRY_URL"), "{text}");
+    assert!(text.contains("Grants:"), "{text}");
+    assert!(text.contains("not a security sandbox"), "{text}");
+    hidden(&output, &proxy_url);
+
+    let output = cli_env(
+        state.path(),
+        &["doctor"],
+        &[
+            ("EJM_CLI_REGISTRY_URL", "https://registry.ejmlabs.com"),
+            ("HTTPS_PROXY", &proxy_url),
+        ],
+    );
+    assert!(output.status.success(), "{}", combined(&output));
+    assert!(output_text(&output.stdout).contains("Registry: https://registry.ejmlabs.com"));
+
+    let output = cli_env(
+        state.path(),
+        &["--registry", &origin, "doctor"],
+        &[
+            ("HTTP_PROXY", ""),
+            ("http_proxy", ""),
+            ("HTTPS_PROXY", ""),
+            ("https_proxy", ""),
+            ("ALL_PROXY", ""),
+            ("all_proxy", ""),
+        ],
+    );
+    assert!(output.status.success(), "{}", combined(&output));
+    assert_no_connection(&registry);
+    assert_no_connection(&proxy);
+}
+
+#[test]
+fn registry_proxy_guard_does_not_block_replay_or_local_discard() {
+    let state = tempfile::tempdir().unwrap();
+    let registry = quiet_listener("127.0.0.1");
+    let proxy = quiet_listener("127.0.0.1");
+    let origin = format!("http://{}", registry.local_addr().unwrap());
+    let proxy_url = format!("http://{}", proxy.local_addr().unwrap());
+    let token = "proxy-guard-retired-token";
+    let session = write_session(state.path(), "https://harness.meetgerry.ai/", token);
+    let env = [
+        ("EJM_CLI_REGISTRY_URL", origin.as_str()),
+        ("ALL_PROXY", proxy_url.as_str()),
+    ];
+    let output = cli_env(state.path(), &["run", "offline", "--json"], &env);
+    assert!(output.status.success(), "{}", combined(&output));
+    assert!(output_text(&output.stdout).contains("run_finished"));
+    hidden(&output, token);
+
+    let output = cli_env(state.path(), &["package", "discard-retired-session"], &env);
+    assert!(output.status.success(), "{}", combined(&output));
+    hidden(&output, token);
+    assert!(!session.exists());
+    assert_no_connection(&registry);
+    assert_no_connection(&proxy);
 }
 
 #[test]

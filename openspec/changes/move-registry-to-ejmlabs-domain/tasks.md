@@ -32,3 +32,10 @@ Harness pull requests [#18](https://github.com/ejmlabs/ejm-harness/pull/18) and 
 
 - [ ] Move `.github/harness-revision` to the harness main commit that contains the merged pull requests #18 and #19. Do that in the same ejm-cli release as `discard-retired-session`. Do not ship the command alone, and do not publish a release note that tells users to discard until both are in.
 - Sync the delta into `openspec/specs/` and archive this change only after Everett asks. This implementation does not archive.
+
+## 5. Proxy compatibility follow-up
+
+- [x] 5.1 Add the narrow older-pin configuration adapter that rejects HTTP loopback registry access with any nonempty proxy variable, even with `NO_PROXY`, before client construction or credential lookup. Reuse provider endpoint code only if it exists on this branch. Preserve pure origin resolution, HTTPS, model commands, and local discard.
+- [x] 5.2 Add isolated real-binary fixtures for each proxy variable form, flag and environment origin selection, doctor rejection, unchanged synthetic session, and no connection to passive registry/proxy listeners. Keep bearer and proxy values out of output and add no HTTP parser or server.
+- [x] 5.3 Update help, README, registry reference and changelog with the temporary restriction and recovery. Record harness transport ownership, public API gap, fixture checks, integration order and removal condition. Preserve the full immutable pin and human CI gates.
+- [ ] 5.4 Run approved focused formatting, validation and regression checks against the exact pinned harness, with Cargo jobs at most two and the existing cache. Record actual results and every unrun full gate. Do not claim checks against an unmerged sibling prove pinned compatibility. See `proxy-verification.md`: formatting, OpenSpec, nine actual Args tests, and seven isolated behavior checks passed; real-binary fixtures and the exact-pin full gate remain unrun on the constrained disk.

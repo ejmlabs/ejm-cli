@@ -68,3 +68,17 @@ When a saved session for the retired `meetgerry.ai` origin exists, the CLI MUST 
 #### Scenario: Doctor with a retired override
 - **WHEN** `EJM_CLI_REGISTRY_URL` is `https://harness.meetgerry.ai` and the user runs `doctor`
 - **THEN** the output marks the registry override as rejected because the meetgerry registry is retired
+
+### Requirement: HTTP loopback registry access fails closed on the older pin
+
+Until the CLI adopts a reviewed harness revision that forces direct HTTP loopback registry transport, it MUST reject an HTTP registry origin if a nonempty `HTTP_PROXY`, `HTTPS_PROXY`, or `ALL_PROXY` variable, uppercase or lowercase, is set. `NO_PROXY` MUST NOT bypass this temporary guard. Rejection MUST occur before session lookup or a request, name the variable without its value, and leave the saved session intact. HTTPS and local retired-session discard MUST remain usable.
+
+#### Scenario: Proxy configured for an HTTP loopback registry
+
+- **WHEN** a user runs `package whoami` for an HTTP loopback origin with a matching synthetic saved session and a proxy variable is set
+- **THEN** the command exits non-zero, neither registry nor proxy receives a connection, the saved session remains, and neither bearer nor proxy value appears in output
+
+#### Scenario: Doctor identifies the temporary refusal
+
+- **WHEN** doctor resolves an HTTP loopback registry while a proxy variable is set, including with a covering `NO_PROXY`
+- **THEN** it marks that registry choice rejected, names the variable without its value, prints the remaining report, and exits non-zero

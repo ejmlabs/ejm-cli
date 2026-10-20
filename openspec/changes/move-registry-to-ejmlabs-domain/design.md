@@ -72,3 +72,15 @@ Harness `6c90a0d` sets `DEFAULT_REGISTRY` to `https://registry.ejmlabs.com`, rej
 - Retired sessions are discarded, not imported. The command is `ejm-cli package discard-retired-session`.
 - Same-origin legacy handoff stays `migrate_registry_token`. This CLI does not call it.
 - `--registry` is global. Model commands ignore it.
+
+## Temporary proxy compatibility adapter
+
+**Gap:** the pinned public `RegistryClient::new` has no option to force a direct HTTP loopback route and still uses process proxy variables. The harness owns transport, so the CLI must not build a second registry client or import private sibling code.
+
+**Adapter:** `Args::registry_choice` rejects an otherwise valid HTTP loopback choice when a nonempty `HTTP_PROXY`, `HTTPS_PROXY`, or `ALL_PROXY` variable, uppercase or lowercase, is set. It stores only the variable name, not its value. `NO_PROXY` does not override this temporary refusal. HTTPS, model commands, replay, and local retired-session discard retain their current behavior. Doctor uses the same choice and marks the origin rejected. Package commands stop before opening the client or loading credentials. Existing pure origin selection remains independent of process proxy state.
+
+This branch has no provider endpoint guard to reuse. Use the existing validated origin and standard-library environment lookup for this narrow refusal. Do not import the provider branch's private module or duplicate its transport. This adds at most six environment lookups only when resolving an HTTP registry choice, with no new dependency or background work.
+
+**Compatibility checks:** isolated real-binary fixtures supply only synthetic registry credentials and a secret-bearing local proxy URL. Passive loopback listeners prove that neither the registry nor proxy receives a connection on rejection. Test flag and environment selection, each proxy variable form, doctor output, preservation of the saved session, and absence of token/proxy values in output. No new HTTP parser, server, dependency, persistent state, process service, or background work is added.
+
+**Upstream owner and removal:** `ejm-harness-packages::RegistryClient::new` must bypass proxies for accepted HTTP loopback origins using reqwest `no_proxy()`. Its Wiremock route fixture exercises a synthetic bearer. Verify and merge that harness change through the human gates first. The CLI then adopts a compatible reviewed full commit from protected main and reconciles credential storage through its public APIs. Remove this adapter only after the committed pin's direct-route and credential checks pass. Keep dependency direction CLI to public harness packages, preserve `.github/harness-revision` here, and do not claim a release or deployment.

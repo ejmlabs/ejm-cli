@@ -51,3 +51,9 @@ None. `openspec/specs/` has no main specs.
 2. **Is an override wanted at all?** It mainly serves local development (`http://127.0.0.1:8787` with `wrangler dev`) and staging. An env override is also something a hostile environment can set. The risk is limited, because registry digests come from the same origin and installs stay disabled until trusted, but a user could still be pointed at a hostile registry. Recommendation: keep it, show it in `doctor`, and print the non-default origin on every registry command.
 3. **Retired-session handling.** Recommendation: an explicit discard command (for example `package logout --retired`) rather than deleting automatically.
 4. **New default origin and the loopback set:** see the ejm-harness change and `require-https-provider-endpoints`.
+
+## Proxy transport compatibility follow-up
+
+The current harness pin `4a751c6a3f24d7d143140f79ff53517fb93e3531` permits environment proxies for an HTTP loopback registry. That can carry its registry bearer away from the loopback endpoint. `ejm-harness-packages::RegistryClient::new` owns the transport fix. The CLI must reject HTTP loopback registry use when a nonempty `HTTP_PROXY`, `HTTPS_PROXY`, or `ALL_PROXY` variable, in either case, is set until it adopts the reviewed fix. This temporary guard fails closed even when `NO_PROXY` is set. It names the variable without its value, blocks before a session lookup or request, and appears as rejected in doctor.
+
+No provider endpoint helper from PR #11 is present on this branch. Add only a configuration adapter using the existing `url` parser and environment API. Keep the harness pin and CI gates intact. Verify both owners with local synthetic-token fixtures, adopt a compatible reviewed harness commit only after protected merge, then remove the adapter when the pinned direct-route and credential contract checks pass. Public docs must state the temporary restriction and recovery.
