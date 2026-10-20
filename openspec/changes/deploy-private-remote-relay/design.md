@@ -2,6 +2,10 @@
 
 ## Context
 
+The current scope is the [inert prerequisite](#current-inert-prerequisite) after
+protected native adoption. The P/native preparation paragraphs and correction
+records below retain their premerge scope and earlier verification limits.
+
 CLI PR #20 merged normally as protected docs/UI prerequisite P
 `9e3f8ef11dc083c31b651b9dae15a98e086e3359`, tree
 `7bd83dafd128ec5755d766b37cad6d7cf43e1a2d`, at `2026-10-20T19:27:08Z`.
@@ -17,27 +21,66 @@ commit, tree, path, mode, blob, size and SHA-256 provenance. Recheck the actual
 workspace closure and tracked npm configuration before export. These are ordinary
 nonexecutable review files, never imported, executed or packaged as product code.
 
-This native layer now starts on protected P and carries corrections from native tree
-`d8dc3fd3e1f1e24deb04c75f70e0f0562f7145d1`. It selects protected harness merge
+Native preparation started on protected P and carried corrections from native tree
+`d8dc3fd3e1f1e24deb04c75f70e0f0562f7145d1`. It selected protected harness merge
 `42e4f9cf33bd3525aec344cfdffabc251271f782`, tree
 `826e02310f1097e13806ca5ca1bf5cc00d71e966`, with historical native lock SHA-256
 `5143432fc0201bedeef680d18ae1c4681e2215fddd6e2fb45cd4cbf0149f7d1b`.
 The d8 local macOS result remains a result for that earlier source, not this
-composition. Preserve P's UI pin and complete static context, then pass the final
-source's normal gate and hosted acceptance. No new gate result or deployment is
-claimed here.
+composition. At that cutoff, P's UI pin/context were retained and the final
+normal gate and hosted native acceptance were still required. The current
+protected receipt below supersedes that pending status, not the old evidence.
 
 The installation PR's old protected base had no UI source pin. Its checks could not
-prove the selected checkout or install. This native PR must bind the
+prove the selected checkout or install. The native PR was required to bind the
 installed pin, exact UI source archive and credential-free lifecycle-disabled
 install, alongside the harness and product source, both complete reviews and all
 protected checks. Keep installed callers and canonical `.github/review-context`
-unchanged. Protected native and main-spec adoption and release verification
-follow actual P; no task is completed by this source preparation.
+unchanged. Main-spec adoption and full release verification remain separate;
+the following static prerequisite checks no release task.
 
 See proposal.md for scope. At the start of this change, the local relay gate had passed on macOS, but the trusted shared workflow did not install the relay prerequisites. The native CLI layer needs reviewed vault, Claude and registry APIs beyond PR #20's working 4a harness pin. That docs/UI prerequisite retains its working pin and consumes no new harness API; this prepared native layer selects protected 42e. Retain human admission and protected merge regardless of the separately owned public rollout. The concurrent public-site migration is separate and uses unpublished ejm-ui packages.
 
 At the initial Cloudflare inspection, Wrangler could access the account, but no ejm-cli-relay Worker or matching D1 database existed and custom domains did not include relay.ejmlabs.com. That inspection did not expose billing subscription details; it reported the standard usage model. The initial relay config had placeholder deployment values and closed admission. The D1 database has since been created and migrations applied. This prepared native layer contains no relay config and does not establish current deployment acceptance. Do not upgrade or downgrade the account; release and authenticated deployment checks remain open.
+
+## Current inert prerequisite
+
+Native PR #21 reviewed head `6cbc5b7d1f8cd70109dd72ae464bef29f8483f11`
+merged normally through protection at **2026-10-20T23:19:40Z** as
+`71d0f47f8b05c6314eca4dc0750ffaad833d6afb`, tree
+`3adf3701aec18883b2aabd710e72fa3c513c7fdf`, with sole parent P above.
+[Run 39511620937](https://github.com/ejmlabs/ejm-cli/actions/runs/39511620937)
+passed Linux/macOS with 133 unit and six integration tests plus PTY checks;
+both raw exact-head reviews were complete with zero findings. Exact approval
+comment `6303964435` preceded the protected merge; controls stayed unchanged.
+This is native acceptance history, not Worker or deployment acceptance.
+
+Prepare the static prerequisite on actual protected native parent 71d0. Select
+protected UI PR #11 merge `79a1aa8b1075f834717bc0c0299dc2c41a22b966`, tree
+`c18c74fd336dbad9515bff8ecf22ca980b889a51`, equal to reviewed head
+`4e4a630710ac504669437f3fcc8609ae98577f35` and with sole parent M above.
+Bind all thirteen full readable metadata files to that current source. Fresh
+mode/blob/size/SHA-256 and byte-identity checks permit twelve existing M fixture
+paths to be reused; copy only changed `packages/ui/package.json` under 79a1.
+Record current-source and reused-fixture provenance. Keep full TSX/CSS targets
+in the separate owner archive, with no private imports or canonical
+`.github/review-context` changes.
+
+Include inert final-path `relay/package-lock.json`, a short planned-use notice,
+the complete 51-line manifest as a content-addressed candidate review fixture
+and its provenance. The fixture identity is not a committed CLI revision.
+Include no runnable `relay/package.json`, Worker/config, root gate, Cargo,
+harness or workflow change. Preserve tested Cargo SHA-256
+`02ba0f0097754444a40e106d683ce530886ec7c31d30009f0c5cc43750d6118b`,
+the selected 42e harness and installed 40d callers. These inputs add no runtime
+requirement, so existing spec deltas stay unchanged.
+
+This prerequisite still needs its own normal full gate, fresh exact-head
+admission and two paid complete reviews, separate final approval and protected
+merge within unchanged admission caps. The next complete Worker PR must inherit
+the new UI pin from protected BASE and verify the full UI archive,
+lifecycle-disabled installed proof and full native/WASM/Worker/browser gate
+before closed deployment. All eleven whole release tasks remain unchecked.
 
 ## Native advisory correction
 

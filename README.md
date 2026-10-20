@@ -84,9 +84,10 @@ See [the full CLI guide](docs/ejm-cli.md) for controls, configuration, and limit
 
 ### Native remote access
 
-This native candidate builds on protected CLI PR #20 merge
-`9e3f8ef11dc083c31b651b9dae15a98e086e3359`. Exact-source local and hosted
-acceptance are required before adoption. It uses the locked native graph and selects
+Native CLI PR #21 is accepted at protected merge
+`71d0f47f8b05c6314eca4dc0750ffaad833d6afb`; the
+[acceptance record](docs/native-remote-publication.md) binds its tree and
+Linux/macOS results. It uses the locked native graph and selects
 protected harness merge `42e4f9cf33bd3525aec344cfdffabc251271f782`, the exact
 358-file completion API tree `826e0231...`. A compatible separately operated
 relay account service is required. Local use still needs no relay account.
@@ -101,7 +102,7 @@ both screens, then confirm pairing on the host. The host's tool grants still app
 
 See [remote setup and recovery](docs/remote-control.md),
 [dependency choices](docs/remote-dependencies.md) and the
-[candidate's remaining gates](docs/native-remote-publication.md). This layer
+[source acceptance and remaining release gates](docs/native-remote-publication.md). This native layer
 contains no Worker, browser UI or deployment. It claims no formal crypto audit
 or performance improvement.
 
@@ -135,12 +136,12 @@ dependency policy, release builds, and real PTY checks run through one command:
 
 ### Native remote guides
 
-These guides describe this native candidate. Protected adoption, binary
-distribution and live acceptance remain pending:
+These guides describe the accepted native source. Worker/browser adoption,
+binary distribution and live acceptance remain pending:
 
 - [Remote control](docs/remote-control.md): setup, controls, trust and recovery.
 - [Remote dependencies](docs/remote-dependencies.md): package choices and dependency review.
-- [Native remote publication candidate](docs/native-remote-publication.md): documentation and shared UI source review prerequisites, native adoption and release gates.
+- [Native remote source and review inputs](docs/native-remote-publication.md): native acceptance, the following inert UI/Relay prerequisite and remaining release gates.
 
 ## Contributing
 

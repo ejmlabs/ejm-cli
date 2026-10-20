@@ -51,7 +51,7 @@ ejm-cli logout REGISTRATION
 
 An account selector accepts a full registration ID or a unique prefix. If several accounts are saved, choose one explicitly. `accounts` reads cached metadata without contacting the provider. `models` retrieves the selected account's current model catalog. When `--model` and `EJM_CLI_MODEL` are absent, ChatGPT selects the first model from that catalog. Logout removes the saved registration and attempts provider revocation, reporting when revocation is unconfirmed.
 
-Credentials live under the configured state directory's `auth` subdirectory. The required shared-vault harness revision encrypts provider and native relay records and protects its key with the native key service. It owns private paths, locking and atomic writes. Unavailable, denied or corrupt key access fails closed. Keep the original vault and native key together for recovery, and keep the entire state directory private. The candidate still requires that exact harness revision and its locked platform checks before adoption; see [dependency integration](native-remote-publication.md#dependency-integration).
+Credentials live under the configured state directory's `auth` subdirectory. The selected shared-vault harness revision encrypts provider and native relay records and protects its key with the native key service. It owns private paths, locking and atomic writes. Unavailable, denied or corrupt key access fails closed. Keep the original vault and native key together for recovery, and keep the entire state directory private. The accepted native source binds that harness revision and its locked platform checks; see [dependency integration](native-remote-publication.md#dependency-integration).
 
 Native OpenAI Responses access with an API key uses:
 
@@ -130,12 +130,12 @@ cleanup and queued local successors. Exiting cancels and drains all runs owned b
 
 ## Native remote access
 
-The native candidate requires a compatible separately operated relay and an
-account on that service. Native preparation began at protected C8; this source
-builds on protected CLI PR #20 merge `9e3f8ef11dc083c31b651b9dae15a98e086e3359`.
-It selects protected
+Native remote access requires a compatible separately operated relay and an
+account on that service. Protected CLI PR #21 accepted the native source after
+PR #20's docs/UI prerequisite; its [acceptance record](native-remote-publication.md)
+binds the merge, tree and Linux/macOS checks. It selects protected
 harness merge `42e4f9cf33bd3525aec344cfdffabc251271f782` for exact-run completion.
-Its normal local and hosted checks remain required. See [publication status](native-remote-publication.md).
+Worker/browser adoption, binary distribution and live acceptance remain separate.
 There is no built-in service origin. Select an explicit HTTPS origin with `--relay` or
 `EJM_CLI_RELAY_URL`. `--memory-only` keeps this foreground process's relay token
 and endpoint identity out of persistent storage.
@@ -258,8 +258,9 @@ Logout first loads the encrypted session, then attempts remote revocation and
 local vault deletion. It reports a local storage failure before claiming success,
 and still clears the local token when remote revocation fails. A permanent
 retirement marker prevents an old file from restoring a deleted session. Missing
-credentials remain an error. This source correction still requires the final
-locked and hosted checks described in [dependency integration](native-remote-publication.md#dependency-integration).
+credentials remain an error. This correction is included in the accepted native
+source; [dependency integration](native-remote-publication.md#dependency-integration)
+binds its tested graph. Following source changes need fresh locked and hosted checks.
 
 `ejm-cli package pack DIRECTORY --output package.tgz` creates a new local archive and refuses to overwrite an existing file. `package publisher HANDLE --display-name NAME` claims a registry namespace, and `package publish DIRECTORY` uploads a package using the saved registry session. Those last two commands change the remote registry. They are deliberate author actions, separate from installing or running the CLI.
 

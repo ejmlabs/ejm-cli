@@ -8,9 +8,10 @@ granted package commands. Clap parses command names and argument counts;
 Ratatui renders the picker and Help. These remain CLI interaction and bounded
 view state. `ejm-harness` owns provider transport, authentication mechanics,
 tools, and run policy through its public APIs. The
-[native remote candidate](native-remote-publication.md) adds host and controller
-interaction through those APIs on protected CLI PR #20. It requires its own
-normal and hosted gates. Worker/browser source and provider or account switching inside
+[accepted native remote source](native-remote-publication.md) adds host and controller
+interaction through those APIs in protected CLI PR #21, following PR #20's
+docs/UI prerequisite. The current slice prepares only inert UI and Relay install
+review inputs on that protected native parent. Worker/browser source and provider or account switching inside
 the TUI belong to later source layers.
 
 Use the reviewed harness revision in `.github/harness-revision` and the locked
@@ -112,8 +113,10 @@ Fresh hosted Linux results must verify this setup; local macOS results cannot.
 The admitted workflow exports the CLI source under `product/`. When
 `product/relay/package.json` exists, the action runs `npm ci --ignore-scripts`
 and the locked Playwright command `npm exec --no -- playwright install
---with-deps chrome` from the relay directory. Before relay source lands, that
-one step is skipped. A relay manifest without its lockfile fails installation.
+--with-deps chrome` from the relay directory. The current inert prerequisite
+includes `relay/package-lock.json` but no runnable `relay/package.json`, so that
+step remains skipped. Its copied review manifest is outside the runnable package.
+A runnable relay manifest without its lockfile fails installation.
 Tool installation needs network access and the hosted runner's package manager.
 
 The prior `5fae851502c2e3c31d4df9a44f8d56c2cb49e098` caller did not invoke
@@ -126,7 +129,7 @@ its `uses` and `standards-ref` pointing to the same revision. Product permission
 triggers, secret forwarding and human controls are unchanged.
 
 The caller-only cutoff used Rust and Python and kept the working harness pin.
-The native candidate adds public API consumers and their PTY gate; it
+The accepted native layer adds public API consumers and their PTY gate; it
 still excludes Worker/browser source.
 The hook installs Linux D-Bus build prerequisites before the later API pin
 adoption; the browser install step skips only when the relay manifest is absent.
@@ -137,6 +140,9 @@ must add its locked dependencies, tests and gate integration together. Run and
 review a fresh clean-checkout gate for each proposed source snapshot.
 
 ## Protected adoption order
+
+Steps 1 through 5 retain the earlier adoption order and its historical working
+4a pin. Current preparation starts from the accepted native parent in step 6.
 
 1. Confirm the reviewed local action is on trusted CLI `main`. The prelude
    receipt above records its protected merge; retain its exact action, working
@@ -159,10 +165,16 @@ review a fresh clean-checkout gate for each proposed source snapshot.
    setup hook and selector are installed, adopt the full reviewed API commit
    and its matching consumer lockfile through a protected change. Retain the
    private credential scope and expiry requirements below.
-6. Publish native remote API consumers against that reviewed dependency pair,
-   then the bounded Worker/browser source. Run hosted Linux
-   and macOS quality checks for each exact admitted head. Retain the protected
-   merge and release checks.
+6. Retain native PR #21's [protected source acceptance](native-remote-publication.md)
+   against that reviewed dependency pair. Prepare the following inert UI pin,
+   readable install context and Relay lock prerequisite on its actual protected
+   merge, preserving the tested Cargo graph, 42e harness and 40d callers.
+7. After that prerequisite's own gates, exact-head admission, two complete paid
+   reviews, separate approval and protected merge, restack the full Worker/browser
+   source. It must inherit the new UI pin from protected BASE, bind the full UI
+   archive and lifecycle-disabled installation, and pass the full
+   native/WASM/Worker/browser gate before closed deployment. Retain the same
+   admission caps and release checks for each exact source.
 
 Readiness may be posted under the maintainer's explicit delegation. Approval
 of each exact head requires its separate explicit human answer. Admission is
@@ -216,9 +228,10 @@ IDE selection keeps its trusted-base behavior.
 At that selector-only cutoff, acceptance still needed a subsequent admitted
 change binding the selected commit/tree, protected-main authority and archive
 digest used by quality. The [later native record](native-remote-publication.md)
-retains 061's source binding and revoked admission; this native candidate
-still needs its own final proof. No existing task checkbox is completed by this
-source preparation.
+retains 061's source binding and revoked admission, followed by PR #21's separate
+accepted receipt. That later result does not complete the following inert or
+Worker layer's own checks. No existing task checkbox is completed by source
+preparation.
 
 ## Readable dependency review prerequisite
 
@@ -263,8 +276,8 @@ no product runtime, provider, dependency, tool version, permission, credential
 or human admission/approval control; macOS setup is unchanged. It adds no
 plaintext backend, product-vault change, memory-provider flag or test skip.
 Its protected acceptance is recorded below. The separate native history and
-this restack's pending gates are recorded in the
-[native publication candidate](native-remote-publication.md). No product page,
+the following source gates are recorded in the
+[native publication record](native-remote-publication.md). No product page,
 relay deployment or release is included in that caller adoption.
 
 ### CLI PR #9 readable-source adoption receipt
@@ -281,7 +294,8 @@ squash merge `c8e2239392f71df82cbef6166b1827c8e5f5f1c5`, tree
 [PR #7 merge below](#cli-pr-7-selector-adoption-receipt), with unchanged
 protection. That run used installed b2. The [later 061 record](native-remote-publication.md)
 binds installed 40d and plain harness source, but its complete review blocked
-native adoption. Neither run accepts this native candidate.
+native adoption at that cutoff. Neither run establishes the later PR #21
+acceptance recorded separately below.
 
 ### CLI PR #7 selector adoption receipt
 
@@ -296,14 +310,15 @@ passed Ubuntu/macOS quality, standards and required technical statuses; both
 actual independent reports state `complete: true` with no findings. Exact-head
 human approval and native approval then passed before protected merge.
 That caller source still used harness `4a751c6a...`; it does not prove the
-native API pair. This successor still needs its own source-bound gates.
+native API pair. The later PR #21 receipt establishes that successor's separate
+source-bound acceptance.
 
 ## UI source review prerequisite
 
-The protected docs/UI prerequisite retained C8's runtime, working harness pin,
+CLI PR #20's protected docs/UI prerequisite retained C8's runtime, working harness pin,
 lock, tools, installed 40d callers and canonical workflow review context. Shared
 UI PR #7 and [Relay asset PR #10](https://github.com/ejmlabs/ejm-ui/pull/10) merged
-through protection. This prerequisite selects actual protected commit
+through protection. That prerequisite selected actual protected commit
 `24935aa85355ea99f49bdbecc4186a5e95049393`, tree
 `2d8bde67c8b5fe851b70ae90a3a2787091397780`, in `.github/ui-source.json`.
 A commit pin selects source; package publication and product deployment remain
@@ -319,7 +334,7 @@ tree `7bd83dafd128ec5755d766b37cad6d7cf43e1a2d`, with sole parent
 `c8e2239392f71df82cbef6166b1827c8e5f5f1c5`.
 
 The separate [UI install review context](../review/dependency-sources/ejm-ui/README.md)
-contains complete original license, root manifest, lockfile and every workspace
+binds complete original license, root manifest, lockfile and every workspace
 manifest. Its provenance records bind the source commit, tree, paths, modes,
 blobs, sizes and SHA-256 values. Recheck the chosen source's workspace closure
 and tracked npm configuration before export. These ordinary nonexecutable
@@ -327,31 +342,68 @@ snapshots are review data, never imported, executed or packaged as product code.
 
 The shared selector reads the pin from protected BASE. PR #20 used C8 and the
 working 4a harness; C8 had no UI pin, so its run selected no UI archive or install.
-The next native PR must bind the installed pin and exact UI archive, inspect
-the credential-free `npm ci --ignore-scripts` step, and pass the normal platform
-gates, both complete reviews and separate final approval. Keep the current
-file, line and byte admission limits. Native candidate behavior and the remaining
-release checks are in the [native publication candidate](native-remote-publication.md).
-This prerequisite adds no remote command, browser controller, release or site
+That old-base limitation is historical. The following Worker source must inherit
+the merged successor UI pin from protected BASE and prove the exact full archive
+and credential-free `npm ci --ignore-scripts` installation. Native source
+acceptance and remaining release checks are in the
+[native publication record](native-remote-publication.md).
+PR #20 added no remote command, browser controller, release or site
 deployment. Public guide publication through the separately reviewed site
 migration remains pending.
 
-## Native source candidate
+### Current inert shared UI and Relay inputs
 
-This preparation combines corrected staged tree
+Prepare this prerequisite on actual protected native merge
+`71d0f47f8b05c6314eca4dc0750ffaad833d6afb`, tree
+`3adf3701aec18883b2aabd710e72fa3c513c7fdf`. Select protected UI PR #11 merge
+`79a1aa8b1075f834717bc0c0299dc2c41a22b966`, tree
+`c18c74fd336dbad9515bff8ecf22ca980b889a51`, equal to reviewed head
+`4e4a630710ac504669437f3fcc8609ae98577f35` with sole parent the historical
+`24935aa85355ea99f49bdbecc4186a5e95049393` UI merge.
+
+Bind all thirteen complete readable install metadata files to that current UI
+source. Fresh mode, blob, size, SHA-256 and byte-identity checks permit twelve
+unchanged fixture paths under 24935 to be reused; copy only changed
+`packages/ui/package.json` under 79a1. Record the current-source identity and
+each reused fixture's provenance. Keep the full TSX/CSS targets in the separate
+owner source archive. Do not import private sibling source or change canonical
+`.github/review-context`.
+
+Include final-path inert `relay/package-lock.json`, a short `relay/README.md`,
+the complete 51-line manifest outside the runnable package as a content-addressed
+review fixture, and provenance for the original prepared candidate. That
+candidate identity is neither the old Git HEAD nor an invented committed revision.
+The slice includes no runnable `relay/package.json`, Worker source or configuration,
+root gate, Cargo, harness or workflow change. Preserve native lock SHA-256
+`02ba0f0097754444a40e106d683ce530886ec7c31d30009f0c5cc43750d6118b`,
+protected harness 42e and installed 40d callers. The Relay install step stays
+skipped because the runnable manifest is absent.
+
+This slice still requires the normal full gate, fresh exact-head admission,
+two complete configured paid reviews, separate final approval and protected
+merge within 200 paths, 12,000 changed lines and 1,000,000 diff bytes. It proves
+no installation, deployment or site publication. The later Worker PR must inherit
+the new pin from protected BASE and verify the exact full UI archive,
+lifecycle-disabled installed proof and full native/WASM/Worker/browser gate before
+closed deployment. There is no runtime or CLI flag change in this prerequisite.
+
+## Native source acceptance
+
+Earlier preparation combined corrected staged tree
 `d8dc3fd3e1f1e24deb04c75f70e0f0562f7145d1` with protected parent
-`9e3f8ef11dc083c31b651b9dae15a98e086e3359` above. It preserves
-the 40d caller context, Linux setup and concurrent owner changes, and selects
+`9e3f8ef11dc083c31b651b9dae15a98e086e3359` above. It preserved
+the 40d caller context, Linux setup and concurrent owner changes, and selected
 protected harness merge `42e4f9cf33bd3525aec344cfdffabc251271f782`, tree
-`826e02310f1097e13806ca5ca1bf5cc00d71e966`. Preserve the native lock and
-refresh exact source bindings for this final source. The recorded
-d8 local pass and revoked earlier reviews establish no result for this restack.
-Its normal gate, installed UI source proof and fresh hosted acceptance remain
-required. This layer contains no Worker or browser source.
+`826e02310f1097e13806ca5ca1bf5cc00d71e966`. The recorded d8 local pass and
+revoked earlier reviews did not accept the restack. Corrected native PR #21 then
+passed its own normal and hosted gates and merged as protected 71d0 above;
+the [native receipt](native-remote-publication.md) binds the exact reviewed head,
+tree and results. Preserve its tested patched native lock. That source contains
+no Worker or browser layer and does not accept their later install or deployment.
 
 The [historical C8 qualification](../openspec/changes/deploy-private-remote-relay/design.md#earlier-c8-native-correction-composition)
 records the 22:46 UTC post-cutover authority readback. It establishes no current
-authority or acceptance for this candidate; recheck both before admission.
+authority for a later admission or acceptance for a different source.
 
 ## Verification and publication record
 

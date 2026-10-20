@@ -1,14 +1,25 @@
-# Native remote publication candidate
+# Native remote source and review inputs
 
-This native candidate builds on protected CLI PR #20 merge
-`9e3f8ef11dc083c31b651b9dae15a98e086e3359`; its
-[adoption record](ci-bootstrap.md#ui-source-review-prerequisite) binds the reviewed
-head, tree and parent. The prerequisite selects
-protected UI merge `24935aa85355ea99f49bdbecc4186a5e95049393`, reviewed tree
-`2d8bde67c8b5fe851b70ae90a3a2787091397780`, with complete
-[install review context](../review/dependency-sources/ejm-ui/README.md).
-The normal gate and fresh hosted acceptance remain required for this source.
-This layer includes no Worker or browser UI.
+Native [CLI PR #21](https://github.com/ejmlabs/ejm-cli/pull/21) reviewed head
+`6cbc5b7d1f8cd70109dd72ae464bef29f8483f11` merged through protection on
+2026-10-20 at 23:19:40 UTC as `71d0f47f8b05c6314eca4dc0750ffaad833d6afb`,
+tree `3adf3701aec18883b2aabd710e72fa3c513c7fdf`. Its sole parent is protected
+CLI PR #20 merge `9e3f8ef11dc083c31b651b9dae15a98e086e3359`.
+[Run 39511620937](https://github.com/ejmlabs/ejm-cli/actions/runs/39511620937)
+passed Linux/macOS quality with 133 unit and six integration tests per platform,
+plus PTY checks. Both raw exact-head reviews were complete with zero findings;
+exact approval comment `6303964435` preceded the normal protected merge.
+Controls stayed unchanged. This accepts the native source, not a live relay,
+binary distribution or published docs site.
+
+PR #20's [historical UI prerequisite](ci-bootstrap.md#ui-source-review-prerequisite)
+selected UI merge `24935aa85355ea99f49bdbecc4186a5e95049393`, tree
+`2d8bde67c8b5fe851b70ae90a3a2787091397780`, with complete install review data.
+The [following inert prerequisite](ci-bootstrap.md#current-inert-shared-ui-and-relay-inputs)
+advances that UI selection and prepares Relay install review data on native 71d0.
+It still needs its own gates and protected adoption. This native layer includes
+no Worker or browser UI. The retained sections below describe earlier cutoffs;
+their then-pending native checks are superseded only by the exact receipt above.
 
 Earlier native preparation started from `06154b18137eb376bef986a520904381b8744b9d`
 on protected PR #9 merge `c8e2239392f71df82cbef6166b1827c8e5f5f1c5`,
@@ -27,9 +38,8 @@ release build, Rust documentation, dependency checks and PTY interaction and
 restoration. One private terminal fixture remains ignored in the unit runner
 because the PTY supervisor drives it. The source includes a test-only injected
 clock with a conditional, reasoned lint expectation for the production helper.
-That local result applies only to d8. This candidate requires its own normal
-gate and fresh hosted acceptance, recorded against its exact source. The earlier
-admission remains revoked.
+That local result applies only to d8. The later exact-source native gate and
+hosted acceptance are recorded above; the earlier admission remains revoked.
 
 ## Account persistence correction
 
@@ -40,15 +50,17 @@ in the existing public vault, preserves newer logins during logout and retains
 bounded legacy input only for controlled migration. Fourteen vault and four
 account HTTP/TLS cases passed locally. Four valid negative controls caught missing
 index publication, stale metadata, stale tokens and missing migration index repair.
-The corrected normal gate and fresh admission remain required.
+Those focused results preceded the corrected normal gate, fresh admission and
+protected acceptance recorded above; they do not accept the following inputs.
 
 ## Earlier review corrections
 
 The f66 normal macOS gate and [hosted Linux/macOS quality](https://github.com/ejmlabs/ejm-cli/actions/runs/39344263873)
 passed 127 unit and 6 integration tests per platform. Both complete AI reviews
 blocked adoption on four distinct defects; [admission was revoked](https://github.com/ejmlabs/ejm-cli/pull/10#issuecomment-6280152832).
-Require regressions, the normal gate, fresh hosted reviews, approval and protected
-adoption for the successor. All eleven deployment tasks stay open.
+At that cutoff, the successor required regressions, the normal gate, fresh hosted
+reviews, approval and protected adoption. PR #21 later supplied its own accepted
+receipt above. All eleven deployment tasks stay open.
 No live relay, binary or docs release is claimed.
 
 ## Retained four review corrections
@@ -74,12 +86,13 @@ Submit and expiry at both wait boundaries. The local source result above does
 not establish final-source or hosted acceptance.
 
 The protected docs/UI prerequisite kept C8's existing runtime, harness pin and
-local gates. This native source and main spec still need their own protected
-adoption. Preparing a tree or splitting review scope establishes no acceptance.
+local gates. Native PR #21 later completed its own protected adoption. Main-spec
+release verification remains separate. Preparing a tree or splitting review
+scope establishes no acceptance.
 
 ## Included source
 
-This native candidate contains account/device HTTP and TLS rejection coverage, endpoint
+The accepted native source contains account/device HTTP and TLS rejection coverage, endpoint
 identity and vault migration, invitations, Snow Noise, bounded version-1 messages,
 exact-session/run authority, host lifecycle and the native controller.
 `LocalBackend`, readiness and `RemoteBadge` share existing App/UI paths.
@@ -97,8 +110,9 @@ The historical d8 lock was
 `5143432fc0201bedeef680d18ae1c4681e2215fddd6e2fb45cd4cbf0149f7d1b`.
 On October 20, the normal hook stopped at Deny's TLS advisory check after
 131 unit and six integration tests, release/Rustdoc and Machete passed; no
-commit was made. The corrected graph and extended WSS rejection fixture require
-a fresh full gate. No earlier pass accepts them.
+commit was made. The corrected graph and extended WSS rejection fixture then
+passed the fresh full native gate and hosted review recorded above. No earlier
+pass supplied that acceptance; preserve the tested lock in the inert prerequisite.
 Versions and package evidence are in [remote dependencies](remote-dependencies.md).
 The pin selects protected harness merge
 `42e4f9cf33bd3525aec344cfdffabc251271f782`, tree
@@ -159,7 +173,12 @@ Hosted f66/42e bytes, modes and Git blobs are bound by receipt SHA-256
 `4f40faadb2b3ad8c969b23f4f9b2c8379ab56d20db1ba8648a8e79e9c4ea372b`.
 Both reviews still rejected f66; local results prove no live latency.
 
-## Verification still required
+## Verification for each following source
+
+The native receipt above completes these checks for PR #21's exact source.
+The inert prerequisite and later Worker source each require a fresh normal gate,
+exact-head admission, two complete paid reviews, separate final approval and
+protected merge. Retain the accepted native baseline and its contracts below.
 
 Run unchanged `./scripts/check` with at most two Cargo jobs and offline fixtures:
 architecture, format, strict Clippy, native tests, release/Rustdoc, Machete,
@@ -185,13 +204,28 @@ credentials or network. New regressions must fail the old pairing input,
 vault contention, server-gap and expired-enrollment decode paths.
 The selector-only command prints the exact executable without opening a PTY.
 Run the full gate on Linux/macOS; Windows needs separate terminal evidence.
-Fresh source-bound quality, two complete reviews, explicit approval, protected
-adoption and separately built/published docs remain required.
+Each following source requires fresh source-bound quality, two complete reviews,
+explicit approval and protected adoption. Separately built/published docs and
+live acceptance remain pending.
 
 ## Following Worker/browser layer
 
-This layer needs a separately configured compatible relay; it includes no Worker,
-WASM, npm lock, Cloudflare config, commercial policy, dashboard or browser assets.
+The original native slice needs a separately configured compatible relay and
+included no Worker, WASM, npm lock, Cloudflare config, commercial policy,
+dashboard or browser assets. The following inert prerequisite adds final-path
+`relay/package-lock.json`, a short README and the complete 51-line manifest as
+a content-addressed original prepared candidate snapshot outside the runnable
+package, with provenance. It adds no runnable `relay/package.json`, so the
+Relay setup/install step remains skipped. Its
+[protected UI target and thirteen-file boundary](ci-bootstrap.md#current-inert-shared-ui-and-relay-inputs)
+remain distinct from the full owner TSX/CSS archive and later installed proof.
+Keep the accepted native lock, 42e harness and 40d callers unchanged; add no
+Worker/config, root gate, Cargo, harness or workflow change in that inert slice.
+
+After its protected merge, the full Worker/browser PR must inherit the new UI
+pin from protected BASE, verify the exact full UI archive and lifecycle-disabled
+installation, and pass the full native/WASM/Worker/browser gate before closed
+deployment. Both slices retain the 200-path, 12,000-line and 1,000,000-byte caps.
 Add `transport_fixture.rs`, `native_roundtrip.rs`, `worker_fixture` and their
 Workerd/native/browser supervisors with that layer, never unconditional gates here.
 The main spec's browser contract does not implement or verify it. Its
