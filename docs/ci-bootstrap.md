@@ -243,7 +243,8 @@ untrusted review data, not executable consumer code. The separate
 [historical ae903/C4 bundle](ci/shared-workflow-review/README.md) and its MIT
 notice remain exact; the older canonical C4 files are replaced by this pair.
 The retained shared implementation also supports optional owner UI source and
-UI quality checks. This consumer adds no UI metadata or UI checkout selection.
+UI quality checks. At this caller-only cutoff, the consumer added no UI metadata
+or UI checkout selection. The later source prerequisite is described below.
 
 The working harness pin remains
 `4a751c6a3f24d7d143140f79ff53517fb93e3531`, and `Cargo.lock` remains exact.
@@ -256,6 +257,35 @@ plaintext backend, product-vault change, memory-provider flag or test skip.
 Full local gates, Linux service acceptance, hosted results, protected adoption
 and installed reviewer/selector evidence remain pending for this source. No
 product page, relay deployment or release is included.
+
+## UI source review prerequisite
+
+The docs/UI prerequisite retains protected C8's runtime, working harness pin,
+lock, tools, installed 40d callers and canonical workflow review context. Shared
+UI PR #7 and [Relay asset PR #10](https://github.com/ejmlabs/ejm-ui/pull/10) merged
+through protection. This prerequisite selects actual protected commit
+`24935aa85355ea99f49bdbecc4186a5e95049393`, tree
+`2d8bde67c8b5fe851b70ae90a3a2787091397780`, in `.github/ui-source.json`.
+A commit pin selects source; package publication and product deployment remain
+separate.
+
+The separate [UI install review context](../review/dependency-sources/ejm-ui/README.md)
+contains complete original license, root manifest, lockfile and every workspace
+manifest. Its provenance records bind the source commit, tree, paths, modes,
+blobs, sizes and SHA-256 values. Recheck the chosen source's workspace closure
+and tracked npm configuration before export. These ordinary nonexecutable
+snapshots are review data, never imported, executed or packaged as product code.
+
+The shared selector reads the pin from protected BASE. The installation PR's
+old base has no UI pin, so that run cannot prove the new checkout or install.
+The next native PR must bind the installed pin and exact UI archive, inspect
+the credential-free `npm ci --ignore-scripts` step, and pass the normal platform
+gates, both complete reviews and separate final approval. Keep the current
+file, line and byte admission limits. Planned native behavior and the remaining
+release checks are in the [native publication plan](native-remote-publication.md).
+This prerequisite adds no remote command, browser controller, release or site
+deployment. Public guide publication through the separately reviewed site
+migration remains pending.
 
 ## Verification and publication record
 

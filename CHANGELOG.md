@@ -16,6 +16,7 @@ Changes follow [Semantic Versioning](https://semver.org/). Each repository is ve
 
 ### Changed
 
+- Prepare the planned native remote-control guides and pin protected shared UI merge `24935aa85355ea99f49bdbecc4186a5e95049393` with complete install review context. Remote functionality is not available in C8; protected CLI adoption, hosted consumer acceptance and release remain pending.
 - Consolidate source setup, local checks, and site-migration limits in the CI guide, replacing the obsolete publication prelude note and its inbound links.
 
 ## [0.1.0] - 2026-10-18

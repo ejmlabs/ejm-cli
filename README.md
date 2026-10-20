@@ -110,6 +110,15 @@ dependency policy, release builds, and real PTY checks run through one command:
 - [Development guide](docs/contributing.md): tools, ownership and the required gate.
 - [Release policy](RELEASING.md): versions and publication requirements.
 
+### Planned remote control
+
+These guides describe planned source. Remote functionality is not available in
+the current protected C8 baseline:
+
+- [Remote control](docs/remote-control.md): planned setup, controls, trust and recovery.
+- [Remote dependencies](docs/remote-dependencies.md): package choices and dependency review.
+- [Native remote publication plan](docs/native-remote-publication.md): documentation and shared UI source review prerequisites, native adoption and release gates.
+
 ## Contributing
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) and the [code of conduct](CODE_OF_CONDUCT.md)
