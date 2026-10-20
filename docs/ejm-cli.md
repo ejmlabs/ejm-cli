@@ -24,6 +24,8 @@ ejm-cli
 
 The provider key comes from `EJM_CLI_API_KEY`, falling back to `OPENAI_API_KEY`. `--api-key-env NAME` selects another variable. There is no API key argument. `--model` and `--base-url` override environment settings. The default `--provider openai` uses the OpenAI compatible Chat Completions interface and defaults to `gpt-4.1-mini`.
 
+`--base-url` and `EJM_CLI_BASE_URL` must use `https`. The exception is `http` on a loopback host: `localhost`, the `127.0.0.0/8` range, or `::1`. That exception is refused when `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, or the lowercase form is set and `NO_PROXY` does not contain that host exactly. `*` and a bracketed IPv6 entry such as `[::1]` do not count. The error names the proxy variable and does not print its value. A URL with a username, password, query, or fragment is rejected. On `run`, a rejected URL exits 1. The error names `--base-url` and `EJM_CLI_BASE_URL` and does not print the URL. `ejm-cli doctor` prints one endpoint line, without userinfo or raw line breaks, and marks a disallowed one rejected.
+
 Read tools are enabled by default. `--allow-write` registers file write tools. `--allow-shell` registers shell execution as the current user. Grants stay visible in the TUI header and remain fixed for the process. Native execution is not a security sandbox. `ejm-cli doctor` prints the executor's actual capability report.
 
 ## Provider accounts and models
@@ -212,7 +214,7 @@ ejm-cli doctor
 ejm-cli --help
 ```
 
-Plain mode streams assistant text on stdout and tool status on stderr. JSON mode emits one durable event per line on stdout. Failed and cancelled runs return a nonzero exit code. Session inspection and doctor work without provider credentials.
+Plain mode streams assistant text on stdout and tool status on stderr. JSON mode emits one durable event per line on stdout. Failed and cancelled runs return a nonzero exit code. Session inspection works without provider credentials. Doctor also works without credentials when the provider endpoint is allowed.
 
 `--cwd` chooses the workspace. `--state-dir` or `EJM_CLI_STATE_DIR` chooses durable storage. The default is `$XDG_DATA_HOME/ejm-cli`, macOS `~/Library/Application Support/ejm-cli`, Windows `%LOCALAPPDATA%/ejm-cli`, or `~/.local/share/ejm-cli` on other systems. Never commit that directory or use a public directory for private sessions.
 
