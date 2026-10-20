@@ -1,0 +1,41 @@
+/* Optional native forms, disclosures and account records. Import after styles.css. */
+@source "./static";
+@source not "./static/**/*.test.{ts,tsx}";
+
+/* Static components share structural utilities so repeated native HTML stays small. */
+@utility native-check-label {
+  @apply touch-target inline-flex max-w-full cursor-pointer items-center gap-3;
+  &:has(:disabled) { @apply cursor-not-allowed opacity-50; }
+}
+@utility native-check {
+  @apply m-0 shrink-0 cursor-pointer accent-primary disabled:cursor-not-allowed;
+  &[aria-invalid="true"] { @apply outline outline-danger; }
+}
+@utility disclosure-summary {
+  @apply touch-target focus-ring cursor-pointer text-fg hover:text-link;
+  display: list-item;
+  list-style-position: inside;
+  overflow-wrap: anywhere;
+}
+@utility disclosure-content {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+@utility disclosure-menu {
+  @apply absolute end-0 top-full z-50 mt-1 w-max min-w-48 overflow-y-auto overscroll-contain rounded-control bg-ground p-2 shadow-raised;
+  max-height: min(28rem, 70svh);
+  max-width: min(24rem, calc(100vw - 2rem));
+  @media (forced-colors: active) { @apply border; }
+}
+@utility document-content {
+  @apply max-w-measure space-y-6;
+  & h2 { @apply text-heading; }
+  & :where(h2, h3, legend) { @apply font-semibold; }
+  & :where(section, form, fieldset) { @apply space-y-5; }
+  & section { @apply hairline-t pt-6; }
+  & form { @apply max-w-measure; }
+  & pre { @apply whitespace-pre-wrap break-words font-mono text-sm; overflow-wrap: anywhere; }
+  & details > pre { @apply mt-4; }
+  & [role="status"] { @apply min-h-6; }
+  & [role="alert"], & [data-kind="error"] { @apply text-danger; }
+}

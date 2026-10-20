@@ -361,13 +361,43 @@ Prepare this prerequisite on actual protected native merge
 `4e4a630710ac504669437f3fcc8609ae98577f35` with sole parent the historical
 `24935aa85355ea99f49bdbecc4186a5e95049393` UI merge.
 
+The original PR #22 head `15a635c2dfa3944fbd88bf3a9397960e403048be`
+received two raw reports with `complete: false` and `findings: []` in
+[run 39516478426](https://github.com/ejmlabs/ejm-cli/actions/runs/39516478426).
+The protected-BASE archive supplied only the older UI source; metadata alone
+did not expose the changed target files. The second report also cited npm
+configuration and workspace closure. Admission was revoked in comment
+`6304341114`; Linux/macOS jobs were cancelled. That head has no quality pass
+or accepted review. The successor must supply the current source for inspection.
+
 Bind all thirteen complete readable install metadata files to that current UI
 source. Fresh mode, blob, size, SHA-256 and byte-identity checks permit twelve
-unchanged fixture paths under 24935 to be reused; copy only changed
+unchanged fixture paths under 24935 to be reused; within that boundary, copy only changed
 `packages/ui/package.json` under 79a1. Record the current-source identity and
-each reused fixture's provenance. Keep the full TSX/CSS targets in the separate
-owner source archive. Do not import private sibling source or change canonical
-`.github/review-context`.
+each reused fixture's provenance. The thirteen-file install boundary is unchanged.
+
+Add a separate complete changed-owner source supplement from M
+`24935aa85355ea99f49bdbecc4186a5e95049393`, tree
+`2d8bde67c8b5fe851b70ae90a3a2787091397780`, to the 79a1/tree c18c74f target
+above. Its 28 complete paths comprise 19 modified and nine added paths, with
+no deletions, renames or mode changes. All are ordinary `100644` UTF-8 files,
+totalling 175,936 bytes and 2,941 lines. Reuse the included UI package manifest,
+3,610 bytes and 100 lines, and add the other 27 complete current files,
+172,326 bytes and 2,841 lines.
+
+`review/dependency-sources/ejm-ui/source-supplement.json` binds current base and
+target commit/tree identities, each path's base record or absence, target record
+and fixture path, with source modes, blobs, byte counts and SHA-256 digests.
+The supplied 932-file M archive plus the 28 target entries exposes the complete
+941-file target source view. The earlier TSX/CSS statement described only M's
+archive; the supplement supplies the changed current files as readable fixtures.
+Unchanged license, notices and assets remain inherited from M,
+including reserved rights. No patch application or source execution is needed.
+
+Metadata and source fixtures are read-only reviewer data, never imported,
+installed, executed or packaged. Production UI uses only public owner exports.
+Keep the protected-BASE selector, canonical `.github/review-context` and workflows
+unchanged. Add no binary archive, duplicated full lockfile or private runtime import.
 
 Include final-path inert `relay/package-lock.json`, a short `relay/README.md`,
 the complete 51-line manifest outside the runnable package as a content-addressed
@@ -379,13 +409,14 @@ root gate, Cargo, harness or workflow change. Preserve native lock SHA-256
 protected harness 42e and installed 40d callers. The Relay install step stays
 skipped because the runnable manifest is absent.
 
-This slice still requires the normal full gate, fresh exact-head admission,
+The successor still requires the normal full gate, new exact-head human readiness,
 two complete configured paid reviews, separate final approval and protected
 merge within 200 paths, 12,000 changed lines and 1,000,000 diff bytes. It proves
 no installation, deployment or site publication. The later Worker PR must inherit
 the new pin from protected BASE and verify the exact full UI archive,
 lifecycle-disabled installed proof and full native/WASM/Worker/browser gate before
-closed deployment. There is no runtime or CLI flag change in this prerequisite.
+closed deployment. There is no runtime or CLI flag change in this prerequisite;
+all eleven aggregate release tasks stay open.
 
 ## Native source acceptance
 

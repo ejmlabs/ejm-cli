@@ -11,13 +11,20 @@ corrections, protected harness merge `42e4f9cf33bd3525aec344cfdffabc251271f782`
 and the patched native lock recorded in the design. Preserve those tested inputs
 and the 40d callers while advancing P's historical M UI pin and static context.
 
+PR #22's incomplete review showed that metadata alone did not expose the changed
+current UI source beside the protected-BASE archive. The successor adds a
+separate complete readable source supplement within the same inert scope;
+the failed-head receipt and exact source boundary are in the design.
+
 ## What Changes
 
 The native correction bullets retain adopted history and required behavior.
 The current slice changes only static review inputs: select protected UI 79a1,
 bind all thirteen complete readable metadata files with verified fixture reuse,
+add the complete changed-owner source supplement beside the supplied M archive,
 and include the inert Relay lock, notice, complete 51-line candidate manifest
-and provenance. It adds no runtime requirement or spec delta.
+and provenance. The supplement stays read-only reviewer data; production
+continues to use public owner exports. It adds no runtime requirement or spec delta.
 
 - Keep relay account metadata, credentials and the current-account index in one public vault transaction; retire normal plaintext cache writes and preserve newer logins during logout.
 - Publish reviewable CLI and dependency revisions through existing protected workflows, repair the scoped shared CI prerequisite hook, and record hosted results for exact revisions. Combine the bounded bootstrap, terminal and command foundations in one prelude that retains the current reviewed harness pin and callers; adopt the hook before the new harness API pin and its native consumers.
@@ -45,4 +52,4 @@ None. This change releases the implemented relay rather than adding another remo
 
 ## Impact
 
-The full release affects relay cleanup, deployment configuration, CI setup, dependency pins, release evidence and public docs. Its native successor adopted the protected 42e harness API after PR #20 retained the working 4a source and the central hook supplied Linux prerequisites. The current slice adds only static UI and Relay install review inputs. Existing maintainer readiness, approval, branch protection and paid-review gates remain in force. No repository visibility change, Cloudflare plan upgrade, payment activation or commercial activation is included. Concurrent site, cross-platform and model-selection work must be preserved.
+The full release affects relay cleanup, deployment configuration, CI setup, dependency pins, release evidence and public docs. Its native successor adopted the protected 42e harness API after PR #20 retained the working 4a source and the central hook supplied Linux prerequisites. The current slice adds only static UI source and Relay install review inputs. Existing maintainer readiness, approval, branch protection and paid-review gates remain in force. No repository visibility change, Cloudflare plan upgrade, payment activation or commercial activation is included. Concurrent site, cross-platform and model-selection work must be preserved.

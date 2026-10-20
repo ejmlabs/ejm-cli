@@ -17,7 +17,9 @@ selected UI merge `24935aa85355ea99f49bdbecc4186a5e95049393`, tree
 `2d8bde67c8b5fe851b70ae90a3a2787091397780`, with complete install review data.
 The [following inert prerequisite](ci-bootstrap.md#current-inert-shared-ui-and-relay-inputs)
 advances that UI selection and prepares Relay install review data on native 71d0.
-It still needs its own gates and protected adoption. This native layer includes
+It retains the thirteen-file install boundary and adds a separate complete
+changed-owner source supplement after PR #22's two incomplete reviews. That
+successor still needs its own gates and protected adoption. This native layer includes
 no Worker or browser UI. The retained sections below describe earlier cutoffs;
 their then-pending native checks are superseded only by the exact receipt above.
 
@@ -218,7 +220,17 @@ a content-addressed original prepared candidate snapshot outside the runnable
 package, with provenance. It adds no runnable `relay/package.json`, so the
 Relay setup/install step remains skipped. Its
 [protected UI target and thirteen-file boundary](ci-bootstrap.md#current-inert-shared-ui-and-relay-inputs)
-remain distinct from the full owner TSX/CSS archive and later installed proof.
+remain distinct from the complete changed-owner source supplement and later
+full target archive/install proof. The supplied 932-file M archive plus 28
+complete current entries exposes the 941-file target view. The older archive
+could not supply changed current TSX/CSS; the supplement supplies those complete files.
+Review metadata and supplement
+fixtures are never imported, installed, executed or packaged. Production still
+uses public owner exports. The centralized prerequisite record binds source
+identities, byte counts and the revoked old-head review; no quality pass is
+claimed for its cancelled platform jobs. The successor needs new exact-head
+human readiness and two complete paid reviews after its own normal full gate,
+then separate final approval and protected merge.
 Keep the accepted native lock, 42e harness and 40d callers unchanged; add no
 Worker/config, root gate, Cargo, harness or workflow change in that inert slice.
 

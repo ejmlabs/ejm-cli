@@ -1,0 +1,63 @@
+/* Opt-in utilities for the terminal components. Import this after styles.css:
+     @import "@ejm/ui/styles.css";
+     @import "@ejm/ui/styles-terminal.css";
+   The components keep one short shared class per structural part. Native fields retain their atomic overrides so cn can
+   remove conflicting field defaults. Every color, font and control target comes from the public theme. */
+@source "./terminal";
+@source not "./terminal/**/*.test.{ts,tsx}";
+
+@utility terminal-workspace {
+  @apply mx-auto flex h-svh min-h-[34rem] w-full max-w-[100rem] flex-col gap-3 p-4 font-mono text-base sm:p-6 sm:text-sm;
+  &:has([data-terminal-pairing]:not([hidden])) {
+    & [data-terminal-log], & [data-terminal-composer] { display: none; }
+  }
+}
+@utility terminal-header { @apply relative shrink-0 space-y-1; }
+@utility terminal-header-line { @apply flex min-w-0 items-center gap-2 sm:gap-3; }
+@utility terminal-brand { @apply inline-flex shrink-0 items-center font-semibold text-link touch-target compact-target focus-ring; }
+@utility terminal-title { @apply min-w-0 flex-1 truncate text-sm text-muted; }
+@utility terminal-nav { @apply flex shrink-0 items-center gap-2 text-muted sm:gap-4; }
+@utility terminal-context-line { @apply flex min-w-0 items-center gap-2 text-xs text-muted sm:gap-3; }
+@utility terminal-context { @apply min-w-0 flex-1 truncate; }
+@utility terminal-link { @apply items-center py-1 text-muted hover:text-fg touch-target compact-target focus-ring; }
+@utility terminal-output { @apply flex min-h-0 flex-1 flex-col overflow-y-auto; }
+@utility terminal-pairing {
+  @apply mx-auto my-auto w-full max-w-[40rem] space-y-4 py-6;
+  & > h2 { @apply text-base font-semibold text-link; }
+}
+@utility terminal-log {
+  @apply min-h-0 flex-1 overflow-y-auto overscroll-contain py-3 focus-ring;
+  scrollbar-gutter: stable;
+}
+@utility terminal-entry {
+  @apply space-y-1 pb-5;
+  &[data-kind="output"] { @apply text-muted; }
+  &[data-kind="error"] { @apply text-danger; }
+  &[data-kind="prompt"] [data-terminal-label] { @apply text-link; }
+  &[data-kind="assistant"] [data-terminal-label] { @apply text-fg; }
+  &[data-kind="error"] [data-terminal-label] { @apply text-danger; }
+}
+@utility terminal-entry-label { @apply font-semibold text-muted; }
+@utility terminal-entry-text {
+  @apply whitespace-pre-wrap break-words font-mono text-base leading-[1.7] sm:text-sm;
+  overflow-wrap: anywhere;
+}
+@utility terminal-status {
+  @apply flex shrink-0 items-start gap-2 text-xs text-muted;
+  & [data-kind="error"] { @apply text-danger; }
+  & [data-kind="connected"] { @apply text-success; }
+}
+@utility terminal-composer { @apply shrink-0 space-y-2; }
+@utility terminal-input { @apply min-w-0 rounded-control border border-control px-3 pb-3; }
+@utility terminal-legend { @apply px-2 text-xs text-muted; }
+@utility terminal-input-body { @apply flex items-start gap-3 py-2; }
+@utility terminal-prompt { @apply pt-1 text-lg leading-6 text-link; }
+@utility terminal-actions {
+  @apply flex flex-wrap items-center justify-end gap-2;
+  & > label { @apply me-auto max-w-full max-sm:basis-full; }
+  & > button { @apply max-sm:flex-1; }
+}
+@utility terminal-hints {
+  @apply flex flex-wrap gap-x-2 gap-y-1 text-xs text-muted;
+  & > p { @apply min-w-0; }
+}

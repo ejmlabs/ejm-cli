@@ -55,6 +55,14 @@ both raw exact-head reviews were complete with zero findings. Exact approval
 comment `6303964435` preceded the protected merge; controls stayed unchanged.
 This is native acceptance history, not Worker or deployment acceptance.
 
+The first inert PR #22 head `15a635c2dfa3944fbd88bf3a9397960e403048be`
+received `complete: false` with `findings: []` in both reviews of
+[run 39516478426](https://github.com/ejmlabs/ejm-cli/actions/runs/39516478426).
+Its protected-BASE UI archive supplied M, omitting the changed 79a1 source;
+the thirteen metadata bindings alone were insufficient. Admission was revoked
+in comment `6304341114` and platform jobs were cancelled. That failed-head
+receipt is historical and establishes no quality pass or successor acceptance.
+
 Prepare the static prerequisite on actual protected native parent 71d0. Select
 protected UI PR #11 merge `79a1aa8b1075f834717bc0c0299dc2c41a22b966`, tree
 `c18c74fd336dbad9515bff8ecf22ca980b889a51`, equal to reviewed head
@@ -62,9 +70,29 @@ protected UI PR #11 merge `79a1aa8b1075f834717bc0c0299dc2c41a22b966`, tree
 Bind all thirteen full readable metadata files to that current source. Fresh
 mode/blob/size/SHA-256 and byte-identity checks permit twelve existing M fixture
 paths to be reused; copy only changed `packages/ui/package.json` under 79a1.
-Record current-source and reused-fixture provenance. Keep full TSX/CSS targets
-in the separate owner archive, with no private imports or canonical
-`.github/review-context` changes.
+Record current-source and reused-fixture provenance. Preserve this thirteen-file
+install boundary separately from the following source supplement.
+
+Add complete read-only target files for the exact M-to-79a1 changed-owner scope:
+28 paths, comprising 19 modified and nine added paths, with no deletions,
+renames or mode changes. All are ordinary mode `100644` UTF-8 files. Their
+complete target content totals 175,936 bytes and 2,941 lines. Reuse the already
+included `packages/ui/package.json` fixture, 3,610 bytes and 100 lines; add the
+other 27 complete current files, 172,326 bytes and 2,841 lines. A separate
+`review/dependency-sources/ejm-ui/source-supplement.json` records current base
+and target commit/tree identities, each path's base record or absence, target
+record and fixture path. Source records bind mode, blob, size and SHA-256.
+
+The supplied 932-file M archive plus those 19 replacements and nine additions
+exposes the complete 941-file target tree c18c74f without applying a patch or
+executing source. The earlier full-archive-only TSX/CSS boundary described the
+supplied M archive, not current 79a1 visibility. The supplement now supplies all
+changed current TSX/CSS and other owner files as plaintext reviewer data.
+Preserve unchanged license, notices and assets from M, including reserved rights.
+Keep metadata and source fixtures read-only: never import, install, execute or
+package them. Production UI consumes only public owner exports. Add no binary
+archive, duplicated full lockfile, private runtime import, canonical
+`.github/review-context` mutation or workflow/selector change.
 
 Include inert final-path `relay/package-lock.json`, a short planned-use notice,
 the complete 51-line manifest as a content-addressed candidate review fixture
@@ -75,9 +103,12 @@ harness or workflow change. Preserve tested Cargo SHA-256
 the selected 42e harness and installed 40d callers. These inputs add no runtime
 requirement, so existing spec deltas stay unchanged.
 
-This prerequisite still needs its own normal full gate, fresh exact-head
-admission and two paid complete reviews, separate final approval and protected
-merge within unchanged admission caps. The next complete Worker PR must inherit
+The revised prerequisite needs its own normal full gate, new human exact-head
+readiness, two complete paid reviews, separate final approval and protected
+merge. Caps remain 200 paths, 12,000 changed lines and 1,000,000 diff bytes.
+The draft projection of 47 paths, about 9,801 changed lines before docs and about
+483 KB is planning only; measure the actual successor diff before admission.
+The next complete Worker PR must inherit
 the new UI pin from protected BASE and verify the full UI archive,
 lifecycle-disabled installed proof and full native/WASM/Worker/browser gate
 before closed deployment. All eleven whole release tasks remain unchecked.
