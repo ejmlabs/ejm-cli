@@ -82,6 +82,32 @@ ejm-cli doctor
 
 See [the full CLI guide](docs/ejm-cli.md) for controls, configuration, and limits.
 
+### Native remote access
+
+This source candidate adds a native session host and controller on protected
+CLI parent `c8e2239392f71df82cbef6166b1827c8e5f5f1c5`. It preserves the
+reviewed native lock and selects protected harness merge
+`42e4f9cf33bd3525aec344cfdffabc251271f782`, the exact 358-file completion
+API tree `826e0231...`. The final pair's normal local and hosted gates remain
+required before native adoption. Earlier and focused native passes are
+recorded separately. A compatible separately operated relay account service is
+required.
+Local use still needs no relay account.
+
+Before first persistent host or controller use, stop older relay writers and
+run `ejm-cli remote migrate-credentials`, including on fresh installations.
+Confirm locally only after those processes have stopped. Then sign in with
+`remote login`. `remote host` shares one session read-only; `remote host
+--control` grants prompt, steer, queue and cancel actions. `remote connect`
+reads the private invitation in a protected terminal. Each endpoint confirms
+pairing locally. The host's tool grants still apply.
+
+See [remote setup and recovery](docs/remote-control.md),
+[dependency choices](docs/remote-dependencies.md) and the
+[candidate's remaining gates](docs/native-remote-publication.md). This layer
+contains no Worker, browser UI or deployment. It claims no formal crypto audit
+or performance improvement.
+
 ### Resource limits
 
 Ratatui and Crossterm render the TUI. Rust and Tokio drive the harness directly.
@@ -106,6 +132,7 @@ dependency policy, release builds, and real PTY checks run through one command:
 ## Documentation
 
 - [CLI reference](docs/ejm-cli.md): controls, providers, sessions, packages and trust.
+- [Native remote guide](docs/remote-control.md): account setup, pairing, controls and recovery.
 - [Performance evidence](docs/benchmarks.md): measurements, method and limits.
 - [Development guide](docs/contributing.md): tools, ownership and the required gate.
 - [Release policy](RELEASING.md): versions and publication requirements.

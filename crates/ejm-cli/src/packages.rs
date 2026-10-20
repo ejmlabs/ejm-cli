@@ -4,8 +4,9 @@ use anyhow::{Context, Result, ensure};
 use clap::Subcommand;
 use ejm_harness_exec::Governor;
 use ejm_harness_packages::{
-    DEFAULT_REGISTRY, PackageGrants, PackageManager, RegistryClient, install_source,
-    load_registry_token, pack_directory, save_registry_token,
+    DEFAULT_REGISTRY, PackageGrants, PackageManager, RegistryClient, delete_registry_token,
+    install_source, load_registry_token, migrate_registry_token, pack_directory,
+    save_registry_token,
 };
 use tokio_util::sync::CancellationToken;
 
@@ -62,6 +63,14 @@ pub enum PackageCommand {
     Login {
         #[arg(long)]
         no_browser: bool,
+    },
+    MigrateCredentials {
+        #[arg(
+            long,
+            required = true,
+            help = "Confirm every older CLI and IDE registry credential writer has stopped"
+        )]
+        old_clients_stopped: bool,
     },
     Logout,
     Whoami,
@@ -148,13 +157,10 @@ pub async fn run(args: &Args, command: &PackageCommand) -> Result<bool> {
             );
         }
         PackageCommand::Login { no_browser } => login(&manager, &registry, *no_browser).await?,
-        PackageCommand::Logout => {
-            let token = load_registry_token(manager.root(), registry.origin())?;
-            let revoked = registry.logout(&token).await;
-            std::fs::remove_file(manager.root().join("registry-session.json"))?;
-            revoked.context("local session removed; remote revocation failed")?;
-            println!("Registry session revoked and removed.");
-        }
+        PackageCommand::MigrateCredentials {
+            old_clients_stopped,
+        } => migrate_credentials(&manager, &registry, *old_clients_stopped)?,
+        PackageCommand::Logout => logout(&manager, &registry).await?,
         PackageCommand::Whoami => show(
             &registry
                 .me(&load_registry_token(manager.root(), registry.origin())?)
@@ -179,6 +185,38 @@ pub async fn run(args: &Args, command: &PackageCommand) -> Result<bool> {
         }
     }
     Ok(true)
+}
+
+fn finish_logout(revoked: Result<()>, clear: impl FnOnce() -> Result<()>) -> Result<()> {
+    clear()?;
+    revoked.context("local session removed; remote revocation failed")
+}
+
+async fn logout(manager: &PackageManager, registry: &RegistryClient) -> Result<()> {
+    let token = load_registry_token(manager.root(), registry.origin())?;
+    let revoked = registry.logout(&token).await;
+    finish_logout(revoked, || {
+        delete_registry_token(manager.root(), registry.origin())
+    })?;
+    println!("Registry session revoked and removed.");
+    Ok(())
+}
+
+fn migrate_credentials(
+    manager: &PackageManager,
+    registry: &RegistryClient,
+    old_clients_stopped: bool,
+) -> Result<()> {
+    let retired = migrate_registry_token(manager.root(), registry.origin(), old_clients_stopped)?;
+    println!(
+        "{}",
+        if retired {
+            "Legacy registry session retired."
+        } else {
+            "No legacy registry session found."
+        }
+    );
+    Ok(())
 }
 
 async fn install(
@@ -235,4 +273,66 @@ async fn login(
 fn show(value: &impl serde::Serialize) -> Result<()> {
     println!("{}", safe_text(&serde_json::to_string_pretty(value)?));
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{cell::Cell, ffi::OsStr};
+
+    use clap::Parser;
+
+    use super::*;
+    use crate::args::Command;
+
+    #[test]
+    fn failed_revocation_still_clears_local_session() {
+        let cleared = Cell::new(false);
+        let result = finish_logout(Err(anyhow::anyhow!("fixture revocation failure")), || {
+            cleared.set(true);
+            Ok(())
+        });
+        assert!(cleared.get());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn local_clear_failure_prevents_logout_success() {
+        let result = finish_logout(Ok(()), || Err(anyhow::anyhow!("fixture storage failure")));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn registry_migration_requires_confirmation_before_storage() -> Result<()> {
+        let directory = tempfile::tempdir()?;
+        let state = directory.path().join("state");
+        let result = Args::try_parse_from([
+            OsStr::new("ejm-cli"),
+            OsStr::new("--state-dir"),
+            state.as_os_str(),
+            OsStr::new("package"),
+            OsStr::new("migrate-credentials"),
+        ]);
+        assert!(result.is_err());
+        assert!(!state.exists());
+        Ok(())
+    }
+
+    #[test]
+    fn registry_migration_accepts_explicit_confirmation() -> Result<()> {
+        let args = Args::try_parse_from([
+            "ejm-cli",
+            "package",
+            "migrate-credentials",
+            "--old-clients-stopped",
+        ])?;
+        assert!(matches!(
+            args.command,
+            Some(Command::Package {
+                command: PackageCommand::MigrateCredentials {
+                    old_clients_stopped: true
+                }
+            })
+        ));
+        Ok(())
+    }
 }
