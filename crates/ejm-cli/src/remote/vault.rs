@@ -38,6 +38,10 @@ fn id(origin: &RelayOrigin, purpose: &str) -> Result<SecretId> {
     SecretId::new(PRODUCT, purpose, origin.as_str())
 }
 
+fn current_id() -> Result<SecretId> {
+    SecretId::new(PRODUCT, "current-account", "current")
+}
+
 fn unavailable() -> anyhow::Error {
     anyhow::anyhow!(
         "encrypted relay vault is unavailable, locked or invalid; restore its original native key access and retry, or explicitly choose --memory-only for this foreground session; do not replace a missing key"
@@ -73,23 +77,38 @@ fn account_value(metadata: &CachedAccount, token: &SecretString) -> Result<Secre
 pub(super) fn load_account(
     state: &Path,
     origin: &RelayOrigin,
-    metadata: &CachedAccount,
     cancel: &CancellationToken,
-) -> Result<SecretString> {
-    let vault = open(state)?;
+) -> Result<(CachedAccount, SecretString)> {
+    load_account_from(&open(state)?, origin, cancel)
+}
+
+pub(super) fn load_account_from(
+    vault: &SecretVault,
+    origin: &RelayOrigin,
+    cancel: &CancellationToken,
+) -> Result<(CachedAccount, SecretString)> {
     let tx = vault.lock_blocking(cancel).map_err(|_| unavailable())?;
     let key = id(origin, TOKEN)?;
     let Some(value) = tx.get(&key) else {
         ensure!(tx.migrated(&key), UPGRADE);
         bail!("no saved relay credential; run ejm-cli remote login");
     };
-    account_token(&value, metadata)
+    let saved = saved_account(&value)?;
+    ensure!(
+        saved.metadata.origin == origin.as_str(),
+        "saved relay account belongs to another origin; sign in to the configured relay"
+    );
+    Ok((saved.metadata.clone(), SecretString::new(&saved.token)))
+}
+
+fn saved_account(value: &SecretString) -> Result<SavedAccount> {
+    serde_json::from_str(value.expose_secret()).map_err(|_| {
+        anyhow::anyhow!("saved relay credential is invalid; restore the vault or sign in again")
+    })
 }
 
 fn account_token(value: &SecretString, metadata: &CachedAccount) -> Result<SecretString> {
-    let saved: SavedAccount = serde_json::from_str(value.expose_secret()).map_err(|_| {
-        anyhow::anyhow!("saved relay credential is invalid; restore the vault or sign in again")
-    })?;
+    let saved = saved_account(value)?;
     ensure!(
         saved.metadata == *metadata,
         "relay metadata does not match the saved credential; sign in again"
@@ -103,23 +122,78 @@ pub(super) fn save_account(
     token: &SecretString,
     cancel: &CancellationToken,
 ) -> Result<()> {
+    save_account_into(&open(state)?, metadata, token, cancel)
+}
+
+pub(super) fn save_account_into(
+    vault: &SecretVault,
+    metadata: &CachedAccount,
+    token: &SecretString,
+    cancel: &CancellationToken,
+) -> Result<()> {
     let origin = RelayOrigin::parse(&metadata.origin)?;
-    let vault = open(state)?;
     let mut tx = vault.lock_blocking(cancel).map_err(|_| unavailable())?;
     let key = id(&origin, TOKEN)?;
     tx.set(key.clone(), account_value(metadata, token)?)?;
+    tx.set(
+        current_id()?,
+        SecretString::new(serde_json::to_string(metadata)?),
+    )?;
     tx.mark_migrated(key)?;
     tx.commit().map_err(|_| unavailable())
 }
 
+pub(super) fn cached_account(
+    vault: &SecretVault,
+    cancel: &CancellationToken,
+) -> Result<Option<CachedAccount>> {
+    let tx = vault.lock_blocking(cancel).map_err(|_| unavailable())?;
+    let Some(value) = tx.get(&current_id()?) else {
+        return Ok(None);
+    };
+    let metadata: CachedAccount = serde_json::from_str(value.expose_secret())
+        .context("saved relay account index is invalid; run ejm-cli remote migrate-credentials")?;
+    let origin = RelayOrigin::parse(&metadata.origin)?;
+    let value = tx.get(&id(&origin, TOKEN)?).context(
+        "saved relay account index has no credential; run ejm-cli remote migrate-credentials",
+    )?;
+    account_token(&value, &metadata)?;
+    Ok(Some(metadata))
+}
+
 pub(super) fn remove_account(
     state: &Path,
-    origin: &RelayOrigin,
+    metadata: &CachedAccount,
+    token: &SecretString,
     cancel: &CancellationToken,
 ) -> Result<()> {
-    let vault = open(state)?;
+    remove_account_from(&open(state)?, metadata, token, cancel)
+}
+
+pub(super) fn remove_account_from(
+    vault: &SecretVault,
+    metadata: &CachedAccount,
+    token: &SecretString,
+    cancel: &CancellationToken,
+) -> Result<()> {
+    let origin = RelayOrigin::parse(&metadata.origin)?;
     let mut tx = vault.lock_blocking(cancel).map_err(|_| unavailable())?;
-    let key = id(origin, TOKEN)?;
+    let key = id(&origin, TOKEN)?;
+    let Some(value) = tx.get(&key) else {
+        return Ok(());
+    };
+    let saved = saved_account(&value)?;
+    if saved.metadata != *metadata || saved.token != token.expose_secret() {
+        return Ok(());
+    }
+    let current = current_id()?;
+    if let Some(value) = tx.get(&current) {
+        let indexed: CachedAccount = serde_json::from_str(value.expose_secret())
+            .context("saved relay account index is invalid; local credential was retained")?;
+        if indexed == *metadata {
+            tx.delete(&current);
+        }
+    }
     tx.delete(&key);
     tx.mark_migrated(key)?;
     tx.commit().map_err(|_| unavailable())
@@ -155,7 +229,7 @@ pub(super) fn migrate(
     cancel: &CancellationToken,
 ) -> Result<bool> {
     ensure!(excluded_old_writers, UPGRADE);
-    let metadata = super::account::metadata(state)?;
+    let metadata = super::account::legacy_metadata(state)?;
     if let Some(metadata) = &metadata {
         ensure!(
             metadata.origin == origin.as_str(),
@@ -293,6 +367,19 @@ fn migrate_into(
         tx.mark_migrated(identity_id.clone())?;
     }
     let expected_token = tx.get(&token_id);
+    let current_id = current_id()?;
+    if let Some(value) = &expected_token {
+        let saved = saved_account(value)?;
+        ensure!(
+            saved.metadata.origin == origin.as_str(),
+            "saved relay account belongs to another origin"
+        );
+        tx.set(
+            current_id.clone(),
+            SecretString::new(serde_json::to_string(&saved.metadata)?),
+        )?;
+    }
+    let expected_current = tx.get(&current_id);
     let expected_identity = tx.get(&identity_id);
     tx.commit().map_err(|_| unavailable())?;
     drop(tx);
@@ -301,6 +388,7 @@ fn migrate_into(
     for (key, expected) in [
         (&token_id, expected_token),
         (&identity_id, expected_identity),
+        (&current_id, expected_current),
     ] {
         ensure!(
             verified.get(key).as_ref().map(SecretString::expose_secret)

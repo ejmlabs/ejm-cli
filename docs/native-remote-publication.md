@@ -31,6 +31,17 @@ That local result applies only to d8. This candidate requires its own normal
 gate and fresh hosted acceptance, recorded against its exact source. The earlier
 admission remains revoked.
 
+## Account persistence correction
+
+Native PR #21 head `45a8d3da23f8f2a17096f2de1f626c7d5c822760` passed its
+normal local gate, but its second complete hosted review found linked JSON
+writes and split credential/metadata publication. The correction stores both
+in the existing public vault, preserves newer logins during logout and retains
+bounded legacy input only for controlled migration. Fourteen vault and four
+account HTTP/TLS cases passed locally. Four valid negative controls caught missing
+index publication, stale metadata, stale tokens and missing migration index repair.
+The corrected normal gate and fresh admission remain required.
+
 ## Earlier review corrections
 
 The f66 normal macOS gate and [hosted Linux/macOS quality](https://github.com/ejmlabs/ejm-cli/actions/runs/39344263873)

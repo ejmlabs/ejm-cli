@@ -3,6 +3,7 @@ use std::{
     sync::{
         Arc, Mutex,
         atomic::{AtomicBool, AtomicUsize, Ordering},
+        mpsc,
     },
 };
 
@@ -67,6 +68,15 @@ fn metadata() -> CachedAccount {
     }
 }
 
+fn assert_account(vault: &SecretVault, expected: &CachedAccount, token: &str) {
+    let cancel = CancellationToken::new();
+    let origin = RelayOrigin::parse(&expected.origin).unwrap();
+    let (actual, saved) = load_account_from(vault, &origin, &cancel).unwrap();
+    assert!(actual == *expected);
+    assert_eq!(saved.expose_secret(), token);
+    assert!(cached_account(vault, &cancel).unwrap().as_ref() == Some(expected));
+}
+
 #[test]
 fn old_writer_exclusion_is_required_before_any_store_access() {
     let cancel = CancellationToken::new();
@@ -126,6 +136,18 @@ fn migration_preserves_account_device_and_fingerprint_with_isolated_authority() 
     other_device.device_id = "different-device".into();
     assert!(account_token(&value, &other_device).is_err());
     assert!(account_token(&SecretString::new("malformed-private-value"), &metadata()).is_err());
+    drop(tx);
+    assert_account(&vault, &metadata(), "synthetic-relay-private-token");
+    let mut tx = vault.lock_blocking(&cancel).unwrap();
+    tx.delete(&current_id().unwrap());
+    tx.commit().unwrap();
+    drop(tx);
+    let reads = legacy.reads.get();
+    for _ in 0..2 {
+        assert!(migrate_into(&vault, &origin(), None, &legacy, true, &cancel).unwrap());
+        assert_account(&vault, &metadata(), "synthetic-relay-private-token");
+    }
+    assert_eq!(legacy.reads.get(), reads);
 }
 
 #[test]
@@ -202,12 +224,19 @@ fn failed_cleanup_and_logout_cannot_reimport_stale_tokens() {
 #[derive(Default)]
 struct FixtureKeys {
     key: Mutex<Option<SecretString>>,
+    pause: Mutex<Option<(mpsc::Sender<()>, mpsc::Receiver<()>)>>,
     deny_save: AtomicBool,
     saves: AtomicUsize,
 }
 
 impl VaultKeyStore for FixtureKeys {
     fn get(&self, _vault_id: &str) -> Result<Option<SecretString>> {
+        if let Some((entered, resume)) = self.pause.lock().unwrap().take() {
+            entered.send(()).unwrap();
+            resume
+                .recv_timeout(std::time::Duration::from_secs(5))
+                .unwrap();
+        }
         Ok(self.key.lock().unwrap().clone())
     }
 
@@ -220,6 +249,141 @@ impl VaultKeyStore for FixtureKeys {
         self.key.lock().unwrap().replace(key.clone());
         Ok(())
     }
+}
+
+#[cfg(unix)]
+#[test]
+fn account_saves_leave_legacy_links_untouched_and_survive_reopen() {
+    for symlink in [false, true] {
+        let state = tempfile::tempdir().unwrap();
+        let root = state.path().join("state");
+        std::fs::create_dir(&root).unwrap();
+        let outside = state.path().join("outside");
+        let cache = root.join("relay-account.json");
+        std::fs::write(&outside, b"untouched sentinel").unwrap();
+        if symlink {
+            std::os::unix::fs::symlink(&outside, &cache).unwrap();
+        } else {
+            std::fs::hard_link(&outside, &cache).unwrap();
+        }
+        let keys = Arc::new(FixtureKeys::default());
+        let vault = SecretVault::open_with_key_store(root.join("auth"), keys.clone()).unwrap();
+        let cancel = CancellationToken::new();
+        save_account_into(
+            &vault,
+            &metadata(),
+            &SecretString::new("saved-token"),
+            &cancel,
+        )
+        .unwrap();
+        drop(vault);
+        let reopened = SecretVault::open_with_key_store(root.join("auth"), keys).unwrap();
+        assert_account(&reopened, &metadata(), "saved-token");
+        assert_eq!(std::fs::read(outside).unwrap(), b"untouched sentinel");
+        assert_eq!(std::fs::read(cache).unwrap(), b"untouched sentinel");
+    }
+}
+
+#[test]
+fn concurrent_account_replacement_is_coherent_and_stale_logout_is_harmless() {
+    let state = tempfile::tempdir().unwrap();
+    let keys = Arc::new(FixtureKeys::default());
+    let path = state.path().join("auth");
+    let vault = SecretVault::open_with_key_store(&path, keys.clone()).unwrap();
+    let cancel = CancellationToken::new();
+    save_account_into(
+        &vault,
+        &metadata(),
+        &SecretString::new("old-token"),
+        &cancel,
+    )
+    .unwrap();
+    let replacement = CachedAccount {
+        device_id: "replacement-device".into(),
+        ..metadata()
+    };
+    let (entered, ready) = mpsc::channel();
+    let (resume, release) = mpsc::channel();
+    *keys.pause.lock().unwrap() = Some((entered, release));
+    let first_vault = vault.clone();
+    let first_account = replacement.clone();
+    let first = std::thread::spawn(move || {
+        save_account_into(
+            &first_vault,
+            &first_account,
+            &SecretString::new("first-token"),
+            &CancellationToken::new(),
+        )
+        .unwrap();
+    });
+    ready
+        .recv_timeout(std::time::Duration::from_secs(5))
+        .unwrap();
+    let (started, waiting) = mpsc::channel();
+    let second_vault = vault.clone();
+    let second = std::thread::spawn(move || {
+        started.send(()).unwrap();
+        save_account_into(
+            &second_vault,
+            &metadata(),
+            &SecretString::new("latest-token"),
+            &CancellationToken::new(),
+        )
+        .unwrap();
+    });
+    waiting
+        .recv_timeout(std::time::Duration::from_secs(5))
+        .unwrap();
+    resume.send(()).unwrap();
+    first.join().unwrap();
+    second.join().unwrap();
+    drop(vault);
+    let reopened = SecretVault::open_with_key_store(path, keys).unwrap();
+    assert_account(&reopened, &metadata(), "latest-token");
+    for (stale, token) in [
+        (metadata(), "old-token"),
+        (replacement.clone(), "latest-token"),
+        (replacement, "first-token"),
+    ] {
+        remove_account_from(&reopened, &stale, &SecretString::new(token), &cancel).unwrap();
+        assert_account(&reopened, &metadata(), "latest-token");
+    }
+    remove_account_from(
+        &reopened,
+        &metadata(),
+        &SecretString::new("latest-token"),
+        &cancel,
+    )
+    .unwrap();
+    assert!(cached_account(&reopened, &cancel).unwrap().is_none());
+    assert!(load_account_from(&reopened, &origin(), &cancel).is_err());
+}
+
+#[test]
+fn account_records_are_scoped_to_the_exact_origin() {
+    let vault = SecretVault::memory();
+    let cancel = CancellationToken::new();
+    let token = SecretString::new("isolated-token");
+    save_account_into(&vault, &metadata(), &token, &cancel).unwrap();
+    let other = RelayOrigin::parse("https://other-relay.example").unwrap();
+    assert!(load_account_from(&vault, &other, &cancel).is_err());
+    let other_account = CachedAccount {
+        origin: other.as_str().into(),
+        ..metadata()
+    };
+    save_account_into(
+        &vault,
+        &other_account,
+        &SecretString::new("other-token"),
+        &cancel,
+    )
+    .unwrap();
+    let (saved, saved_token) = load_account_from(&vault, &origin(), &cancel).unwrap();
+    assert!(saved == metadata());
+    assert_eq!(saved_token.expose_secret(), token.expose_secret());
+    remove_account_from(&vault, &metadata(), &token, &cancel).unwrap();
+    assert!(load_account_from(&vault, &origin(), &cancel).is_err());
+    assert_account(&vault, &other_account, "other-token");
 }
 
 #[test]

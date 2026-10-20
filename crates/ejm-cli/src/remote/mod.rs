@@ -94,7 +94,9 @@ async fn execute(args: &Args, command: &RemoteCommand, cancel: CancellationToken
     if matches!(command, RemoteCommand::Accounts) {
         println!(
             "{}",
-            account::cached(&state)?.unwrap_or_else(|| "No saved relay account.".into())
+            account::cached(&state, &cancel)
+                .await?
+                .unwrap_or_else(|| "No saved relay account.".into())
         );
         return Ok(true);
     }

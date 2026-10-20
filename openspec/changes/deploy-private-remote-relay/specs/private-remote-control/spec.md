@@ -54,6 +54,15 @@ Each new pairing confirmation SHALL be displayed before accepting a fresh approv
 - **WHEN** the original controller reconnects after the initial enrollment deadline but before share expiry
 - **THEN** the host accepts its pinned key and rejects unenrolled or replacement keys
 
+### Requirement: Coherent account persistence
+
+Relay account metadata and credentials SHALL publish atomically through the public vault. Normal login SHALL NOT write a separate metadata file. Logout SHALL preserve a newer saved login.
+
+#### Scenario: Concurrent account replacement
+
+- **WHEN** concurrent logins publish different accounts, or an older logout finishes after a new login
+- **THEN** reloading returns one complete account and credential pair, without changing files linked to the legacy metadata path or deleting the newer login
+
 ### Requirement: Credential wait cancellation
 
 Vault lock waits SHALL observe operation cancellation and the end of the awaiting caller, using the public vault cancellation contract.

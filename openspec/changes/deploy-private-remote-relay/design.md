@@ -52,6 +52,18 @@ Retain historical 514343 and WSS fake-ticket coverage in the existing TLS fixtur
 The unchanged normal gate and fresh exact-source hosted checks and reviews remain
 required. No acceptance is claimed, and advisory checks stay enforced.
 
+## Account persistence correction
+
+Native PR #21 review found linked metadata writes and split credential/cache
+publication. Store the existing account record and a fixed current-account
+metadata index in one public vault transaction. Load each origin's record and
+list the encrypted index under that lock; never write the old JSON cache.
+Keep bounded legacy JSON reads only for controlled migration, and rebuild the
+index from the verified credential even when its migration marker exists.
+Logout deletes only the exact saved account it revoked, preserving a newer login.
+Reuse existing cancellation and storage APIs, with no new dependency or TLS graph
+change. Require persistence regressions, the normal gate and fresh admission.
+
 ## Goals / Non-Goals
 
 Goals: obtain exact committed dependency and product revisions with hosted evidence; deploy one inexpensive relay/UI origin; keep secrets out of source and logs; make pending launch steps visible.

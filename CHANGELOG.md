@@ -11,6 +11,7 @@ Changes follow [Semantic Versioning](https://semver.org/). Each repository is ve
 
 ### Fixed
 
+- Prepare atomic relay account metadata and credential publication in the shared vault; stop normal JSON cache writes and preserve newer logins during logout. Fresh corrected-source gates and reviews remain required.
 - Prepare the TLS advisory lock correction and native WSS root loading, reusing the existing certificate loader. Extend untrusted-peer coverage to WSS tickets; fresh exact-source gates remain required.
 - Prepare snapshot authority through its delivered cursor and fresh expiry checks after mutation waits. The complete 061 review found both defects; corrected d8 source passed its local macOS gate, while final-source and hosted acceptance remain required.
 - Prepare fresh approval after each displayed pairing confirmation, cancelled vault lock waits, snapshot recovery after server gaps and enrolled-controller restarts until share expiry. Both f66 reviews blocked adoption on these four defects; successor verification remains separate.

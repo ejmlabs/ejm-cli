@@ -259,29 +259,4 @@ mod contracts {
         );
         Ok(())
     }
-
-    #[tokio::test]
-    async fn a_cached_account_from_another_origin_never_opens_the_secret_store() -> Result<()> {
-        let directory = tempfile::tempdir()?;
-        std::fs::write(
-            directory.path().join("relay-account.json"),
-            serde_json::to_vec(&CachedAccount {
-                origin: "https://old.invalid/".into(),
-                account_id: "account".into(),
-                device_id: "device".into(),
-            })?,
-        )?;
-        let result = RelayAccount::load(
-            RelayOrigin::parse("https://new.invalid")?,
-            directory.path(),
-            &CancellationToken::new(),
-        )
-        .await;
-        let message = result
-            .err()
-            .map(|error| error.to_string())
-            .unwrap_or_default();
-        assert!(message.contains("another origin"));
-        Ok(())
-    }
 }

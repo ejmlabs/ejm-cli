@@ -15,6 +15,7 @@ installed UI archive/install proof remain pending.
 
 ## What Changes
 
+- Keep relay account metadata, credentials and the current-account index in one public vault transaction; retire normal plaintext cache writes and preserve newer logins during logout.
 - Publish reviewable CLI and dependency revisions through existing protected workflows, repair the scoped shared CI prerequisite hook, and record hosted results for exact revisions. Combine the bounded bootstrap, terminal and command foundations in one prelude that retains the current reviewed harness pin and callers; adopt the hook before the new harness API pin and its native consumers.
 - Native preparation began on actual protected CLI parent `c8e2239392f71df82cbef6166b1827c8e5f5f1c5`, tree `d49abd3f2881f8a2328063bc45d9ded4a078e00f`, preserving its 40d readable source context, Linux setup and consolidated guides. Select the completion API's actual protected merge `42e4f9cf33bd3525aec344cfdffabc251271f782`, with exact 358-file tree `826e02310f1097e13806ca5ca1bf5cc00d71e966`. Root's post-cutover readback confirms C8/42e and preserved controls. The corrected local macOS source passed its normal gate; the final native source after protected CLI prerequisite P still needs its own normal gate and admission. Earlier and focused passes do not establish that final source's acceptance.
 - Resolve RUSTSEC-2026-0381/0382/0383 with the [selected TLS/root graph](design.md#native-advisory-correction), then repeat the normal gate and exact-source hosted review without advisory waivers.

@@ -141,13 +141,14 @@ ejm-cli --memory-only remote connect
 ```
 
 Each command signs in for that process. A standalone memory-only login ends
-when its process exits. Saved metadata contains only relay origin, account ID
-and device ID. One local state directory caches one relay account at a time.
+when its process exits. Saved metadata contains relay origin, account ID
+and device ID. One local state directory selects one relay account at a time.
 Each HTTPS origin has a separate credential namespace, with distinct
 `device-session` and `endpoint-identity` purposes under `ejm-cli-relay`. Provider
 and registry credentials cannot be used for relay access. Account/device
-metadata is bound inside the encrypted token record as well as the separate
-non-secret cache. Mismatched metadata requires sign-in again.
+metadata and the current-account index publish with the credential in one
+encrypted vault transaction. Normal commands never write `relay-account.json`.
+`remote accounts` stays offline but may require unlocking the OS key service.
 
 ### Prepare or upgrade persistent relay credentials
 
@@ -182,7 +183,8 @@ ejm-cli remote devices --revoke DEVICE_ID
 ejm-cli remote logout
 ```
 
-Logout requests server revocation and removes the local credential. A network
+Logout requests server revocation and removes the matching local credential,
+preserving a newer login saved while that request was pending. A network
 failure is reported as unconfirmed revocation. Use your operator's account page,
 when available, to revoke it when the service returns. Active relay leases last
 at most fifteen minutes;

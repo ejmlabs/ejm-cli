@@ -7,7 +7,7 @@ use oauth2::{
     TokenUrl, basic::BasicClient,
 };
 use serde::{Deserialize, Serialize};
-use std::{path::Path, time::Duration};
+use std::{io::Read as _, path::Path, time::Duration};
 use tokio_util::sync::CancellationToken;
 use zeroize::Zeroizing;
 
@@ -74,13 +74,7 @@ impl RelayAccount {
         state: &Path,
         cancel: &CancellationToken,
     ) -> Result<Self> {
-        let metadata =
-            metadata(state)?.context("no saved relay account; run ejm-cli remote login")?;
-        ensure!(
-            metadata.origin == origin.as_str(),
-            "saved relay account belongs to another origin; sign in to the configured relay"
-        );
-        let token = super::vault::load_account(state, &origin, &metadata, cancel)?;
+        let (metadata, token) = super::vault::load_account(state, &origin, cancel)?;
         Ok(Self {
             origin,
             device_id: metadata.device_id,
@@ -132,24 +126,22 @@ impl RelayAccount {
         account.register_device(cancel.clone()).await?;
         if !memory_only {
             let state = state.to_path_buf();
-            let metadata = CachedAccount {
-                origin: account.origin.as_str().into(),
-                account_id: account.account_id.clone(),
-                device_id: account.device_id.clone(),
-            };
+            let metadata = account.metadata();
             let token = account.token.clone();
-            super::vault::blocking(&cancel, move |cancel| -> Result<()> {
-                std::fs::create_dir_all(&state)?;
-                super::vault::save_account(&state, &metadata, &token, cancel)?;
-                std::fs::write(
-                    state.join("relay-account.json"),
-                    serde_json::to_vec(&metadata)?,
-                )?;
-                Ok(())
+            super::vault::blocking(&cancel, move |cancel| {
+                super::vault::save_account(&state, &metadata, &token, cancel)
             })
             .await?;
         }
         Ok(account)
+    }
+
+    fn metadata(&self) -> CachedAccount {
+        CachedAccount {
+            origin: self.origin.as_str().into(),
+            account_id: self.account_id.clone(),
+            device_id: self.device_id.clone(),
+        }
     }
 
     async fn register_device(&mut self, cancel: CancellationToken) -> Result<()> {
@@ -266,14 +258,10 @@ impl RelayAccount {
             .await
             .is_ok();
         let state = state.to_path_buf();
-        let origin = self.origin.clone();
-        super::vault::blocking(cancel, move |cancel| -> Result<()> {
-            super::vault::remove_account(&state, &origin, cancel)?;
-            let path = state.join("relay-account.json");
-            if path.exists() {
-                std::fs::remove_file(path)?;
-            }
-            Ok(())
+        let metadata = self.metadata();
+        let token = self.token.clone();
+        super::vault::blocking(cancel, move |cancel| {
+            super::vault::remove_account(&state, &metadata, &token, cancel)
         })
         .await?;
         Ok(revoked)
@@ -307,8 +295,16 @@ async fn show_device_authorization(
     super::protected::login_notice(&panel, no_browser, verification.as_str(), cancel).await
 }
 
-pub fn cached(state: &Path) -> Result<Option<String>> {
-    let Some(account) = metadata(state)? else {
+pub async fn cached(state: &Path, cancel: &CancellationToken) -> Result<Option<String>> {
+    let state = state.to_path_buf();
+    let account = super::vault::blocking(cancel, move |cancel| {
+        if !state.join("auth").try_exists()? {
+            return Ok(None);
+        }
+        super::vault::cached_account(&super::vault::open(&state)?, cancel)
+    })
+    .await?;
+    let Some(account) = account else {
         return Ok(None);
     };
     Ok(Some(format!(
@@ -319,16 +315,15 @@ pub fn cached(state: &Path) -> Result<Option<String>> {
     )))
 }
 
-pub(super) fn metadata(state: &Path) -> Result<Option<CachedAccount>> {
+pub(super) fn legacy_metadata(state: &Path) -> Result<Option<CachedAccount>> {
     let path = state.join("relay-account.json");
-    if !path.exists() {
-        return Ok(None);
-    }
-    ensure!(
-        std::fs::metadata(&path)?.len() <= 4096,
-        "invalid relay account metadata"
-    );
-    let data = std::fs::read(path)?;
+    let file = match std::fs::File::open(path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error.into()),
+    };
+    let mut data = Vec::new();
+    file.take(4097).read_to_end(&mut data)?;
     ensure!(data.len() <= 4096, "invalid relay account metadata");
     let account: CachedAccount = serde_json::from_slice(&data)?;
     Ok(Some(account))
