@@ -96,7 +96,7 @@ pub struct Args {
         long,
         global = true,
         env = "EJM_CLI_BASE_URL",
-        help = "API base URL for OpenAI compatible or Anthropic API-key access. Use https, or http on localhost, 127.0.0.0/8, or ::1. HTTP on loopback is refused while HTTP_PROXY, http_proxy, ALL_PROXY, or all_proxy is set unless NO_PROXY covers that host. ChatGPT and Responses use a fixed official endpoint"
+        help = "API base URL for OpenAI compatible or Anthropic API-key access. Use https, or http on localhost, 127.0.0.0/8, or ::1. HTTP on loopback is refused while HTTP_PROXY, HTTPS_PROXY, ALL_PROXY, or the lowercase form is set unless NO_PROXY contains that host exactly. ChatGPT and Responses use a fixed official endpoint"
     )]
     pub base_url: Option<String>,
 

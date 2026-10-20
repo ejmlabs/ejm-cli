@@ -97,7 +97,14 @@ fn unset_proxy_allows_http_loopback() {
 
 #[test]
 fn set_proxy_refuses_before_the_key_and_does_not_connect() {
-    for variable in ["HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy"] {
+    for variable in [
+        "HTTP_PROXY",
+        "http_proxy",
+        "HTTPS_PROXY",
+        "https_proxy",
+        "ALL_PROXY",
+        "all_proxy",
+    ] {
         let state = tempfile::tempdir().unwrap();
         let (listener, port) = bind();
         listener.set_nonblocking(true).unwrap();
@@ -142,18 +149,23 @@ fn no_proxy_exact_ip_reaches_loopback_and_skips_the_proxy() {
 }
 
 #[test]
-fn no_proxy_star_covers_localhost_and_not_an_ip() {
+fn no_proxy_star_is_not_coverage() {
     let state = tempfile::tempdir().unwrap();
     let (proxy, port) = bind();
     proxy.set_nonblocking(true).unwrap();
     let output = provider_cli(state.path())
-        .args(["doctor", "--base-url", "http://localhost:9/v1"])
+        .args(["run", "--base-url", "http://localhost:9/v1", "hello"])
         .env("ALL_PROXY", proxy_url(port))
         .env("NO_PROXY", "*")
+        .env("EJM_CLI_API_KEY", KEY)
         .output()
         .unwrap();
-    assert!(output.status.success(), "{}", text(&output.stderr));
-    assert!(text(&output.stdout).contains("Endpoint: http://localhost:9/v1\n"));
+    let stderr = text(&output.stderr);
+    assert_eq!(output.status.code(), Some(1), "{stderr}");
+    assert!(stderr.contains("ALL_PROXY"), "{stderr}");
+    assert!(!stderr.contains("set EJM_CLI_API_KEY"), "{stderr}");
+    assert!(!stderr.contains("provider connection failed"), "{stderr}");
+    assert_secret_free(&output);
     assert_proxy_idle(&proxy);
 
     let (proxy, port) = bind();
@@ -170,6 +182,27 @@ fn no_proxy_star_covers_localhost_and_not_an_ip() {
     assert!(stderr.contains("HTTP_PROXY"), "{stderr}");
     assert_secret_free(&output);
     assert_proxy_idle(&proxy);
+}
+
+#[test]
+fn bracketed_ipv6_no_proxy_refuses_before_the_key() {
+    let state = tempfile::tempdir().unwrap();
+    let (listener, port) = bind();
+    listener.set_nonblocking(true).unwrap();
+    let output = provider_cli(state.path())
+        .args(["run", "--base-url", "http://[::1]:9/v1", "hello"])
+        .env("HTTP_PROXY", proxy_url(port))
+        .env("NO_PROXY", "[::1]")
+        .env("EJM_CLI_API_KEY", KEY)
+        .output()
+        .unwrap();
+    let stderr = text(&output.stderr);
+    assert_eq!(output.status.code(), Some(1), "{stderr}");
+    assert!(stderr.contains("HTTP_PROXY"), "{stderr}");
+    assert!(!stderr.contains("set EJM_CLI_API_KEY"), "{stderr}");
+    assert!(!stderr.contains("provider connection failed"), "{stderr}");
+    assert_secret_free(&output);
+    assert_proxy_idle(&listener);
 }
 
 #[test]

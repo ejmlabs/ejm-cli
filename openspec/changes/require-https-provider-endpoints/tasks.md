@@ -39,7 +39,7 @@ Spec scenarios are named below. Integration tests in `crates/ejm-cli/tests/cli.r
 
 ## 5. Review fixes
 
-- [x] 5.1 Refuse an `http` loopback base URL when `HTTP_PROXY`, `http_proxy`, `ALL_PROXY`, or `all_proxy` is set and `NO_PROXY` / `no_proxy` does not cover the host. Cover the exact host, the same loopback IP, and `*` for a hostname. `*` does not cover an IP. Fail before the API key is read. The error names the variable and not its value. Do not bump `.github/harness-revision`.
+- [x] 5.1 Refuse an `http` loopback base URL when `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, or the lowercase form is set and `NO_PROXY` / `no_proxy` does not contain that host exactly. `*` is not coverage. A bracketed IPv6 entry is not coverage. Fail before the API key is read. The error names the variable that was set and not its value. Do not bump `.github/harness-revision`.
 - [x] 5.2 Reject userinfo, query, and fragment in the CLI check. Print endpoint lines from the parsed URL with userinfo removed and with no raw line break. `doctor` with `--replay` does not fail on an unused cleartext base URL.
 - [x] 5.3 Point rejection fixtures at `.invalid`. Replace the tautological `127.1` test with the url 2.5 normalizations. Drop the fixed port `1234` and the doctor accept check that cannot fail. Add `fe80::`, `fc00::`, `169.254.169.254`, expanded `::1`, userinfo, backslash, and `foo.localhost`. Prove the proxy is unused from `tests/proxy_env.rs`.
 

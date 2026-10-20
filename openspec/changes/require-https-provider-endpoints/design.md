@@ -154,7 +154,7 @@ Left to the harness, after this check has accepted the URL:
 
 Proxy guard, on this CLI, before the API key is read:
 
-- An accepted `http` loopback URL is refused when `HTTP_PROXY`, `http_proxy`, `ALL_PROXY`, or `all_proxy` is set and `NO_PROXY` / `no_proxy` does not cover that host. Coverage is an exact host match, the same loopback IP, or `*` for a hostname. `*` does not cover an IP address, which matches the HTTP client on pin `4a751c6a`. The error names the variable and does not include its value. `https` is not refused for this reason. The harness client on this pin still honors those variables, so the CLI refuses instead of waiting for harness PR 18's `no_proxy` change. The pin stays where it is.
+- Until ejm-cli builds against an ejm-harness revision that bypasses proxies for plain-http loopback endpoints, an accepted `http` loopback URL is refused when `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, or the lowercase form is set and `NO_PROXY` / `no_proxy` does not contain that host exactly. `*` is not coverage. A bracketed IPv6 entry such as `[::1]` is not coverage, because `Ipv6Addr` parsing leaves the brackets in place and the current harness client still sends that request through the proxy. The error names the variable that was set and does not include its value. The pin stays where it is.
 
 Commands that must keep working when `EJM_CLI_BASE_URL` is a remote `http://` URL, because they do not call `api_base_url()`:
 

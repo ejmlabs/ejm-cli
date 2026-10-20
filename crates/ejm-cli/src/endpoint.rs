@@ -22,7 +22,7 @@ pub(crate) enum HttpsLoopbackError {
 /// The snapshot stores which variable is set. It does not store the proxy URL.
 #[derive(Clone, Debug, Default)]
 pub(crate) struct ProxySnapshot {
-    /// `HTTP_PROXY`, `http_proxy`, `ALL_PROXY`, or `all_proxy`, in that order.
+    /// `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, or the lowercase form, in that order.
     pub(crate) http_proxy_variable: Option<&'static str>,
     /// `NO_PROXY` when that variable is present, otherwise `no_proxy`.
     pub(crate) no_proxy: Option<String>,
@@ -30,7 +30,14 @@ pub(crate) struct ProxySnapshot {
 
 impl ProxySnapshot {
     pub(crate) fn from_env() -> Self {
-        const PROXY_VARIABLES: [&str; 4] = ["HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy"];
+        const PROXY_VARIABLES: [&str; 6] = [
+            "HTTP_PROXY",
+            "http_proxy",
+            "HTTPS_PROXY",
+            "https_proxy",
+            "ALL_PROXY",
+            "all_proxy",
+        ];
         Self {
             http_proxy_variable: PROXY_VARIABLES
                 .into_iter()
@@ -87,9 +94,10 @@ pub(crate) fn require_https_or_loopback(value: &str) -> Result<(), HttpsLoopback
 
 /// The proxy variable that would carry this `http` loopback URL, if any.
 ///
-/// `NO_PROXY` / `no_proxy` covers the host when an entry is the exact host, the
-/// same loopback IP, or `*` for a hostname. `*` does not cover an IP address:
-/// the HTTP client on the current harness pin uses that same rule.
+/// `NO_PROXY` / `no_proxy` covers the host only when an entry is that host.
+/// A domain matches exactly, ignoring ASCII case. An IP matches `parse` of the
+/// entry with brackets left in place, so `[::1]` is not coverage. `*` is not
+/// coverage. The current harness client still proxies those two forms.
 pub(crate) fn blocking_proxy_variable(
     value: &str,
     proxies: &ProxySnapshot,
@@ -130,19 +138,11 @@ fn entry_covers(entry: &str, host: &Host<&str>) -> bool {
     if entry.is_empty() {
         return false;
     }
-    if entry == "*" {
-        return matches!(host, Host::Domain(_));
-    }
     match host {
         Host::Domain(name) => entry.eq_ignore_ascii_case(name),
         Host::Ipv4(address) => entry.parse::<Ipv4Addr>().ok() == Some(*address),
-        Host::Ipv6(address) => {
-            let bare = entry
-                .strip_prefix('[')
-                .and_then(|value| value.strip_suffix(']'))
-                .unwrap_or(entry);
-            bare.parse::<Ipv6Addr>().ok() == Some(*address)
-        }
+        // Do not strip brackets. `[::1]` does not parse, and reqwest still proxies it.
+        Host::Ipv6(address) => entry.parse::<Ipv6Addr>().ok() == Some(*address),
     }
 }
 
@@ -273,7 +273,7 @@ mod tests {
     }
 
     #[test]
-    fn proxy_guard_uses_exact_host_loopback_ip_and_star() {
+    fn proxy_guard_requires_an_exact_unbracketed_host() {
         let blocked = |url, variable: &'static str, no_proxy: Option<&str>| {
             blocking_proxy_variable(
                 url,
@@ -318,7 +318,15 @@ mod tests {
         assert_eq!(blocked("http://[::1]/v1", "HTTP_PROXY", Some("::1")), None);
         assert_eq!(
             blocked("http://[0:0:0:0:0:0:0:1]/v1", "HTTP_PROXY", Some("[::1]")),
-            None
+            Some("HTTP_PROXY")
+        );
+        assert_eq!(
+            blocked("http://[::1]/v1", "HTTP_PROXY", Some("[::1]")),
+            Some("HTTP_PROXY")
+        );
+        assert_eq!(
+            blocked("http://[::1]/v1", "HTTP_PROXY", Some("[0:0:0:0:0:0:0:1]")),
+            Some("HTTP_PROXY")
         );
         assert_eq!(
             blocked("http://localhost/v1", "HTTP_PROXY", Some("localhost")),
@@ -332,7 +340,14 @@ mod tests {
             blocked("http://127.0.0.1/v1", "HTTP_PROXY", Some("localhost")),
             Some("HTTP_PROXY")
         );
-        assert_eq!(blocked("http://localhost/v1", "ALL_PROXY", Some("*")), None);
+        assert_eq!(
+            blocked("http://localhost/v1", "ALL_PROXY", Some("*")),
+            Some("ALL_PROXY")
+        );
+        assert_eq!(
+            blocked("http://127.0.0.1/v1", "HTTPS_PROXY", None),
+            Some("HTTPS_PROXY")
+        );
         assert_eq!(
             blocked("http://127.0.0.1/v1", "HTTP_PROXY", Some("*")),
             Some("HTTP_PROXY")

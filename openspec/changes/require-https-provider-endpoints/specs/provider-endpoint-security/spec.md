@@ -48,12 +48,16 @@ The CLI MUST reject a provider base URL that has userinfo, a query, or a fragmen
 - **WHEN** the base URL contains userinfo, a query, or a fragment
 - **THEN** the CLI exits non-zero with the invalid base URL error and does not print the secret
 
-### Requirement: HTTP loopback is refused when a proxy would carry the key
-The CLI MUST refuse an `http` loopback base URL when `HTTP_PROXY`, `http_proxy`, `ALL_PROXY`, or `all_proxy` is set and neither `NO_PROXY` nor `no_proxy` covers that host. Coverage is an exact host match, the same loopback IP, or `*` for a hostname. `*` does not cover an IP. The CLI MUST do this before it reads the API key. The error MUST name the proxy variable and MUST NOT include its value. This guard MUST NOT depend on a harness revision.
+### Requirement: Loopback HTTP is refused while a proxy is configured
+Until ejm-cli builds against an ejm-harness revision that bypasses proxies for plain-http loopback endpoints, the CLI MUST refuse an `http` loopback base URL when `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, or their lowercase forms are set, unless `NO_PROXY` or `no_proxy` contains that host exactly. Neither `*` nor a bracketed IPv6 entry is coverage. The check MUST run before the API key is read. The error MUST name the variable that was set and MUST NOT include its value.
 
 #### Scenario: HTTP loopback base URL behind a proxy
-- **WHEN** the base URL is `http://127.0.0.1:1234/v1` and `HTTP_PROXY` names another host and `NO_PROXY` does not cover `127.0.0.1`
-- **THEN** the CLI exits non-zero before it reads the API key, the error names `HTTP_PROXY` and not the proxy value, and no request carrying the key is sent to the proxy
+- **WHEN** the base URL is `http://127.0.0.1:1234/v1`, `HTTP_PROXY` names another host, and `NO_PROXY` does not cover `127.0.0.1`
+- **THEN** the CLI exits non-zero before it reads the API key, the error names `HTTP_PROXY`, and no request goes to the proxy
+
+#### Scenario: NO_PROXY lists the loopback address
+- **WHEN** `NO_PROXY` is `127.0.0.1`
+- **THEN** the request goes direct
 
 ### Requirement: The CLI rejects cleartext without a harness pin bump
 The CLI MUST perform the https-or-loopback check itself. Rejecting cleartext MUST NOT depend on a harness revision.
