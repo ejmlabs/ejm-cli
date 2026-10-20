@@ -24,7 +24,7 @@ ejm-cli
 
 The provider key comes from `EJM_CLI_API_KEY`, falling back to `OPENAI_API_KEY`. `--api-key-env NAME` selects another variable. There is no API key argument. `--model` and `--base-url` override environment settings. The default `--provider openai` uses the OpenAI compatible Chat Completions interface and defaults to `gpt-4.1-mini`.
 
-`--base-url` and `EJM_CLI_BASE_URL` must use `https`. The exception is `http` on a loopback host: `localhost`, the `127.0.0.0/8` range, or `::1`. On `run`, a rejected URL exits 1. The error names `--base-url` and `EJM_CLI_BASE_URL` and does not print the URL. `ejm-cli doctor` prints the endpoint and marks a disallowed one rejected.
+`--base-url` and `EJM_CLI_BASE_URL` must use `https`. The exception is `http` on a loopback host: `localhost`, the `127.0.0.0/8` range, or `::1`. That exception is refused when `HTTP_PROXY`, `http_proxy`, `ALL_PROXY`, or `all_proxy` is set and `NO_PROXY` does not cover the host. The error names the proxy variable and does not print its value. A URL with a username, password, query, or fragment is rejected. On `run`, a rejected URL exits 1. The error names `--base-url` and `EJM_CLI_BASE_URL` and does not print the URL. `ejm-cli doctor` prints one endpoint line, without userinfo or raw line breaks, and marks a disallowed one rejected.
 
 Read tools are enabled by default. `--allow-write` registers file write tools. `--allow-shell` registers shell execution as the current user. Grants stay visible in the TUI header and remain fixed for the process. Native execution is not a security sandbox. `ejm-cli doctor` prints the executor's actual capability report.
 

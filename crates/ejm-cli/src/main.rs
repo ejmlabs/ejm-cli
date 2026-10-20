@@ -422,8 +422,16 @@ fn doctor(args: &Args) -> Result<bool> {
     match args.provider {
         ProviderKind::Chatgpt => println!("Endpoint: official ChatGPT Responses endpoint"),
         ProviderKind::Responses => println!("Endpoint: official OpenAI Responses endpoint"),
+        ProviderKind::Openai | ProviderKind::Anthropic
+            if args.replay || args.replay_file.is_some() =>
+        {
+            println!("Endpoint: (not used: offline replay)");
+        }
         ProviderKind::Openai | ProviderKind::Anthropic => match args.endpoint_check()? {
-            EndpointCheck::Allowed(url) => println!("Endpoint: {}", render::safe_text(url)),
+            EndpointCheck::Allowed(url) => println!(
+                "Endpoint: {}",
+                render::safe_text(&crate::endpoint::display_without_userinfo(url))
+            ),
             EndpointCheck::Rejected(url) => {
                 println!(
                     "Endpoint: {} (rejected). HTTPS is required except for loopback hosts.",

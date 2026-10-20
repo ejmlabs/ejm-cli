@@ -37,16 +37,30 @@ The CLI MUST accept a provider base URL from `--base-url` or `EJM_CLI_BASE_URL` 
 - **WHEN** the base URL is `http://0.0.0.0/v1`, `http://10.1.2.3/v1` or `http://172.16.0.1/v1`
 - **THEN** the CLI exits non-zero with the HTTPS-required error
 
+#### Scenario: Other schemes
+- **WHEN** the base URL uses `ftp`, `file`, `ws` or no scheme
+- **THEN** the CLI exits non-zero with an invalid base URL error
+
+### Requirement: Embedded URL secrets are rejected
+The CLI MUST reject a provider base URL that has userinfo, a query, or a fragment. The error MUST be the invalid base URL error and MUST NOT include the secret or the raw URL.
+
+#### Scenario: Userinfo, query, or fragment
+- **WHEN** the base URL contains userinfo, a query, or a fragment
+- **THEN** the CLI exits non-zero with the invalid base URL error and does not print the secret
+
+### Requirement: HTTP loopback is refused when a proxy would carry the key
+The CLI MUST refuse an `http` loopback base URL when `HTTP_PROXY`, `http_proxy`, `ALL_PROXY`, or `all_proxy` is set and neither `NO_PROXY` nor `no_proxy` covers that host. Coverage is an exact host match, the same loopback IP, or `*` for a hostname. `*` does not cover an IP. The CLI MUST do this before it reads the API key. The error MUST name the proxy variable and MUST NOT include its value. This guard MUST NOT depend on a harness revision.
+
+#### Scenario: HTTP loopback base URL behind a proxy
+- **WHEN** the base URL is `http://127.0.0.1:1234/v1` and `HTTP_PROXY` names another host and `NO_PROXY` does not cover `127.0.0.1`
+- **THEN** the CLI exits non-zero before it reads the API key, the error names `HTTP_PROXY` and not the proxy value, and no request carrying the key is sent to the proxy
+
 ### Requirement: The CLI rejects cleartext without a harness pin bump
 The CLI MUST perform the https-or-loopback check itself. Rejecting cleartext MUST NOT depend on a harness revision.
 
 #### Scenario: Cleartext is rejected on the current pin
 - **WHEN** the pinned harness still accepts a remote `http` provider URL
 - **THEN** the CLI still rejects that URL before it reads the API key
-
-#### Scenario: Other schemes
-- **WHEN** the base URL uses `ftp`, `file`, `ws` or no scheme
-- **THEN** the CLI exits non-zero with an invalid base URL error
 
 ### Requirement: Base URL is validated before credentials are used
 The CLI MUST validate the base URL before it reads or reports on the provider API key, and before it opens any network connection. The error output MUST NOT include the API key.

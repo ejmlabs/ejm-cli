@@ -6,7 +6,14 @@ pub(crate) const INVALID_BASE_URL: &str =
     "invalid provider base URL. Change --base-url or EJM_CLI_BASE_URL.";
 pub(crate) const CLEARTEXT_BASE_URL: &str = "provider base URL must use https, or http on a loopback host (localhost, 127.0.0.0/8, or ::1). Change --base-url or EJM_CLI_BASE_URL.";
 
+pub(crate) fn proxy_block_message(variable: &str) -> String {
+    format!(
+        "http provider URLs on loopback cannot be used while {variable} is set unless NO_PROXY covers the host. Change --base-url or EJM_CLI_BASE_URL."
+    )
+}
+
 /// Result of checking the provider base URL the user would actually use.
+#[derive(Debug)]
 pub(crate) enum EndpointCheck<'a> {
     Allowed(&'a str),
     Rejected(String),
@@ -89,7 +96,7 @@ pub struct Args {
         long,
         global = true,
         env = "EJM_CLI_BASE_URL",
-        help = "API base URL for OpenAI compatible or Anthropic API-key access. Use https, or http on localhost, 127.0.0.0/8, or ::1. ChatGPT and Responses use a fixed official endpoint"
+        help = "API base URL for OpenAI compatible or Anthropic API-key access. Use https, or http on localhost, 127.0.0.0/8, or ::1. HTTP on loopback is refused while HTTP_PROXY, http_proxy, ALL_PROXY, or all_proxy is set unless NO_PROXY covers that host. ChatGPT and Responses use a fixed official endpoint"
     )]
     pub base_url: Option<String>,
 
@@ -302,8 +309,10 @@ impl Args {
     /// # Errors
     ///
     /// Returns an error when the effective URL is not `https` and is not `http`
-    /// on a loopback host. The error names `--base-url` and `EJM_CLI_BASE_URL`
-    /// and does not include the supplied URL.
+    /// on a loopback host, when that loopback URL would be sent through a proxy,
+    /// or when it contains userinfo, a query, or a fragment. The error names
+    /// `--base-url` and `EJM_CLI_BASE_URL` and does not include the supplied URL
+    /// or a proxy value.
     pub fn api_base_url(&self) -> Result<&str> {
         match self.endpoint_check()? {
             EndpointCheck::Allowed(url) => Ok(url),
@@ -312,9 +321,21 @@ impl Args {
     }
 
     pub(crate) fn endpoint_check(&self) -> Result<EndpointCheck<'_>> {
+        self.endpoint_check_with(&crate::endpoint::ProxySnapshot::from_env())
+    }
+
+    pub(crate) fn endpoint_check_with(
+        &self,
+        proxies: &crate::endpoint::ProxySnapshot,
+    ) -> Result<EndpointCheck<'_>> {
         let url = self.effective_base_url();
         match crate::endpoint::require_https_or_loopback(url) {
-            Ok(()) => Ok(EndpointCheck::Allowed(url)),
+            Ok(()) => {
+                if let Some(variable) = crate::endpoint::blocking_proxy_variable(url, proxies) {
+                    bail!("{}", proxy_block_message(variable));
+                }
+                Ok(EndpointCheck::Allowed(url))
+            }
             Err(crate::endpoint::HttpsLoopbackError::Invalid) => bail!("{INVALID_BASE_URL}"),
             Err(crate::endpoint::HttpsLoopbackError::Cleartext) => Ok(EndpointCheck::Rejected(
                 crate::endpoint::display_without_userinfo(url),
@@ -515,6 +536,24 @@ mod tests {
         Args::try_parse_from(args).unwrap()
     }
 
+    fn refusal(url: &str) -> String {
+        match parsed(&["ejm-cli", "--base-url", url])
+            .endpoint_check_with(&crate::endpoint::ProxySnapshot::none())
+        {
+            Ok(EndpointCheck::Allowed(value)) => format!("allowed {value}"),
+            Ok(EndpointCheck::Rejected(_)) => CLEARTEXT_BASE_URL.to_owned(),
+            Err(error) => error.to_string(),
+        }
+    }
+
+    fn allows(url: &str) -> bool {
+        matches!(
+            parsed(&["ejm-cli", "--base-url", url])
+                .endpoint_check_with(&crate::endpoint::ProxySnapshot::none()),
+            Ok(EndpointCheck::Allowed(value)) if value == url
+        )
+    }
+
     #[test]
     fn api_base_url_accepts_https_and_loopback_only() {
         assert_eq!(
@@ -531,35 +570,31 @@ mod tests {
             "https://api.deepseek.com/v1",
             "http://localhost:11434/v1",
             "http://LOCALHOST/v1",
-            "http://127.0.0.1:1234/v1",
+            "http://127.0.0.1:9/v1",
             "http://127.0.0.2/v1",
-            "http://[::1]:1234/v1",
+            "http://[::1]:9/v1",
+            "http://[0:0:0:0:0:0:0:1]/v1",
+            "http://localhost\\@evil.invalid/v1",
         ] {
-            assert_eq!(
-                parsed(&["ejm-cli", "--base-url", url])
-                    .api_base_url()
-                    .unwrap(),
-                url,
-                "{url}"
-            );
+            assert!(allows(url), "{url}");
         }
         for url in [
-            "http://api.example.com/v1",
-            "http://localhost.evil.com/v1",
-            "http://127.0.0.1.nip.io/v1",
+            "http://api.example.invalid/v1",
+            "http://localhost.evil.invalid/v1",
+            "http://127.0.0.1.nip.invalid/v1",
+            "http://foo.localhost/v1",
             "http://192.168.1.10:11434/v1",
             "http://0.0.0.0/v1",
             "http://10.1.2.3/v1",
             "http://172.16.0.1/v1",
+            "http://169.254.169.254/v1",
+            "http://[fe80::1]/v1",
+            "http://[fc00::1]/v1",
             "http://[::]",
-            "http://[::]/v1",
             "http://[::ffff:127.0.0.1]/v1",
-            "http://user:secret@example.com/v1",
+            "http://evil.invalid\\@localhost/v1",
         ] {
-            let text = parsed(&["ejm-cli", "--base-url", url])
-                .api_base_url()
-                .unwrap_err()
-                .to_string();
+            let text = refusal(url);
             assert!(text.contains("must use https"), "{url}: {text}");
             assert!(
                 text.contains("--base-url") && text.contains("EJM_CLI_BASE_URL"),
@@ -569,24 +604,34 @@ mod tests {
             assert!(!text.contains("secret"), "{text}");
         }
         for url in [
-            "ftp://files.example.com/v1",
+            "ftp://files.example.invalid/v1",
             "file:///tmp/a",
-            "ws://api.example.com/v1",
-            "api.example.com/v1",
+            "ws://api.example.invalid/v1",
+            "api.example.invalid/v1",
+            "https://user:secret@api.example.invalid/v1",
+            "http://user:secret@localhost/v1",
+            "http://evil.invalid@localhost/v1",
+            "https://api.example.invalid/v1?key=sk-secret",
         ] {
-            let text = parsed(&["ejm-cli", "--base-url", url])
-                .api_base_url()
-                .unwrap_err()
-                .to_string();
+            let text = refusal(url);
             assert!(text.contains("invalid provider base URL"), "{url}: {text}");
             assert!(!text.contains("must use https"), "{url}: {text}");
+            assert!(!text.contains("secret"), "{text}");
+            assert!(!text.contains("sk-secret"), "{text}");
             assert!(!text.contains(url), "{text}");
         }
-        let empty = parsed(&["ejm-cli", "--base-url", ""])
-            .api_base_url()
-            .unwrap_err()
-            .to_string();
+        let empty = refusal("");
         assert!(empty.contains("invalid provider base URL"), "{empty}");
         assert!(!empty.contains("must use https"), "{empty}");
+        let blocked = parsed(&["ejm-cli", "--base-url", "http://127.0.0.1/v1"])
+            .endpoint_check_with(&crate::endpoint::ProxySnapshot {
+                http_proxy_variable: Some("HTTP_PROXY"),
+                no_proxy: None,
+            })
+            .unwrap_err()
+            .to_string();
+        assert!(blocked.contains("HTTP_PROXY"), "{blocked}");
+        assert!(blocked.contains("NO_PROXY"), "{blocked}");
+        assert!(!blocked.contains("http://"), "{blocked}");
     }
 }

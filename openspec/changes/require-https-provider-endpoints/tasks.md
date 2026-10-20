@@ -37,6 +37,12 @@ Spec scenarios are named below. Integration tests in `crates/ejm-cli/tests/cli.r
 - [x] 4.1 Do not edit `../ejm-harness`, `.github/harness-revision`, or `Cargo.lock`. The new tests must fail when the CLI check is removed even though pin `4a751c6a3f24d7d143140f79ff53517fb93e3531` still accepts remote `http://` inside private `endpoint()`.
 - [x] 4.2 Run `./scripts/check`. In the implementation notes, record harness PR 18 (`https://github.com/ejmlabs/ejm-harness/pull/18`) as the sibling design: same loopback predicate, private `endpoint()`, message `provider URL must use HTTPS, or HTTP on a loopback host`. The coordinated release in the proposal adopts that commit after it is on protected harness main. The CLI early error stays after that pin update. Leave the harness `0.2.0` versus CLI `0.1.0` release-number disagreement unresolved.
 
+## 5. Review fixes
+
+- [x] 5.1 Refuse an `http` loopback base URL when `HTTP_PROXY`, `http_proxy`, `ALL_PROXY`, or `all_proxy` is set and `NO_PROXY` / `no_proxy` does not cover the host. Cover the exact host, the same loopback IP, and `*` for a hostname. `*` does not cover an IP. Fail before the API key is read. The error names the variable and not its value. Do not bump `.github/harness-revision`.
+- [x] 5.2 Reject userinfo, query, and fragment in the CLI check. Print endpoint lines from the parsed URL with userinfo removed and with no raw line break. `doctor` with `--replay` does not fail on an unused cleartext base URL.
+- [x] 5.3 Point rejection fixtures at `.invalid`. Replace the tautological `127.1` test with the url 2.5 normalizations. Drop the fixed port `1234` and the doctor accept check that cannot fail. Add `fe80::`, `fc00::`, `169.254.169.254`, expanded `::1`, userinfo, backslash, and `foo.localhost`. Prove the proxy is unused from `tests/proxy_env.rs`.
+
 ## Workflow follow-up
 
 - Implement only after Everett approves this design. `proposal.md` and `specs/provider-endpoint-security/spec.md` are already on the branch.

@@ -68,7 +68,7 @@ The harness change remains necessary. It is the only check that runs for every c
 - The dangerous send is `bearer_auth` / `x-api-key` inside the harness. A CLI-only check would leave every other harness caller exposed. A harness-only check, on the current pin, does not exist: `endpoint()` still allows remote `http://`.
 - On today's code the key is loaded before `OpenAiProvider::new` / `AnthropicProvider::new`. Even after the harness rejects remote `http://`, that rejection happens after `required_api_key()`, and `doctor` would still print the cleartext URL as the configured endpoint.
 - Making `api_base_url()` itself return `Result<&str>` means the compiler sees both production call sites. A second unchecked accessor would be easy to misuse. The method returns the same string the caller supplied or the existing default. It does not allocate a rewritten URL.
-- The check runs only when that method is called. Replay, replay files, session listing, package commands, login, accounts, logout, and `--package-provider` do not call it, so a hostile or stale `EJM_CLI_BASE_URL` does not break commands that never send the URL.
+- The check runs only when that method is called. Replay, replay files, session listing, package commands, login, accounts, logout, and `--package-provider` do not call it, so a hostile or stale `EJM_CLI_BASE_URL` does not break commands that never send the URL. `--replay doctor` prints `Endpoint: (not used: offline replay)` and does not apply the check.
 
 **Alternatives:**
 
@@ -142,12 +142,19 @@ Rejected with the invalid-URL sentence:
 
 - `ftp://`, `file://`, `ws://`, and a value with no scheme, including `api.example.com/v1`.
 - The empty string, a value `url::Url::parse` rejects, and a parsed URL with no host.
-- The CLI does not trim. A trailing space that fails parsing uses the invalid-URL sentence.
+- The `url` parser removes tab and newline and strips leading and trailing spaces before it classifies the host. `" http://localhost/v1 "` and a tab inside `localhost` are accepted as `localhost`. The CLI does not add a second trim. A value that still fails parsing uses the invalid-URL sentence.
+
+Rejected with the invalid-URL sentence, before the scheme check, matching harness `endpoint()`:
+
+- Any URL with userinfo, a query, or a fragment, including `https://user:secret@host/v1`, `http://user:secret@localhost/v1`, and `http://evil.example@localhost/v1`. The error does not include the secret or the raw URL. `doctor` does not print that URL.
 
 Left to the harness, after this check has accepted the URL:
 
-- `https://user:secret@host/v1`, and any accepted URL that also has a query or fragment. `endpoint()` already rejects those with `provider URL must not contain credentials, query, or fragment` and does not include the URL in the error. The API key is read before that constructor runs. This design does not move that existing check. The CLI https error for `http://user:secret@example.test/v1` must still omit `secret`, because that URL is rejected here as non-loopback HTTP.
 - Redirects. The harness client already uses `redirect::Policy::none()`, so an accepted `https` URL is not followed onto `http`. This change does not weaken that policy.
+
+Proxy guard, on this CLI, before the API key is read:
+
+- An accepted `http` loopback URL is refused when `HTTP_PROXY`, `http_proxy`, `ALL_PROXY`, or `all_proxy` is set and `NO_PROXY` / `no_proxy` does not cover that host. Coverage is an exact host match, the same loopback IP, or `*` for a hostname. `*` does not cover an IP address, which matches the HTTP client on pin `4a751c6a`. The error names the variable and does not include its value. `https` is not refused for this reason. The harness client on this pin still honors those variables, so the CLI refuses instead of waiting for harness PR 18's `no_proxy` change. The pin stays where it is.
 
 Commands that must keep working when `EJM_CLI_BASE_URL` is a remote `http://` URL, because they do not call `api_base_url()`:
 
@@ -198,7 +205,7 @@ Harness PR 18 records the break under `## [Unreleased]` and prefers a later mino
 - Users of a private non-loopback `http://` server lose a path that the binary accepted and the docs did not describe. Loopback HTTP and real TLS remain. No bypass flag is added to soften that.
 - `doctor` for `responses` and `chatgpt` still succeeds when a base URL is set, while `models` and `run` fail. That mismatch is existing behavior and stays. Widening `doctor` would change a path that does not send a key.
 - Accepting every `https` host still sends the key to whatever host the user or the environment named. TLS does not make a hostile host trustworthy. The finding is cleartext, not endpoint identity.
-- `https` URLs with userinfo still reach `required_api_key()` before the harness rejects them. The key is not sent. Closing that order is a separate cleanup.
+- `https` URLs with userinfo are rejected by the CLI before `required_api_key()`. The harness still rejects them for other callers.
 - A pin bump before harness PR 18 is on protected main would name a commit that does not contain the check, or point CI at a branch. The pin stays on `4a751c6a` until that full SHA exists. The proposal's paired 0.1.0 release is what later moves it.
 - Claiming "the key never leaves the process" needs the call order and the tests below. It does not need a packet capture, and this change must not claim one.
 
@@ -212,7 +219,7 @@ Integration tests use a builder that does not force `--replay`, a temporary `--s
 
 - `doctor` with `EJM_CLI_BASE_URL=http://api.example.com/v1` prints an `Endpoint:` line that contains that URL, marks it rejected, and says HTTPS is required except for loopback hosts. The process exits 1. Stdout does not present the URL as a usable endpoint.
 - Accepted `https://api.deepseek.com/v1` from the flag and from the environment is the endpoint `doctor` prints, with no rejection mark. `--provider anthropic` with no base URL prints `https://api.anthropic.com/v1`.
-- The three loopback URLs are accepted. `doctor` prints `http://127.0.0.1:1234/v1` as a usable endpoint and does not connect to that port.
+- The three loopback URLs are accepted. `doctor` prints an ephemeral `http://127.0.0.1` URL as the usable endpoint. A separate `tests/proxy_env.rs` binary proves that `run` with a key connects to that loopback listener when no proxy is in the way, and that a set proxy receives nothing.
 - A planted API key is absent from stdout and stderr, and the output does not contain `provider connection failed` or `set EJM_CLI_API_KEY`.
 - `--provider chatgpt --base-url https://other.test/v1` still reports the fixed official endpoint. The existing `models` test for `responses` and `chatgpt` stays.
 
@@ -231,7 +238,7 @@ There is no data migration. Reverting the CLI commit restores the previous accep
 
 ## Implementation notes
 
-The CLI check is `require_https_or_loopback` in `crates/ejm-cli/src/endpoint.rs`. Provider error text stays in `args.rs`, so a later `--registry` flag can call the helper and choose its own sentence.
+The CLI check is `require_https_or_loopback` in `crates/ejm-cli/src/endpoint.rs`. Provider error text stays in `args.rs`, so a later `--registry` flag can call the helper and choose its own sentence. `blocking_proxy_variable` is the loopback proxy guard. It is not part of the shared helper, because a registry URL does not send the provider API key.
 
 Sibling design: [ejm-harness PR 18](https://github.com/ejmlabs/ejm-harness/pull/18). Same loopback predicate, private `endpoint()`, message `provider URL must use HTTPS, or HTTP on a loopback host`. The coordinated release adopts that commit after it is on protected harness main. This change leaves `.github/harness-revision` on `4a751c6a3f24d7d143140f79ff53517fb93e3531`. The CLI early error stays after that pin update. The harness `0.2.0` versus CLI `0.1.0` release-number disagreement stays unresolved.
 
