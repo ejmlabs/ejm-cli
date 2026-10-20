@@ -6,7 +6,7 @@ Changes follow [Semantic Versioning](https://semver.org/). Each repository is ve
 
 ### Added
 
-- Shared repository standards, explicit human admission, protected merge gates, two-pass Codex review, and a draft source release pipeline.
+- Shared repository standards, explicit human admission, protected merge gates, a two-pass automated review step, and a draft source release pipeline.
 
 ### Fixed
 

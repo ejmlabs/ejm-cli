@@ -293,7 +293,7 @@ tests, the release build, Rust documentation, dependency checks and actual PTY
 interaction/restoration. Repository standards passed for version `0.1.0`. The
 separate registry job succeeded but performs no registry checks for the CLI.
 
-Both independent `gpt-6.1-sol` sessions used medium reasoning. Their actual
+Both independent automated review steps used medium reasoning. Their actual
 reports matched the reviewed head and pass numbers, stated completed static
 scope, and had no findings. The old schema has no `complete` field. These
 reports establish completed static review for adoption; they do not establish
