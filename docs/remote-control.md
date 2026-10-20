@@ -1,16 +1,16 @@
 # Remote control
 
-This guide describes the planned native layer. This docs-only prerequisite adds
-no remote commands or runtime and retains protected C8's working harness pin.
-Use the following workflow only after building the reviewed native source;
-protected adoption, binary distribution and live acceptance remain pending.
+This guide describes native candidate source based on protected CLI PR #20 merge
+`9e3f8ef11dc083c31b651b9dae15a98e086e3359`. Exact-source normal and hosted
+acceptance must precede adoption; binary distribution and live acceptance remain
+pending. Use this workflow only after building the reviewed native source.
 
 Remote access shares one selected CLI session through an account-gated relay.
-Local use needs no relay account. This prepared native-only successor retains
-protected CLI parent `c8e2239392f71df82cbef6166b1827c8e5f5f1c5`,
+Local use needs no relay account. Native preparation began on protected CLI
+`c8e2239392f71df82cbef6166b1827c8e5f5f1c5`. This candidate selects
 harness merge `42e4f9cf33bd3525aec344cfdffabc251271f782` and its exact
-358-file completion API tree `826e0231...`. The unchanged native lock and prior
-passes do not accept this revision. A compatible account service is required;
+358-file completion API tree `826e0231...`. Earlier lock and gate results do not
+accept this revision. A compatible account service is required;
 no relay or browser UI is included. See [candidate status](native-remote-publication.md)
 for the blocked reviews and required fresh gates. The workflow below applies
 after those prerequisites pass.
@@ -206,8 +206,8 @@ active Noise handshake. They cannot recover honest native endpoint stream
 plaintext from the forwarding protocol.
 
 A compromised endpoint or altered client can read its own plaintext. The
-native installation and update channel must be trusted. This source
-includes local contract tests, but this extracted tree has no runtime result.
+native installation and update channel must be trusted. Earlier local contract
+tests are recorded separately; they do not accept this candidate.
 Snow states that it has not received a formal audit. Reachable
 invitation/plaintext buffers are cleared where practical; Snow does not promise
 forensic erasure of all internal key state.
@@ -242,8 +242,11 @@ The service must implement compatible account/device authorization, one-use
 header tickets, room admission, stop and revocation routes, and bounded
 WebSocket forwarding. Host and controller use the same relay account. Native
 account requests verify HTTPS certificates and refuse redirects. Native
-transport uses WSS and certificate validation. The loopback HTTP exception is
-compiled only for local tests.
+transport uses WSS with Rustls chain and hostname checks against native roots.
+An empty loaded trust store fails closed. Local `SSL_CERT_FILE` and
+`SSL_CERT_DIR` override platform roots; see [TLS dependencies](remote-dependencies.md#package-boundaries).
+This root loader does not use the full OS platform verifier.
+The loopback HTTP exception is compiled only for local tests.
 
 Relay operation, browser delivery, account capacity, daily quotas, payment and
 commercial policies belong to the separate Worker/browser publication layer.
