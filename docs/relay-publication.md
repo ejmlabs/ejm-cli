@@ -1,24 +1,24 @@
 # Relay source publication prerequisites
 
-This Worker/browser layer is being integrated on actual protected CLI parent
+This Worker/browser layer is prepared on actual protected CLI parent
 `78810826cd376588d3303f13bc237309fb5170a8`, tree
 `dca23befbbe5bf065807f8ed06a98aa5b4c7a159`. The parent accepts native source
 and inert install/review inputs. It does not accept this complete Worker,
-new UI installation or browser runtime. Worker PR #23's
-[second corrections](#second-worker-review-corrections) passed the normal local
-gate at `2de6de3958a288da4ed90c5379c26238a739e06d`. The first hosted review
-reported two medium blockers; the second timed out without a final report.
-The [third corrections](#third-worker-review-corrections) passed local and hosted
-platform checks at 8a2, but both complete reviews identified the further
-[device-history and quota corrections](#device-history-and-quota-review-corrections).
-Those corrections passed hosted platform checks at 7f10. Its first review found
-two medium blockers; its second review failed without a final report. The
-[device revocation and label correction](#device-revocation-and-label-correction)
-advanced to e0bf. Its complete retry reviews identified the prepared
-[native retirement and browser gap correction](#native-retirement-and-browser-gap-correction).
-Each candidate must pass its local checks. Fresh hosted acceptance, protected
-adoption, deployment and authenticated live acceptance remain pending.
-The historical closed deployment is recorded in [deployment status](remote-deployment.md).
+new UI installation or browser runtime.
+
+For published Worker head `86d8a73c648714c2cdb94dbdc3cbd860471f3154`,
+[run 39659009589](https://github.com/ejmlabs/ejm-cli/actions/runs/39659009589)
+produced one complete review with two medium findings. The second review failed
+execution without a final report. Neither result accepts the source. The
+prepared correction queues scoped recipient-only withdrawal follow-up and rejects
+expired profiles at cohort reads and final disclosure commit through shared
+eligibility. See [privacy contracts](relay-privacy.md#user-controls).
+
+The correction still needs its fresh local gate, exact-source hosted checks and
+two complete final reviews, separate final approval, protected adoption,
+deployment and authenticated live acceptance. Earlier correction sections below
+retain their specific source evidence. The historical closed deployment is
+recorded in [deployment status](remote-deployment.md).
 
 The approved [notice](relay-notice.md) and [terms](relay-service-terms.md) remain
 unpublished with effective dates pending actual publication. Their approved

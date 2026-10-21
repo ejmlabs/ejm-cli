@@ -64,6 +64,7 @@ export class PrivacyService {
   private eligible(id: string, buyer: Buyer, kind: Category, generation?: number): Subject {
     const subject = this.ensure(id);
     if (this.blocked(subject) || (generation !== undefined && subject.generation !== generation) || !this.consent(id, buyer, kind)) throw new PrivacyError("export_eligibility_changed", 409);
+    if (kind === "profile" && subject.profile_purge_at !== null && subject.profile_purge_at <= this.now()) throw new PrivacyError("profile_unavailable", 409);
     return subject;
   }
 
@@ -145,6 +146,7 @@ export class PrivacyService {
       this.ensure(id);
       this.store.exec("UPDATE privacy_consents SET withdrawn_at=COALESCE(withdrawn_at,?) WHERE account_id=? AND category=? AND (? IS NULL OR buyer_id=?)", this.now(), id, kind, buyerId, buyerId);
       this.evidence(id, kind, "withdrawn", buyerId ?? "all buyers"); this.bump(id);
+      this.withdrawalFollowup(id, kind, buyerId);
       if (kind === "usage") { this.store.exec("DELETE FROM privacy_usage WHERE account_id=?", id); this.store.exec("UPDATE privacy_subjects SET usage_since=? WHERE account_id=?", this.now(), id); }
       if (kind === "profile" && !this.anyConsent(id, "profile")) this.scheduleProfilePurge(id);
       else if (kind === "profile") this.store.exec("UPDATE privacy_subjects SET profile_purge_at=? WHERE account_id=? AND profile IS NOT NULL", this.profileExpiry(id), id);
@@ -229,7 +231,7 @@ export class PrivacyService {
     const ids = value.accountIds.map((id) => text(id)); if (new Set(ids).size !== ids.length) throw new PrivacyError("duplicate_subject");
     return this.store.transaction(() => {
       const candidates = ids.map((id) => { const subject = this.eligible(id, buyer, kind); return { id, generation: subject.generation }; });
-      for (const candidate of candidates) if (this.disclosures(candidate.id).length >= 512) throw new PrivacyError("disclosure_rights_capacity_reached", 429);
+      for (const candidate of candidates) this.requireDisclosureCapacity(candidate.id);
       const id = crypto.randomUUID(); const expiry = this.now() + this.retention().stagingHours * 3_600_000;
       this.store.exec("INSERT INTO privacy_manifests(id,operator_id,buyer_id,category,fields,scope,candidates,state,created_at,expires_at) VALUES(?,?,?,?,?,?,?,'prepared',?,?)", id, operator, buyer.id, kind, JSON.stringify(fields), buyerScope(buyer, kind), JSON.stringify(candidates), this.now(), expiry);
       return { manifestId: id, candidateCount: candidates.length, expiresAt: expiry, containsDownloadableData: false };
@@ -248,7 +250,7 @@ export class PrivacyService {
     if (!pseudonym) { pseudonym = crypto.randomUUID(); this.store.exec("INSERT INTO privacy_pseudonyms(account_id,buyer_id,pseudonym,expires_at) VALUES(?,?,?,?)", id, buyer.id, pseudonym, this.now() + this.retention().disclosureDays * DAY); }
     else this.store.exec("UPDATE privacy_pseudonyms SET expires_at=MAX(expires_at,?) WHERE account_id=? AND buyer_id=?", this.now() + this.retention().disclosureDays * DAY, id, buyer.id);
     if (kind === "profile") {
-      if (subject.profile === null || (subject.profile_purge_at !== null && subject.profile_purge_at <= this.now())) throw new PrivacyError("profile_unavailable", 409);
+      if (subject.profile === null) throw new PrivacyError("profile_unavailable", 409);
       const profile = directProfile(JSON.parse(subject.profile));
       const projection = Object.fromEntries(fields.filter((field) => profile[field as keyof Profile] !== undefined).map((field) => [field, profile[field as keyof Profile]]));
       if (Object.keys(projection).length === 0) throw new PrivacyError("profile_unavailable", 409);
@@ -275,7 +277,7 @@ export class PrivacyService {
     this.store.transaction(() => {
       const current = this.manifest(id, operator); const currentBuyer = approvedBuyer(this.config, current.buyer_id, this.now());
       if (current.scope !== buyerScope(currentBuyer, current.category)) throw new PrivacyError("buyer_scope_changed", 409);
-      for (const candidate of candidates) { this.eligible(candidate.id, currentBuyer, current.category, candidate.generation); if (this.disclosures(candidate.id).length >= 512) throw new PrivacyError("disclosure_rights_capacity_reached", 429); }
+      for (const candidate of candidates) { this.eligible(candidate.id, currentBuyer, current.category, candidate.generation); this.requireDisclosureCapacity(candidate.id); }
       if (includedUsage.length > 0 && this.rows("SELECT 1 AS unavailable FROM json_each(?) AS included WHERE NOT EXISTS(SELECT 1 FROM privacy_usage WHERE account_id=json_extract(included.value,'$.accountId') AND month=json_extract(included.value,'$.month') AND quality=json_extract(included.value,'$.quality') AND expires_at=json_extract(included.value,'$.expiresAt') AND expires_at>?) LIMIT 1", JSON.stringify(includedUsage), this.now()).length > 0) throw new PrivacyError("usage_unavailable", 409);
       this.store.exec("INSERT INTO privacy_ledger(id,manifest_id,buyer_id,purpose,category,fields,notice_version,subjects,digest,released_at,expires_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)", crypto.randomUUID(), id, buyer.id, buyer.purpose, manifest.category, manifest.fields, buyer.noticeVersion, JSON.stringify(candidates.map((candidate) => candidate.id)), digest, this.now(), this.now() + this.retention().disclosureDays * DAY);
       this.store.exec("UPDATE privacy_manifests SET state='released' WHERE id=?", id);
@@ -299,23 +301,46 @@ export class PrivacyService {
   private disclosures(id: string): Record<string, unknown>[] {
     return this.rows("SELECT id,buyer_id,purpose,category,fields,notice_version,digest,released_at,expires_at FROM privacy_ledger WHERE EXISTS(SELECT 1 FROM json_each(subjects) WHERE value=?) ORDER BY released_at DESC LIMIT 512", id);
   }
+  private requireDisclosureCapacity(id: string): void {
+    const tracked = this.rows("SELECT id FROM privacy_ledger WHERE EXISTS(SELECT 1 FROM json_each(subjects) WHERE value=?) UNION SELECT json_extract(item.value,'$.disclosureId') FROM privacy_rights r,json_each(r.recipients) item WHERE r.account_id=? AND r.kind='withdrawal' AND r.state!='completed' LIMIT 512", id, id);
+    if (tracked.length >= 512) throw new PrivacyError("disclosure_rights_capacity_reached", 429);
+  }
+  private withdrawalFollowup(id: string, kind: Category, buyerId: string | null): void {
+    const matching = this.disclosures(id).filter((entry) => entry.category === kind && (buyerId === null || entry.buyer_id === buyerId));
+    if (matching.length === 0) return;
+    const pending = this.rows<{ id: string; recipients: string }>("SELECT id,recipients FROM privacy_rights WHERE account_id=? AND kind='withdrawal' AND state!='completed' LIMIT 1", id)[0];
+    const recipients = JSON.parse(pending?.recipients ?? "[]") as { disclosureId: string }[];
+    const seen = new Set<unknown>(recipients.map((entry) => entry.disclosureId));
+    const completed = this.rows<{ disclosure_id: string }>("SELECT DISTINCT json_extract(item.value,'$.disclosureId') AS disclosure_id FROM privacy_rights r,json_each(r.recipients) item WHERE r.account_id=? AND r.kind='withdrawal' AND r.state='completed' AND json_extract(item.value,'$.state') IN ('confirmed','exception') AND json_extract(item.value,'$.disclosureId') IN (SELECT value FROM json_each(?))", id, JSON.stringify(matching.map((entry) => entry.id)));
+    for (const entry of completed) seen.add(entry.disclosure_id);
+    const added = matching.filter((entry) => !seen.has(entry.id)).map((entry) => ({ disclosureId: entry.id, buyerId: entry.buyer_id, state: "pending", note: "Recipient copies require contractual withdrawal follow-up." }));
+    if (added.length === 0) return;
+    const merged = [...recipients, ...added];
+    if (pending) this.store.exec("UPDATE privacy_rights SET recipients=? WHERE id=?", JSON.stringify(merged), pending.id);
+    else this.createRights(id, "withdrawal", "unspecified", "", merged);
+  }
+  private createRights(id: string, kind: string, jurisdiction: string, statusHash: string, recipients: unknown[]): { requestId: string; acknowledgedAt: number; acknowledgementDue: number; responseDue: number } {
+    const deadlines = this.config?.jurisdictionPolicies.find((entry) => entry.jurisdiction === jurisdiction) ?? { acknowledgementDays: 10, responseDays: 30 };
+    const now = this.now(); const requestId = crypto.randomUUID();
+    const retained: unknown[] = [{ category: "consent-disclosure-rights", reason: "Restricted evidence retained under the published policy; excluded from sale datasets.", expiresAt: now + this.retention().rightsDays * DAY }];
+    if (kind !== "withdrawal") retained.push({ category: "payment-provider-records", reason: "Statutory and processor retention is reviewed in the operational task; no promise of immediate buyer or backup erasure." });
+    this.store.exec("INSERT INTO privacy_rights(id,account_id,status_token_hash,kind,jurisdiction,state,requested_at,acknowledged_at,acknowledgement_due,response_due,retained_exceptions,recipients,operational_state,expires_at) VALUES(?,?,?,?,?,'acknowledged',?,?,?,?,?,?,?,?)", requestId, id, statusHash, kind, jurisdiction, now, now, now + deadlines.acknowledgementDays * DAY, now + deadlines.responseDays * DAY, JSON.stringify(retained), JSON.stringify(recipients), kind === "withdrawal" ? "completed" : "pending", now + this.retention().rightsDays * DAY);
+    return { requestId, acknowledgedAt: now, acknowledgementDue: now + deadlines.acknowledgementDays * DAY, responseDue: now + deadlines.responseDays * DAY };
+  }
 
   async rightsRequest(actor: Actor, input: unknown): Promise<unknown> {
     const id = this.account(actor); const value = object(input); exactKeys(value, ["kind", "jurisdiction"]);
     if (!["access", "export", "correction", "delete", "close"].includes(value.kind as string)) throw new PrivacyError("invalid_rights_kind");
     const jurisdiction = text(value.jurisdiction, 64);
-    const policy = this.config?.jurisdictionPolicies.find((entry) => entry.jurisdiction === jurisdiction);
-    // Conservative fallback keeps rights available while commercial activation is disabled.
-    const deadlines = policy ?? { acknowledgementDays: 10, responseDays: 30, extensionDays: 0 };
     const statusKey = [...crypto.getRandomValues(new Uint8Array(32))].map((byte) => byte.toString(16).padStart(2, "0")).join("");
     const statusHash = await sha256(statusKey);
     return this.store.transaction(() => {
       this.ensure(id);
-      if (this.rows("SELECT id FROM privacy_rights WHERE account_id=? AND state!='completed' LIMIT 33", id).length >= MAX_RIGHTS) throw new PrivacyError("rights_request_limit", 429);
+      if (this.rows("SELECT id FROM privacy_rights WHERE account_id=? AND kind!='withdrawal' AND state!='completed' LIMIT 33", id).length >= MAX_RIGHTS) throw new PrivacyError("rights_request_limit", 429);
       if (value.kind === "delete" || value.kind === "close") this.close(id, value.kind === "close");
-      const requestId = crypto.randomUUID(); const recipients = this.disclosures(id).map((entry) => ({ disclosureId: entry.id, buyerId: entry.buyer_id, state: "pending", note: "Recipient copies require contractual follow-up." }));
-      this.store.exec("INSERT INTO privacy_rights(id,account_id,status_token_hash,kind,jurisdiction,state,requested_at,acknowledged_at,acknowledgement_due,response_due,retained_exceptions,recipients,expires_at) VALUES(?,?,?,?,?,'acknowledged',?,?,?,?,?,?,?)", requestId, id, statusHash, value.kind as string, jurisdiction, this.now(), this.now(), this.now() + deadlines.acknowledgementDays * DAY, this.now() + deadlines.responseDays * DAY, JSON.stringify([{ category: "consent-disclosure-rights", reason: "Restricted evidence retained under the published policy; excluded from sale datasets.", expiresAt: this.now() + this.retention().rightsDays * DAY }, { category: "payment-provider-records", reason: "Statutory and processor retention is reviewed in the operational task; no promise of immediate buyer or backup erasure." }]), JSON.stringify(recipients), this.now() + this.retention().rightsDays * DAY);
-      return { requestId, statusKey, statusKeyNotice: "Save this private key to track this request after account closure. It grants only access to this request. It is returned once, never in a URL.", acknowledgedAt: this.now(), acknowledgementDue: this.now() + deadlines.acknowledgementDays * DAY, responseDue: this.now() + deadlines.responseDays * DAY, kind: value.kind, jurisdiction, operationalTask: { requestId, accountId: id, action: value.kind, requestedAt: this.now(), dueAt: this.now() + deadlines.responseDays * DAY, expiresAt: this.now() + this.retention().operationalTaskDays * DAY }, retainedExceptions: "Shown in the tracked request. Already delivered recipient copies require follow-up." };
+      const recipients = this.disclosures(id).map((entry) => ({ disclosureId: entry.id, buyerId: entry.buyer_id, state: "pending", note: "Recipient copies require contractual follow-up." }));
+      const request = this.createRights(id, value.kind as string, jurisdiction, statusHash, recipients);
+      return { ...request, statusKey, statusKeyNotice: "Save this private key to track this request after account closure. It grants only access to this request. It is returned once, never in a URL.", kind: value.kind, jurisdiction, operationalTask: { requestId: request.requestId, accountId: id, action: value.kind, requestedAt: request.acknowledgedAt, dueAt: request.responseDue, expiresAt: request.acknowledgedAt + this.retention().operationalTaskDays * DAY }, retainedExceptions: "Shown in the tracked request. Already delivered recipient copies require follow-up." };
     });
   }
 
@@ -393,13 +418,13 @@ export class PrivacyService {
     const counts = new Map<string, number>(); for (const candidate of candidates) { const subject = this.eligible(candidate.id, buyer, "profile", candidate.generation); if (!subject.profile) throw new PrivacyError("profile_unavailable", 409); const profile = directProfile(JSON.parse(subject.profile)); const key = profile[fields[0] as keyof Profile] ?? "not-reported"; counts.set(key, (counts.get(key) ?? 0) + 1); }
     // Suppress the whole output if even one cell is small. A complement must not expose it.
     if (candidates.length < 20 || [...counts.values()].some((count) => count < 10)) return { suppressed: true, reason: "small_or_revealing_cohort", classification: "personal-data" };
-    const universe = this.rows<{ account_id: string }>("SELECT account_id FROM privacy_subjects WHERE adult=1 AND opted_out=0 AND closed=0 AND profile IS NOT NULL ORDER BY account_id LIMIT 129").filter((row) => this.consent(row.account_id, buyer, "profile") !== null).map((row) => row.account_id).sort();
+    const universe = this.rows<{ account_id: string }>("SELECT account_id FROM privacy_subjects WHERE adult=1 AND opted_out=0 AND closed=0 AND profile IS NOT NULL AND (profile_purge_at IS NULL OR profile_purge_at>?) ORDER BY account_id LIMIT 129", this.now()).filter((row) => this.consent(row.account_id, buyer, "profile") !== null).map((row) => row.account_id).sort();
     if (universe.length > MAX_EXPORT || JSON.stringify(universe) !== JSON.stringify(candidates.map((candidate) => candidate.id).sort())) throw new PrivacyError("custom_cohort_cut_forbidden", 403);
     const payload = { buyer: buyer.name, purpose: buyer.purpose, field: fields[0], classification: "personal-data", anonymous: false, quality: "self-reported", cells: [...counts].map(([value, count]) => ({ value, count })) };
     const digest = [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(payload))))].map((byte) => byte.toString(16).padStart(2, "0")).join("");
     return this.store.transaction(() => {
       this.manifest(manifest.id, this.account(actor));
-      for (const candidate of candidates) { this.eligible(candidate.id, buyer, "profile", candidate.generation); if (this.disclosures(candidate.id).length >= 512) throw new PrivacyError("disclosure_rights_capacity_reached", 429); }
+      for (const candidate of candidates) { this.eligible(candidate.id, buyer, "profile", candidate.generation); this.requireDisclosureCapacity(candidate.id); }
       // Deny overlapping releases even across buyer or field changes. No custom cuts.
       if (this.rows("SELECT id FROM privacy_cohorts WHERE expires_at>? AND EXISTS(SELECT 1 FROM json_each(members) AS prior JOIN json_each(?) AS current ON prior.value=current.value) LIMIT 1", this.now(), JSON.stringify(universe)).length > 0) throw new PrivacyError("overlapping_cohort_forbidden", 403);
       this.store.exec("INSERT INTO privacy_cohorts(id,buyer_id,field,members,released_at,expires_at) VALUES(?,?,?,?,?,?)", crypto.randomUUID(), buyer.id, fields[0] as string, JSON.stringify(universe), this.now(), this.now() + this.retention().disclosureDays * DAY);

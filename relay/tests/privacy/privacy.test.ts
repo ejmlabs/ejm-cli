@@ -187,13 +187,25 @@ describe("bounded manual disclosure and withdrawal races", () => {
     const { service, store } = fixture(); enroll(service, actor()); const manifest = prepare(service);
     const released = await service.release(operator, { manifestId: manifest.manifestId, approved: true }) as { payload: { records: { subject: string; fields: unknown }[] }; sha256: string };
     expect(released.payload.records[0]?.subject).not.toBe("account-a"); expect(released.payload.records[0]?.fields).toEqual({ role: "engineering" }); expect(released.sha256).toMatch(/^[a-f0-9]{64}$/u);
-    service.withdraw(actor(), { category: "profile" });
+    expect(service.withdraw(actor(), { category: "profile" })).toMatchObject({ withdrawn: true, serviceAccessChanged: false });
     expect(store.exec("SELECT id FROM privacy_ledger")).toHaveLength(1);
     await expect(service.release(operator, { manifestId: manifest.manifestId, approved: true })).rejects.toThrow("manifest_not_releasable");
+    const followups = new PrivacyService(store, configuration(), () => START).rightsList(actor()) as { id: string; recipients: { disclosureId: string; buyerId: string; state: string; note: string }[] }[];
+    expect(followups).toHaveLength(1);
+    const followup = followups[0]!;
+    expect(followup.recipients).toMatchObject([{ buyerId: "buyer-a", state: "pending" }]); expect(followup.recipients).toHaveLength(1);
+    expect(() => service.rightsUpdate(operator, { requestId: followup.id, action: "complete" })).toThrow("cross_store_work_incomplete");
+    service.rightsUpdate(operator, { requestId: followup.id, action: "progress", recipients: followup.recipients.map((recipient) => ({ ...recipient, state: "requested", note: "Fixture recipient contacted" })) });
+    expect(service.withdraw(actor(), { category: "profile", buyerId: "buyer-a" })).toMatchObject({ serviceAccessChanged: false });
+    const repeated = new PrivacyService(store, configuration(), () => START).rightsList(actor());
+    expect(repeated).toHaveLength(1); expect(repeated).toMatchObject([{ id: followup.id, recipients: [{ buyerId: "buyer-a", state: "requested", note: "Fixture recipient contacted" }] }]);
+    expect(service.status(actor())).toMatchObject({ closed: false, optedOut: false }); expect(service.operationalTasks()).toEqual([]);
+    for (let index = 0; index < 31; index += 1) await service.rightsRequest(actor(), { kind: "access", jurisdiction: "fixture" });
     const rights = await service.rightsRequest(actor(), { kind: "delete", jurisdiction: "fixture" }) as { requestId: string };
     const row = store.exec<{ recipients: string }>("SELECT recipients FROM privacy_rights WHERE id=?", rights.requestId)[0]!;
     expect(JSON.parse(row.recipients)).toMatchObject([{ buyerId: "buyer-a", state: "pending" }]);
     expect(() => service.rightsUpdate(operator, { requestId: rights.requestId, action: "complete" })).toThrow("cross_store_work_incomplete");
+    await expect(service.rightsRequest(actor(), { kind: "access", jurisdiction: "fixture" })).rejects.toThrow("rights_request_limit");
   });
   it("does not let a different operator reuse prepared authority", async () => {
     const { service } = fixture(); enroll(service, actor()); const manifest = prepare(service);
@@ -290,6 +302,21 @@ describe("coarse measurements, estimates and retention", () => {
     const manifest = prepare(service, ids); const report = await service.cohort(operator, { manifestId: manifest.manifestId, approved: true }) as { payload: unknown };
     expect(report.payload).toMatchObject({ classification: "personal-data", anonymous: false, cells: [{ value: "engineering", count: 10 }, { value: "design", count: 10 }] });
     const overlapping = prepare(service, ids); await expect(service.cohort(operator, { manifestId: overlapping.manifestId, approved: true })).rejects.toThrow("overlapping_cohort_forbidden");
+    const expiries: Record<string, unknown>[] = [];
+    for (const duringDigest of [false, true]) {
+      const config = configuration(); const { service: active, store, advance, clock } = fixture(config);
+      ids.forEach((id, index) => enroll(active, actor(id), config, index < 10 ? "engineering" : "design"));
+      new PrivacyService(store, null, clock).cleanup();
+      expect(store.exec<{ profile_purge_at: number }>("SELECT profile_purge_at FROM privacy_subjects").map((row) => row.profile_purge_at)).toEqual(Array.from({ length: 20 }, () => START + 30 * DAY));
+      const restored = new PrivacyService(store, config, clock); advance(30 * DAY - 1);
+      const expiryManifest = prepare(restored, ids);
+      if (!duringDigest) advance(1);
+      const pending = restored.cohort(operator, { manifestId: expiryManifest.manifestId, approved: true });
+      if (duringDigest) advance(1);
+      const result = await pending.then(() => "released", (error: unknown) => error instanceof Error ? error.message : String(error));
+      expiries.push({ duringDigest, result, ledger: store.exec("SELECT id FROM privacy_ledger").length, cohorts: store.exec("SELECT id FROM privacy_cohorts").length, state: store.exec<{ state: string }>("SELECT state FROM privacy_manifests WHERE id=?", expiryManifest.manifestId)[0]?.state, profiles: store.exec("SELECT account_id FROM privacy_subjects WHERE profile IS NOT NULL").length });
+    }
+    expect(expiries).toEqual([false, true].map((duringDigest) => ({ duringDigest, result: "profile_unavailable", ledger: 0, cohorts: 0, state: "prepared", profiles: 20 })));
   });
   it("purges profiles after buyer approval expires and preserves retention when commercial activation is removed", () => {
     const config = configuration(); config.buyers[0]!.expiresAt = START + DAY; config.retention.profileWithdrawalDays = 10;

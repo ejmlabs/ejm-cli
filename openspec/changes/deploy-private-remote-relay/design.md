@@ -412,71 +412,38 @@ e0bf and corrected passes, then run the unchanged normal gate once after both
 fixes. Fresh exact-head admission, complete reviews, approval, protected adoption
 and deployment remain required. All eleven release tasks stay open.
 
-### Profile retention correction
+### Retention and withdrawal corrections
 
-Both bounded reviews in run `39619449723` completed for
-`9a61b44d5f0d308aeb17b1bec1cbae5ee7ca6ee0`. Each reported one medium
-profile-retention defect. This correction belongs to the ejm-cli Worker privacy
-authority; its public API, approved policy periods and sibling inputs stay fixed.
+The Worker privacy authority owns these product-specific rules. Keep public
+APIs, owner pins, policy periods and closed release controls unchanged. Existing
+SQLite transactions rotate bounded subject cleanup through its durable primary
+key cursor, preserve the earliest current purge deadline across withdrawal,
+opt-out, GPC and ineligibility, and exclude live operational holds from
+unadmitted identity deletion. Fresh valid consent or an eligible profile update
+may establish a new baseline; closure still deletes a profile immediately.
+Preserve the existing regression assertions for these prior corrections.
 
-Reuse the existing SQLite transaction and subject primary key. A singleton
-durable cursor selects at most the existing cleanup limit of subjects by
-`account_id` before checking profile presence and consent. Advance past every
-inspected subject, including unchanged eligible subjects and subjects without a
-profile, with at most one bounded wrap. Commit cursor progress with deadline
-updates and purges. This adds one small SQLite cursor table and no secondary
-index, D1 migration, background task, service or dependency. Do not use
-`updated_at` writes merely to rotate inspection order.
+The complete first review of 86d8 in run `39659009589` found missing withdrawal
+follow-up and expired cohort eligibility. Its second review produced no final
+report. Refine task 2.4 for only these two confirmed blockers:
 
-In the existing last-consent withdrawal branch, fill a missing deletion deadline
-or shorten a later deadline. Repeating withdrawal must not extend the current
-deadline. Preserve the original consent withdrawal timestamp. Fresh valid consent
-or an explicit eligible profile update may establish its existing new retention
-baseline; do not impose a lifetime minimum across those deliberate actions.
-
-Extend only the existing buyer-expiry retention and profile-withdrawal tests.
-Prove the unchanged eligible prefix cannot starve a later scope-invalidated
-profile across service recreation, and repeated withdrawal still purges at the
-original deadline. Check unchanged eligible generations and deadlines. Require
-intended failures on 9a61, corrected focused passes and the unchanged normal gate
-once before fresh human admission. Keep task 2.4 and the release gates open.
-
-### Suppression retention correction
-
-Both complete reviews in run `39627652123` found two distinct medium retention
-defects in `b35d129203f6c6bfe5e71e1eac7817ed56612eb2`. A first opt-out or GPC
-signal after profile withdrawal can replace the existing deletion deadline with
-a later one. Use the same conditional SQLite update for withdrawal and shared
-suppression, filling a missing deadline or shortening a later one. Keep the
-original withdrawal time and fresh valid consent/profile-update baseline rules.
-The shared suppression path also covers loss of adult eligibility and closure;
-closure still deletes the profile immediately. Add no dependency, table or index.
-
-Extend the existing bounded-retention case with separate direct opt-out and GPC
-subjects, preserving its original usage-expiry assertions. Prove both keep the
-withdrawal deadline and are actually purged when it becomes due. Require the
-intended failure on b35d, a corrected focused pass and the normal gate once after
-both confirmed corrections are applied. Fresh admission, complete reviews and
-separate protected adoption remain required; no release task is completed.
-
-### Unadmitted identity hold correction
-
-The second b35d review found that unadmitted identity cleanup ignores live
-operational legal holds. An operator can record a hold for a verified identity
-before Relay terms acceptance; the existing hold schema has no admission foreign
-key. Deleting that user also cascades to its provider identity and sessions.
-Apply the same live-hold exclusion used by closed-account cleanup to the existing
-unadmitted delete, using its indexed account and expiry lookup. Retain the
-100-identity limit, expiry semantics and expired-hold cleanup. CLI owns this
-Worker adapter; no harness or UI contract, API, schema, index or pin changes.
-
-Extend only the existing operational-retention case with held and unheld
-unadmitted identities and their auth records. Prove live holds preserve those
-records, while unheld records expire and held records expire after the hold.
-Keep its closed-account and pending-cancellation assertions. Require an intended
-failure on unchanged b35d, one corrected focused invocation for both affected
-cases and one normal gate before fresh exact-source admission. All release
-controls and task checkboxes remain open.
+- Within withdrawal's consent transaction, derive prior recipients from the
+  committed ledger, scoped by category and optional buyer. Reuse one pending
+  internal rights record per account, recipient progress and completion. Keep
+  operational work completed because withdrawal does not revoke relay access.
+  Preserve recipient state and deadlines on repeat, avoid duplicate disclosure
+  work, and keep automatic follow-up independent of the 32 user-request cap.
+  Include pending internal recipients in the existing 512-disclosure admission
+  bound so ledger expiry cannot cause unbounded follow-up or block withdrawal.
+- Shared profile eligibility must reject a due purge deadline during projection
+  and the final synchronous transaction. Exclude expired profiles before the
+  canonical cohort universe limit. Reuse existing SQL, clock and digest awaits;
+  add no service, dependency, schema, index or background work.
+- Extend the existing release/withdrawal and cohort cases only. Prove intended
+  failures on 86d8, then one combined corrected invocation and one normal gate.
+  Keep prepared manifests and ledger/cohort tables unchanged on expiry failure.
+  Fresh admission, complete reviews, approval, protected adoption, deployment
+  and authenticated acceptance remain required. All release tasks stay open.
 
 ### Dependency and artifact bounds
 

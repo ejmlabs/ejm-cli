@@ -1,6 +1,6 @@
 # Relay data choices and rights
 
-This reference describes the prepared Worker source on protected CLI PR #22. Both complete reviews of Worker head cf1 reported defects; the [local corrections and remaining gates](relay-publication.md#worker-review-corrections) are recorded separately from its earlier checks. Protected adoption and live acceptance remain pending. This source activates no commercial program.
+This reference describes prepared Worker source on CLI PR #23, after protected prerequisite PR #22. The [publication record](relay-publication.md) separates candidate reviews and corrections from protected adoption and live acceptance, which remain pending. This source activates no commercial program.
 
 The relay requires an operational account. Commercial participation is optional and off by default. Refusing or withdrawing does not change relay access, price or allowance. The account email, GitHub identity, devices, quotas and billing records stay outside the sale dataset.
 
@@ -11,6 +11,13 @@ The commercial program remains disabled unless `COMMERCIAL_CONFIG` parses and ev
 ## User controls
 
 Open `/privacy` while signed in to inspect choices, withdraw choices, download privacy records or submit a tracked rights request. Eligibility, named-buyer consent and direct profile controls appear only when the commercial program is configured and the account is eligible. A profile form also needs current profile consent. An explicit rejoin form needs an eligible opted-out account and no live GPC signal. Every profile and usage checkbox starts unchecked. Each choice names its buyer, purpose, fields, notice version and buyer retention period. The accepted scope also binds the notice URL, contract evidence and approval interval. Changing a buyer or scope blocks transfer until a fresh applicable choice.
+
+Withdrawing a category for one or all buyers atomically queues recipient-only
+follow-up for matching prior disclosures. It appears in the authenticated account
+rights list and uses the existing operator recipient-progress controls. This work
+does not revoke relay access. Repeating withdrawal preserves pending recipient
+progress and deadlines; completed work prevents duplication while its record is
+retained.
 
 `/do-not-sell-or-share` works without an account or identity check. A valid `Sec-GPC: 1` signal saves an opt-out for the browser and any known account. A first-party, HttpOnly, SameSite cookie preserves the browser preference when the signal disappears. The cookie lasts 400 days and is renewed when the saved preference is applied; production uses a Secure cookie restricted to the relay host. The server-side browser record follows its configured retention period of at least 366 days, while an account opt-out remains durable for the active account. Signing in with that preference also suppresses account sales. Clearing an anonymous browser cookie removes the browser's durable identifier; it does not remove an account opt-out.
 
@@ -41,14 +48,19 @@ The first release offers bounded manual JSON exports. It has no buyer login, unr
 1. An operator chooses an approved buyer, purpose, category, allowed fields and at most 128 candidate accounts, and affirms approval.
 2. Preparation stores a manifest, candidate IDs and privacy generations. It stores no downloadable data file.
 3. Release constructs the current allowed projection in memory and computes its SHA-256 digest. The serialized export is limited to 256 KiB.
-4. A synchronous transaction in the single SQLite `PrivacyAuthority` rechecks every candidate generation, current eligibility, accepted scope and buyer approval, then commits the disclosure ledger and manifest state together.
+4. A synchronous transaction in the single SQLite `PrivacyAuthority` rechecks every candidate generation, current eligibility, profile and usage expiry, accepted scope and buyer approval, then commits the disclosure ledger and manifest state together.
 5. The response is returned only after that transaction commits. There is no later download URL or retryable download authority.
 
 This transaction is the release boundary. Withdrawal or deletion committed first blocks the whole release, including one already constructing a projection. If release commits first, later withdrawal cannot recall authorized bytes. It instead triggers the recorded recipient follow-up. A network interruption after commit may mean the operator did not receive the response; the same manifest cannot release again. Prepare a fresh manifest from current eligibility if another attempt is needed.
 
-A restricted ledger records recipient, purpose, category, field set, notice version, affected accounts, digest and release time. Terminal data and payload JSON are absent. A maximum of 512 retained disclosures per account bounds complete recipient tracking; further releases fail until the applicable retention cleanup makes room.
+A restricted ledger records recipient, purpose, category, field set, notice version, affected accounts, digest and release time. Terminal data and payload JSON are absent. The per-account 512-entry admission budget counts retained disclosure-ledger IDs plus pending internal withdrawal work. New buyer exports fail while that combined budget is full and can proceed only after it has room.
 
 Cohort output requires a canonical full eligible cohort, one profile field, at least 20 subjects and at least 10 subjects in every cell. The entire report is suppressed if a small cell would be exposed. No arbitrary filters or intersections are offered. A persistent overlap registry blocks another release involving any member of a retained cohort, including a changed buyer or field. A cohort release uses the same generation transaction and ledger boundary. These controls do not prove anonymity.
+
+Individual and cohort exports reject profiles whose deletion deadline is due,
+both when reading them and when the final release transaction commits after the
+digest wait. Expired profiles are excluded before applying the canonical cohort
+universe limit.
 
 ## Account access, correction and deletion
 
@@ -58,7 +70,7 @@ Cohort output requires a canonical full eligible cohort, one profile field, at l
 | `GET /api/privacy/access` | Machine-readable privacy record, summaries and recent evidence |
 | `GET /api/privacy/evidence?before=TIMESTAMP&id=ID` | Complete evidence export in bounded pages; the response returns the next cursor |
 | `POST /api/privacy/profile` | Enter or correct a directly supplied profile |
-| `GET /api/privacy/rights` | Current account's tracked requests, deadlines, results and exceptions |
+| `GET /api/privacy/rights` | Current account's tracked requests, withdrawal follow-up, deadlines, results and exceptions |
 | `POST /api/privacy/rights/request` | Request access, export, correction, deletion or account closure |
 | `POST /v1/account/close` | Dashboard closure through the same tracked rights workflow |
 | `GET /privacy/rights` | Public form to track a request with its saved private key after account closure |
@@ -66,7 +78,10 @@ Cohort output requires a canonical full eligible cohort, one profile field, at l
 
 Authenticated mutations require a same-origin `Origin` header. Every query derives account ownership from the authenticated session. No buyer route can request a broad account export.
 
-A rights request is acknowledged and recorded before returning. Its response includes a random 256-bit private status key once. Save this key to track the request after account closure. Only its SHA-256 hash is stored. The key grants access to that request alone, restores no account or relay authority, and is never placed in a URL. Keep it private. The policy chosen for its jurisdiction sets acknowledgement, response and maximum extension periods. While commercial activation is disabled or a jurisdiction is unknown, the conservative fallback acknowledges immediately and sets a 30-day response deadline with no automatic extension. Unknown jurisdiction still needs operator review. A configured extension requires a notice before the original response deadline and can occur only once. Overdue requests stay visible in account status and the scheduled cleanup report.
+A user-submitted rights request is acknowledged and recorded before returning. Its response includes a random 256-bit private status key once. Save this key to track the request after account closure. Only its SHA-256 hash is stored. The key grants access to that request alone, restores no account or relay authority, and is never placed in a URL. Keep it private. The policy chosen for its jurisdiction sets acknowledgement, response and maximum extension periods. While commercial activation is disabled or a jurisdiction is unknown, the conservative fallback acknowledges immediately and sets a 30-day response deadline with no automatic extension. Unknown jurisdiction still needs operator review. A configured extension requires a notice before the original response deadline and can occur only once. Overdue requests stay visible in account status and the scheduled cleanup report.
+
+The 32-request account limit applies to user-submitted rights requests. Automatic
+withdrawal follow-up does not use those slots.
 
 Dashboard closure creates the durable rights request, recipient follow-up and operational work before session revocation. Its result page displays the request ID and one-time private status key without automatic navigation. Save both before leaving; signing in again cannot recover the key. The key belongs in neither logs nor URLs.
 

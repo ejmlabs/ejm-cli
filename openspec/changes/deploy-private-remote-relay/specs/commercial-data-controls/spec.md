@@ -51,6 +51,10 @@ Each sale export SHALL require an approved recipient, permitted purpose, field s
 - **WHEN** an included usage row expires or is removed during asynchronous disclosure preparation
 - **THEN** the final disclosure transaction revalidates the included rows and their deadlines and refuses to release expired or missing data
 
+#### Scenario: A retained profile expires before disclosure commits
+- **WHEN** a profile reaches its purge deadline before cohort counting or while an individual or cohort disclosure awaits its digest
+- **THEN** shared eligibility refuses the release, no ledger or cohort entry is committed, and expired profiles are excluded before the canonical universe limit
+
 #### Scenario: Buyer is unapproved
 - **WHEN** an operator requests export to an unknown recipient or unsupported purpose
 - **THEN** release is denied without producing a downloadable dataset
@@ -76,6 +80,10 @@ Users SHALL be able to inspect, correct, export and request deletion of account,
 #### Scenario: Data was already delivered
 - **WHEN** a rights request concerns a prior buyer export
 - **THEN** the service uses the disclosure ledger and recipient contract process to track required follow-up without falsely promising technical erasure of every buyer copy
+
+#### Scenario: Consent is withdrawn after a committed disclosure
+- **WHEN** an account withdraws a category for one or all buyers after release
+- **THEN** the same transaction durably queues matching recipient-only follow-up without another rights request, duplicated work, loss of pending progress, or a relay-access change, even when the user-request limit is full
 
 #### Scenario: Device history exceeds one rights export part
 - **WHEN** retained device history within an access or export capture window exceeds one bounded part
