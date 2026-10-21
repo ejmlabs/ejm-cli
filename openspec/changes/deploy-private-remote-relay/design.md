@@ -358,6 +358,29 @@ the unchanged full gate, measured source and artifact bounds, and fresh human
 admission and complete hosted reviews. Preserve all prior corrections and leave
 release task 2.4 open until protected acceptance and deployment evidence exist.
 
+### Atomic revocation and Unicode export correction
+
+The complete first review of `7f10bfab4c7dcc6bb4cd4aac2b570d778b3ec7ed`
+found two medium blockers. A session deletion failure after a separately
+committed device revocation leaves a credential that authenticates without an
+active device. Put the owner-scoped device update and session deletion in one
+existing D1 batch. Decide the response from the update result after the batch
+commits. Failure must roll back both changes so the same revocation can succeed
+on retry. Reuse the two existing statements and platform transaction boundary.
+
+Registration accepts at most 64 Unicode code points, while the generic export
+text validator counts UTF-16 units. Share the existing registration pattern as
+one product-specific label guard in the already imported privacy schema module.
+Use it at registration and operational export validation, retaining the existing
+text validator for other fields and the serialized UTF-8 part byte limit.
+
+Extend the existing revoked-session test with a real SQLite session-deletion
+failure and successful retry. Extend the complete-history export test with
+64 supplementary-plane letters per label and unchanged delivered values.
+Run these two focused cases against the old paths, then the corrected paths,
+followed by the unchanged normal gate once. Keep task 2.4 open pending exact-head
+hosted checks, complete reviews and protected acceptance.
+
 ### Dependency and artifact bounds
 
 Activate the exact 51-line candidate manifest already reviewed with its inherited

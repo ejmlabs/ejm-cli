@@ -51,6 +51,10 @@ Users SHALL be able to list safe relay device metadata, revoke devices, log out 
 - **WHEN** an account has older active devices and more than 64 newer revoked devices
 - **THEN** its bounded safe metadata list includes every active device first, newest first within each group, and a fresh account session can revoke any listed active device without transport enrollment
 
+#### Scenario: Credential deletion fails during device revocation
+- **WHEN** session deletion fails while an account revokes its device
+- **THEN** device revocation and session deletion both roll back, the request reports failure, and retry can revoke the device and invalidate its credential together
+
 #### Scenario: Fresh browser account stops sharing
 - **WHEN** a verified account session without a registered transport device stops a share owned by that account
 - **THEN** the account service retires that share under its mutation-origin checks without enrolling a controller or granting decryption or execution authority

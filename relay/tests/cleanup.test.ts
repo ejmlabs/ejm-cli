@@ -88,8 +88,10 @@ async function queue(count: number, accountIds: string[], now: number, closeFirs
 it("delivers all device-history parts across lost replies, failed progress writes and eviction", async () => {
   let now = Date.now(); const id = "history-export-fixture"; const created = now - DAY;
   await account(id, created);
+  const label = "\u{10400}".repeat(64);
+  await bindings.DB.prepare("UPDATE relay_devices SET label=? WHERE account_id=?").bind(label, id).run();
   const history = Array.from({ length: 128 }, (_, i) => `history-${String(i).padStart(3, "0")}`);
-  await bindings.DB.batch(history.map((device, i) => bindings.DB.prepare("INSERT INTO relay_devices(id,account_id,session_id,label,created_at,last_used_at,revoked_at,os_family,cli_major) VALUES(?,?,?,?,?,?,?,'linux',1)").bind(device, id, `session-${device}`, `Device ${i} ${"界".repeat(40)}`, created, created, i < 7 ? null : created + HOUR)));
+  await bindings.DB.batch(history.map((device, i) => bindings.DB.prepare("INSERT INTO relay_devices(id,account_id,session_id,label,created_at,last_used_at,revoked_at,os_family,cli_major) VALUES(?,?,?,?,?,?,?,'linux',1)").bind(device, id, `session-${device}`, label, created, created, i < 7 ? null : created + HOUR)));
   await account("other-export-fixture", created);
   const headers = { origin: bindings.RELAY_ORIGIN, "content-type": "application/json" };
   const request = (path: string, body: unknown) => new Request(bindings.RELAY_ORIGIN + path, { method: "POST", headers, body: JSON.stringify(body) });
@@ -139,12 +141,14 @@ it("delivers all device-history parts across lost replies, failed progress write
   const records = parts.flatMap(part => part.operational_result.devices);
   expect(records.map(device => device.id)).toEqual([`device-${id}`, ...history].sort());
   expect(new Set(records.map(device => device.id)).size).toBe(129);
+  expect(records.map(device => device.label)).toEqual(Array.from({ length: 129 }, () => label));
   expect(parts[2]!.operational_result.deviceExport).toMatchObject({ partCount: 3, deviceCount: 129, complete: true });
   expect(parts.every(part => part.operational_state === "completed")).toBe(true);
   const sizes = parts.map(part => new TextEncoder().encode(JSON.stringify(part.operational_result)).byteLength);
   expect(Math.max(...sizes)).toBeLessThan(48 * 1024);
-  const storedSizes = await runInDurableObject(privacy(), async (_instance, state) => state.storage.sql.exec<{ bytes: number }>("SELECT length(CAST(payload AS BLOB)) AS bytes FROM privacy_operational_parts WHERE request_id=? ORDER BY part", receipt.requestId).toArray());
+  const storedSizes = await runInDurableObject(privacy(), async (_instance, state) => state.storage.sql.exec<{ bytes: number; payload: string }>("SELECT payload,length(CAST(payload AS BLOB)) AS bytes FROM privacy_operational_parts WHERE request_id=? ORDER BY part", receipt.requestId).toArray());
   expect(storedSizes).toHaveLength(3); expect(Math.max(...storedSizes.map(part => part.bytes))).toBeLessThan(48 * 1024);
+  expect(storedSizes.flatMap(part => (JSON.parse(part.payload) as { records: { id: string; label: string }[] }).records)).toEqual(records);
   console.info({ exportDeviceRows: records.length, exportParts: parts.length, largestPublicPartBytes: Math.max(...sizes), largestStoredPartBytes: Math.max(...storedSizes.map(part => part.bytes)) });
   const denied = await privacyRoute(request("/api/privacy/rights/status", { ...receipt, statusKey: "0".repeat(64), part: 1 }), bindings, null);
   expect(denied?.status).toBe(404); expect(await denied?.json()).toEqual({ error: "request_not_found" });

@@ -4,7 +4,7 @@ import { retentionPolicy } from "./retention.js";
 import { LIMITS } from "./types.js";
 import { DEFAULT_RETENTION, parseConfig } from "./privacy/config.js";
 import { errorPage, resultPage } from "./privacy/html.js";
-import { object, text } from "./privacy/schema.js";
+import { object, text, validDeviceLabel } from "./privacy/schema.js";
 import { withCurrentNav } from "./ui.js";
 
 const ACTIVE_DEVICE_LIMIT = 16;
@@ -41,7 +41,7 @@ export async function accountRoute(request: Request, env: Env, auth: AccountSess
   if (path === "/v1/devices" && request.method === "POST") {
     if (auth.termsVersion !== env.TERMS_VERSION) return failure(403, "current_terms_required");
     const body = await jsonObject(request);
-    if (!body || typeof body.label !== "string" || !/^[\p{L}\p{N} ._-]{1,64}$/u.test(body.label) || !onlyKeys(body, ["label", "osFamily", "cliMajor"])) return failure(400, "invalid_device_metadata");
+    if (!body || !validDeviceLabel(body.label) || !onlyKeys(body, ["label", "osFamily", "cliMajor"])) return failure(400, "invalid_device_metadata");
     if (body.osFamily !== undefined && !["macos", "linux", "windows", "other"].includes(String(body.osFamily))) return failure(400, "invalid_device_metadata");
     if (body.cliMajor !== undefined && (!Number.isSafeInteger(body.cliMajor) || Number(body.cliMajor) < 0 || Number(body.cliMajor) > 1000)) return failure(400, "invalid_device_metadata");
     const existing = await env.DB.prepare("SELECT id,revoked_at FROM relay_devices WHERE account_id=? AND session_id=?").bind(auth.accountId, auth.sessionId).first<{ id: string; revoked_at: number | null }>();
@@ -56,9 +56,11 @@ export async function accountRoute(request: Request, env: Env, auth: AccountSess
   }
   const revoke = /^\/v1\/devices\/([a-zA-Z0-9_-]{16,128})\/revoke$/.exec(path);
   if (revoke && request.method === "POST") {
-    const result = await env.DB.prepare("UPDATE relay_devices SET revoked_at=? WHERE id=? AND account_id=? AND revoked_at IS NULL RETURNING session_id").bind(Date.now(), revoke[1], auth.accountId).first<{ session_id: string }>();
-    if (!result) return failure(404, "device_not_found");
-    await env.DB.prepare('DELETE FROM "session" WHERE id=? AND "userId"=?').bind(result.session_id, auth.accountId).run();
+    const [result] = await env.DB.batch([
+      env.DB.prepare("UPDATE relay_devices SET revoked_at=? WHERE id=? AND account_id=? AND revoked_at IS NULL RETURNING session_id").bind(Date.now(), revoke[1], auth.accountId),
+      env.DB.prepare('DELETE FROM "session" WHERE id=(SELECT session_id FROM relay_devices WHERE id=? AND account_id=?) AND "userId"=?').bind(revoke[1], auth.accountId, auth.accountId),
+    ]);
+    if (!result?.results.length) return failure(404, "device_not_found");
     return Response.json({ revoked: true, existingLeaseMaximumSeconds: 900 });
   }
   if (path === "/v1/logout" && request.method === "POST") {

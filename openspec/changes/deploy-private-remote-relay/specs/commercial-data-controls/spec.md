@@ -81,6 +81,10 @@ Users SHALL be able to inspect, correct, export and request deletion of account,
 - **WHEN** retained device history within an access or export capture window exceeds one bounded part
 - **THEN** the existing workflow stores every part durably, remains pending until terminal acknowledgement, survives retries and authority eviction without duplicate or missing parts, and permits private-key retrieval of each part without putting the key in a URL
 
+#### Scenario: Registered labels use supplementary Unicode letters
+- **WHEN** an access or export capture contains a device label accepted by registration with up to 64 Unicode code points
+- **THEN** the same label validator accepts it during export and every delivered part preserves the original label within the existing UTF-8 byte bound
+
 #### Scenario: Export parts reach their retention deadline
 - **WHEN** a completed request's original rights retention expires
 - **THEN** its parts become inaccessible and bounded cleanup removes them without extending expiry on retry or deleting pending work

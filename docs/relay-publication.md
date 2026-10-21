@@ -11,6 +11,9 @@ reported two medium blockers; the second timed out without a final report.
 The [third corrections](#third-worker-review-corrections) passed local and hosted
 platform checks at 8a2, but both complete reviews identified the further
 [device-history and quota corrections](#device-history-and-quota-review-corrections).
+Those corrections passed hosted platform checks at 7f10. Its first review found
+two medium blockers; its second review failed without a final report. The
+[next correction](#device-revocation-and-label-correction) remains prepared.
 Each candidate must pass its local checks. Fresh hosted acceptance, protected
 adoption, deployment and authenticated live acceptance remain pending.
 The historical closed deployment is recorded in [deployment status](remote-deployment.md).
@@ -187,10 +190,10 @@ results blocked adoption.
   that unresolved attempt. A previously uncertain key remains guarded.
   Empty or truncated provider history cannot authorize another subscription.
 
-These fixes remain local preparation until focused regressions, the unchanged
-full gate and fresh exact-source hosted checks pass. They retain the existing
-account schema and pinned Stripe client. Billing remains disabled. Policy text,
-retention durations and release controls are unchanged.
+These fixes retain the existing account schema and pinned Stripe client.
+Their subsequent local and hosted results at 8a2 are recorded below. Billing
+remains disabled. Policy text, retention durations and release controls are
+unchanged.
 
 Deploy only production artifacts from the accepted source, with admission closed,
 then bind the Worker version, configuration and artifact hashes. Verify anonymous
@@ -208,7 +211,7 @@ passed Linux/macOS quality, registry and standards. Both reviews completed:
 the first found two medium device-history defects; the second passed with one
 low quota advisory. These results block release of 8a2.
 
-The next correction keeps every active device visible within the dashboard's
+The correction keeps every active device visible within the dashboard's
 64-row response, then fills remaining space with recent revoked history.
 Access/export requests deliver retained device history through durable bounded
 parts rather than silently stopping at 64 records. They use the existing queue
@@ -222,13 +225,41 @@ Forwarding also rejects a frame larger than a renewed partial quota allowance.
 No frame is split and no allowance can become negative. Existing lease, peer
 and room-retirement checks remain required.
 
-These changes are being prepared, not released. They need old-path failure
-controls, corrected focused checks, the full gate, fresh exact-source hosted
-review and protected acceptance. Preserve closed signup, the two-account cap,
-disabled billing/commercial programs, existing secrets and all earlier fixes.
+These changes were published at head
+`7f10bfab4c7dcc6bb4cd4aac2b570d778b3ec7ed`, tree
+`5cc3e4a2d43a8c38c23053fb423c24e7a0ebd7cb`.
+[Hosted run 39564063841](https://github.com/ejmlabs/ejm-cli/actions/runs/39564063841)
+passed Linux/macOS quality, registry and standards. Its admitted source matched
+the exact product tree and pinned sibling sources. Review 1 completed and
+reported two medium findings: device revocation could leave its credential
+active after a partial failure, and export validation rejected some valid
+Unicode device labels. Review 2's execution failed; structured validation was
+skipped and no final report was available. Its cause remains unknown. These
+results block adoption and release of 7f10.
+
+Preserve closed signup, the two-account cap, disabled billing/commercial
+programs, existing secrets and all earlier fixes.
 The new index must pass the release schema preflight before application. Once
 export parts exist, recovery requires code that can deliver and clean them;
 do not roll back to a single-result implementation.
+
+### Device revocation and label correction
+
+The next correction uses one atomic, owner-scoped D1 batch for device
+revocation and session credential deletion. Registration and operational
+exports share one Unicode-aware label guard, so every accepted
+device label remains exportable. The two affected existing regression cases
+cover partial revocation failure and supplementary-plane labels.
+
+Both cases failed on unchanged 7f10 and passed on the corrected source in the
+local macOS Worker fixture on October 21. No new test cases were added. These
+focused results do not supply hosted acceptance.
+
+The unchanged full gate, push, fresh exact-head human admission and hosted
+reviews, final approval,
+protected merge and deployment remain pending for this correction. The prior
+run supplies no acceptance for the new source. No approved policy, retention
+duration, dependency or release control changes.
 
 ## Current local checks
 

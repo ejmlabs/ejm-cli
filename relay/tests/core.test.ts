@@ -200,6 +200,12 @@ describe("account and device boundary", () => {
   });
   it("requires a fresh local pairing after account recovery and prevents revoked sessions", async () => {
     const owner = await identity();
+    await bindings.DB.prepare(`CREATE TRIGGER fixture_device_session_delete_failure BEFORE DELETE ON "session" BEGIN SELECT RAISE(ABORT,'Offline fixture session deletion failure'); END`).run();
+    expect((await call(`/v1/devices/${owner.deviceId}/revoke`, "POST", {}, owner.token)).status).toBe(503);
+    expect(await bindings.DB.prepare("SELECT revoked_at FROM relay_devices WHERE id=? AND account_id=?").bind(owner.deviceId, owner.accountId).first()).toEqual({ revoked_at: null });
+    expect(await bindings.DB.prepare('SELECT id FROM "session" WHERE id=? AND "userId"=?').bind(owner.sessionId, owner.accountId).first()).toEqual({ id: owner.sessionId });
+    expect((await call("/v1/account", "GET", undefined, owner.token)).status).toBe(200);
+    await bindings.DB.prepare("DROP TRIGGER fixture_device_session_delete_failure").run();
     expect((await call(`/v1/devices/${owner.deviceId}/revoke`, "POST", {}, owner.token)).status).toBe(200);
     expect((await call("/v1/account", "GET", undefined, owner.token)).status).toBe(401);
     // The service stores no endpoint public/private keys or invite secret.

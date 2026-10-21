@@ -33,6 +33,10 @@ export function text(value: unknown, max = 128): string {
   return value;
 }
 
+export function validDeviceLabel(value: unknown): value is string {
+  return typeof value === "string" && /^[\p{L}\p{N} ._-]{1,64}$/u.test(value);
+}
+
 export function fieldSet(value: unknown, category: Category): CommercialField[] {
   const allowed = category === "profile" ? PROFILE_FIELDS : USAGE_FIELDS;
   if (!Array.isArray(value) || value.length < 1 || value.length > allowed.length) throw new PrivacyError("invalid_fields");

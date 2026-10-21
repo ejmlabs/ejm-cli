@@ -84,6 +84,11 @@ not a full history export. Hourly work saves at most 64 devices per part and one
 part per attempt. Requests with more history need more invocations; monitor the
 request deadline and use bounded catch-up if needed.
 
+Export validation uses the registration label rule: up to 64 Unicode code
+points from the permitted letters, digits and separators. Supplementary-plane
+letters remain intact. This character limit is separate from the existing
+48 KiB serialized UTF-8 part limit.
+
 The first claim records a fixed upper `(created_at,id)` watermark. Later parts
 continue after their stored cursor in that order, including tied timestamps.
 Devices added beyond the watermark belong to a later request. This is a

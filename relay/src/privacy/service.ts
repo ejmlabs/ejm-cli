@@ -1,5 +1,5 @@
 import { approvedBuyer, buyerScope, DEFAULT_RETENTION, requireConfig, type Buyer, type CommercialConfig } from "./config.js";
-import { category, directProfile, exactKeys, fieldSet, object, PrivacyError, text, usageProjection, usageSample, type Category, type CommercialField, type Profile } from "./schema.js";
+import { category, directProfile, exactKeys, fieldSet, object, PrivacyError, text, usageProjection, usageSample, validDeviceLabel, type Category, type CommercialField, type Profile } from "./schema.js";
 import { initialize, type Binding, type SqlStore } from "./store.js";
 
 const DAY = 86_400_000;
@@ -518,7 +518,9 @@ function operationalDevicePart(value: Record<string, unknown>): OperationalDevic
   let previous = part.after;
   for (const input of value.records) {
     const row = object(input); exactKeys(row, ["id", "label", "created_at", "revoked_at", "os_family", "cli_major"]);
-    const device: OperationalDevice = { id: text(row.id), label: text(row.label, 64), created_at: operationalInteger(row.created_at), revoked_at: row.revoked_at === null ? null : operationalInteger(row.revoked_at), os_family: row.os_family === null ? null : text(row.os_family, 32), cli_major: row.cli_major === null ? null : operationalInteger(row.cli_major) };
+    const label = row.label;
+    if (!validDeviceLabel(label)) throw new PrivacyError("invalid_text");
+    const device: OperationalDevice = { id: text(row.id), label, created_at: operationalInteger(row.created_at), revoked_at: row.revoked_at === null ? null : operationalInteger(row.revoked_at), os_family: row.os_family === null ? null : text(row.os_family, 32), cli_major: row.cli_major === null ? null : operationalInteger(row.cli_major) };
     const cursor = { createdAt: device.created_at, id: device.id };
     if (part.through === null || (previous !== null && !orderedOperationalCursor(previous, cursor)) || orderedOperationalCursor(part.through, cursor)) throw new PrivacyError("invalid_export_cursor");
     part.records.push(device); previous = cursor;
