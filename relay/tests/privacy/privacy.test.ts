@@ -185,6 +185,41 @@ describe("bounded manual disclosure and withdrawal races", () => {
 });
 
 describe("coarse measurements, estimates and retention", () => {
+  it("collects only fields covered by current scoped usage consents", async () => {
+    const config = configuration(); config.buyers[0]!.fields.usage = ["activeDays"];
+    config.buyers.push({ ...config.buyers[0]!, id: "buyer-b", name: "Fixture buyer B", fields: { profile: ["role"], usage: ["traffic", "osFamily"] }, expiresAt: START + DAY });
+    const { service, store, advance, clock } = fixture(config); enroll(service, actor(), config); consent(service, actor(), config, "usage");
+    const sample = { accountId: "account-a", bytes: 25_000_000, frames: 100, connectedMs: 7_200_000, quality: "measured", osFamily: "linux", cliMajor: 1, measuredAt: START };
+    service.recordUsage(sample);
+    const stored = () => store.exec("SELECT bytes,frames,connected_ms,active_days,os_family,cli_major FROM privacy_usage WHERE account_id='account-a'")[0];
+    expect(stored()).toMatchObject({ bytes: 0, frames: 0, connected_ms: 0, active_days: '["18"]', os_family: null, cli_major: null });
+    const manifest = prepare(service, ["account-a"], "usage", ["activeDays"]);
+    const released = await service.release(operator, { manifestId: manifest.manifestId, approved: true }) as { payload: { records: { summaries: { fields: unknown }[] }[] } };
+    expect(released.payload.records[0]?.summaries[0]?.fields).toEqual({ activeDays: "0-2" });
+    consent(service, actor(), config, "usage", "buyer-b"); service.recordUsage(sample);
+    expect(stored()).toMatchObject({ bytes: 25_000_000, frames: 0, connected_ms: 0, active_days: '["18"]', os_family: "linux", cli_major: null });
+    advance(2 * DAY); service.recordUsage({ ...sample, measuredAt: clock() });
+    expect(stored()).toMatchObject({ bytes: 0, frames: 0, connected_ms: 0, active_days: '["18","20"]', os_family: null, cli_major: null });
+  });
+  it("expires a monthly aggregate at its earliest included contribution deadline", async () => {
+    const { service, advance, store, clock } = fixture(); enroll(service, actor()); consent(service, actor(), configuration(), "usage");
+    const sample = { accountId: "account-a", bytes: 25_000_000, frames: 100, connectedMs: 1000, quality: "measured", measuredAt: START };
+    service.recordUsage(sample); advance(10 * DAY); service.recordUsage({ ...sample, measuredAt: clock() });
+    advance(79 * DAY); expect(service.access(actor())).toMatchObject({ usage: [expect.objectContaining({ bytes: 50_000_000 })] });
+    advance(DAY); expect(service.access(actor())).toMatchObject({ usage: [] });
+    const manifest = prepare(service, ["account-a"], "usage", ["traffic"]);
+    await expect(service.release(operator, { manifestId: manifest.manifestId, approved: true })).rejects.toThrow("usage_unavailable");
+    service.cleanup(1); expect(store.exec("SELECT account_id FROM privacy_usage")).toHaveLength(0);
+  });
+  it("starts expired same-month usage from zero before cleanup runs", async () => {
+    const config = configuration(); config.retention.usageDays = 1;
+    const { service, advance, clock } = fixture(config); enroll(service, actor(), config); consent(service, actor(), config, "usage");
+    service.recordUsage({ accountId: "account-a", bytes: 25_000_000, frames: 100, connectedMs: 7_200_000, quality: "measured", osFamily: "linux", cliMajor: 1, measuredAt: START });
+    advance(2 * DAY); service.recordUsage({ accountId: "account-a", bytes: 1000, frames: 1, connectedMs: 1000, quality: "measured", measuredAt: clock() });
+    const manifest = prepare(service, ["account-a"], "usage", ["traffic", "connectedHours", "activeDays", "osFamily", "cliMajor"]);
+    const released = await service.release(operator, { manifestId: manifest.manifestId, approved: true }) as { payload: { records: { summaries: { fields: unknown }[] }[] } };
+    expect(released.payload.records[0]?.summaries[0]?.fields).toEqual({ activeDays: "0-2", connectedHours: "0-1", traffic: "0-1" });
+  });
   it("collects only after usage consent and exports bands with honest quality labels", async () => {
     const { service } = fixture(); enroll(service, actor()); consent(service, actor(), configuration(), "usage");
     service.recordUsage({ accountId: "account-a", bytes: 25_000_000, frames: 100, connectedMs: 7_200_000, quality: "measured", osFamily: "linux", cliMajor: 1, measuredAt: START });

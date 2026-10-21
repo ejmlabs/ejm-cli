@@ -207,12 +207,12 @@ test("signed-out page and every asset reject access without disclosing content",
   } finally { await context.close(); await fixture.dispose(); }
 });
 
-test("account closure requires inline confirmation before sending a destructive request", async ({ browser }) => {
-  const fixture = await createLocalFixture({ assetsDirectory: "web/.fixture-dist" }), context = await browser.newContext();
+test("account closure confirms inline and keeps its private receipt without JavaScript", async ({ browser }) => {
+  const fixture = await createLocalFixture({ assetsDirectory: "web/.fixture-dist" }), context = await browser.newContext({ javaScriptEnabled: false });
   try {
     await signIn(context, fixture);
     const page = await context.newPage(), closes = [], dialogs = [];
-    page.on("request", request => { if (new URL(request.url()).pathname === "/v1/account/close") closes.push(request.postDataJSON()); });
+    page.on("request", request => { if (new URL(request.url()).pathname === "/v1/account/close") closes.push(Object.fromEntries(new URLSearchParams(request.postData()))); });
     page.on("dialog", dialog => { dialogs.push(dialog.type()); void dialog.dismiss(); });
     await page.goto(fixture.origin + "/account");
     await page.locator("summary").filter({ hasText: /^Close account$/u }).click();
@@ -227,6 +227,13 @@ test("account closure requires inline confirmation before sending a destructive 
     expect((await completed).status()).toBe(200);
     expect(closes).toEqual([{ confirm: "close" }]);
     expect(dialogs).toEqual([]);
+    await expect(page.getByRole("heading", { name: "Data choice saved", exact: true })).toBeVisible();
+    const receipt = JSON.parse(await page.locator("pre").textContent());
+    expect(typeof receipt.requestId).toBe("string"); expect(receipt.statusKey).toMatch(/^[a-f0-9]{64}$/u);
+    expect(page.url()).toBe(fixture.origin + "/v1/account/close");
+    expect(page.url()).not.toContain(receipt.statusKey);
+    const status = await context.request.post(fixture.origin + "/api/privacy/rights/status", { headers: { origin: fixture.origin }, data: { requestId: receipt.requestId, statusKey: receipt.statusKey } });
+    expect(status.status()).toBe(200); expect(await status.json()).toMatchObject({ kind: "close", operational_state: "pending" });
   } finally { await context.close(); await fixture.dispose(); }
 });
 

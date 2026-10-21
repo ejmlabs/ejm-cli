@@ -1,7 +1,11 @@
 import type { AccountSession, Env } from "./types.js";
-import { integer, failure, jsonObject, onlyKeys, validId } from "./http.js";
+import { boundedBytes, integer, failure, jsonObject, onlyKeys, validId } from "./http.js";
 import { retentionPolicy } from "./retention.js";
 import { LIMITS } from "./types.js";
+import { DEFAULT_RETENTION, parseConfig } from "./privacy/config.js";
+import { errorPage, resultPage } from "./privacy/html.js";
+import { object, text } from "./privacy/schema.js";
+import { withCurrentNav } from "./ui.js";
 
 export async function accountRoute(request: Request, env: Env, auth: AccountSession): Promise<Response | null> {
   const path = new URL(request.url).pathname;
@@ -58,19 +62,48 @@ export async function accountRoute(request: Request, env: Env, auth: AccountSess
     return Response.json({ revoked: true, existingLeaseMaximumSeconds: 900 });
   }
   if (path === "/v1/account/close" && request.method === "POST") {
-    const body = await jsonObject(request);
+    const form = request.headers.get("content-type")?.startsWith("application/x-www-form-urlencoded") ?? false;
+    const bytes = form ? await boundedBytes(request) : null;
+    const fields = bytes ? new URLSearchParams(new TextDecoder().decode(bytes)) : null;
+    const body = form ? fields?.size === 1 ? Object.fromEntries(fields) : null : await jsonObject(request);
     if (!body || body.confirm !== "close" || !onlyKeys(body, ["confirm"])) return failure(400, "confirmation_required");
-    await revokeRelayAccount(env, auth.accountId);
-    return Response.json({ closed: true, billingCancellation: await env.DB.prepare("SELECT state FROM relay_billing_cancellations WHERE account_id=?").bind(auth.accountId).first(), retainedExceptions: ["Required billing and legal records follow the configured category retention policy.", "Recipient copies already released require recorded follow-up; this action cannot recall them."] });
+    const upstream = await env.PRIVACY_AUTHORITY.get(env.PRIVACY_AUTHORITY.idFromName("privacy-v1")).fetch("https://privacy.internal/internal/action", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "rights/request", actor: { accountId: auth.accountId, browserId: null, operator: false, gpc: request.headers.get("sec-gpc") === "1" }, input: { kind: "close", jurisdiction: "unspecified" } }) });
+    const result = object(await upstream.json());
+    const status = upstream.ok ? await followUpRightsRequest(env, result, auth.accountId) : upstream.status;
+    if (status === 200) {
+      try { result.billingCancellation = await env.DB.prepare("SELECT state FROM relay_billing_cancellations WHERE account_id=?").bind(auth.accountId).first(); }
+      catch { result.billingCancellation = { state: "unknown" }; }
+    }
+    const errorCode = result.error;
+    if (typeof errorCode === "string") result.error = { code: errorCode };
+    return form ? withCurrentNav(new Response(result.requestId ? resultPage(result) : errorPage(errorCode), { status, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } }), "/privacy") : Response.json(result, { status });
   }
   return null;
 }
 
-export async function revokeRelayAccount(env: Env, accountId: string): Promise<void> {
-  const privacy = env.PRIVACY_AUTHORITY.get(env.PRIVACY_AUTHORITY.idFromName("privacy-v1"));
-  const closed = await privacy.fetch("https://internal/internal/close", { method: "POST", body: JSON.stringify({ accountId }) });
-  await closed.text();
-  if (!closed.ok) throw new Error("privacy_authority_unavailable");
+export async function queueOperationalTask(env: Env, task: Record<string, unknown>): Promise<void> {
+  const days = (parseConfig(env.COMMERCIAL_CONFIG)?.retention ?? DEFAULT_RETENTION).operationalTaskDays;
+  await env.DB.prepare("INSERT OR IGNORE INTO privacy_operational_tasks(request_id,account_id,action,state,requested_at,due_at,expires_at) VALUES(?,?,?,'pending',?,?,?)").bind(text(task.requestId), text(task.accountId), text(task.action), task.requestedAt, task.dueAt, typeof task.expiresAt === "number" ? task.expiresAt : Number(task.requestedAt) + days * 86_400_000).run();
+}
+
+export async function followUpRightsRequest(env: Env, result: Record<string, unknown>, accountId: string): Promise<number> {
+  // The authority owns the pending task before relay credentials are revoked.
+  try { await queueOperationalTask(env, object(result.operationalTask)); }
+  catch { result.operationalQueuePending = true; }
+  if (result.kind === "close") {
+    try { await revokeRelayAccount(env, accountId, true); result.closed = true; result.relayClosureAcknowledged = true; }
+    catch { result.error = "relay_revocation_pending"; result.relayClosureAcknowledged = false; return 503; }
+  }
+  return 200;
+}
+
+export async function revokeRelayAccount(env: Env, accountId: string, privacyAlreadyClosed = false): Promise<void> {
+  if (!privacyAlreadyClosed) {
+    const privacy = env.PRIVACY_AUTHORITY.get(env.PRIVACY_AUTHORITY.idFromName("privacy-v1"));
+    const closed = await privacy.fetch("https://internal/internal/close", { method: "POST", body: JSON.stringify({ accountId }) });
+    await closed.text();
+    if (!closed.ok) throw new Error("privacy_authority_unavailable");
+  }
   const now = Date.now();
   await env.DB.batch([
     env.DB.prepare("UPDATE relay_accounts SET status='closed',closed_at=COALESCE(closed_at,?),cleanup_after=COALESCE(cleanup_after,?) WHERE id=?").bind(now, now, accountId),

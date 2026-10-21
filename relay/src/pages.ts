@@ -13,7 +13,7 @@ export function accountPage(account: AccountSession | null, env: Env): Response 
   if (!account) return page("Relay account", templates.signedOut, "/account");
   return pageValues(page("Relay account", templates.account, "/account"), { email: account.email, termsVersion: env.TERMS_VERSION, termsState: account.termsVersion === env.TERMS_VERSION ? "Service terms accepted" : "Service terms required" },
     { plan: billingConfigured(env) ? templates.paymentActions : templates.freePlan },
-    { "#accept-terms": { "data-version": env.TERMS_VERSION }, ...(account.termsVersion === env.TERMS_VERSION ? {} : { "#account-terms": { open: "" } }) });
+    { "#accept-terms": { "data-version": env.TERMS_VERSION }, "#close-account-form": { method: "post", action: "/v1/account/close" }, ...(account.termsVersion === env.TERMS_VERSION ? {} : { "#account-terms": { open: "" } }) });
 }
 export function devicePage(account: AccountSession | null): Response { return page("Approve a CLI device", account ? templates.device : templates.deviceSignedOut, "/account"); }
 export function termsPage(env: Env): Response {
@@ -35,7 +35,6 @@ function on(id,task){document.getElementById(id)?.addEventListener('click',()=>t
 on('sign-in',async()=>{const result=await api('/api/auth/sign-in/social',{provider:'github',callbackURL:location.origin+'/account'});const target=new URL(result.url);if(target.origin!=='https://github.com')throw new Error('Unexpected sign-in origin');location.assign(target.href);});
 on('accept-terms',async()=>{await api('/v1/account/terms',{version:document.getElementById('accept-terms').dataset.version});const label=document.querySelector('[data-field="termsState"]');if(label)label.textContent='Service terms accepted';status.textContent='Service terms accepted. Commercial choices remain off.';});
 on('sign-out',async()=>{await api('/v1/logout',{});location.assign('/account');});
-document.getElementById('close-account-form')?.addEventListener('submit',event=>{event.preventDefault();if(new FormData(event.currentTarget).get('confirm')!=='close')return;api('/v1/account/close',{confirm:'close'}).then(()=>location.assign('/account')).catch(report);});
 async function openBillingPortal(){const result=await api('/v1/billing/portal',{});const target=new URL(result.url);if(target.origin!=='https://billing.stripe.com')throw new Error('Unexpected payment origin');location.assign(target.href);}
 on('billing-portal',openBillingPortal);
 document.querySelectorAll('[data-plan]').forEach(button=>button.addEventListener('click',async()=>{try{const result=await api('/v1/billing/checkout',{plan:button.dataset.plan});const target=new URL(result.url);if(target.origin!=='https://checkout.stripe.com')throw new Error('Unexpected payment origin');location.assign(target.href);}catch(error){if(error instanceof Error&&error.message==='manage_existing_subscription_in_portal')await openBillingPortal().catch(report);else report(error);}}));

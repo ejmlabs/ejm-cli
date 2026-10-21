@@ -29,6 +29,10 @@ Commercial data SHALL use an explicit field allowlist and provenance. Profile fi
 - **WHEN** a record or field is sourced from GitHub, another identity provider or enrichment data
 - **THEN** commercial eligibility validation rejects it even if its value matches a directly supplied field
 
+#### Scenario: Consent covers only part of usage data
+- **WHEN** current usage consent covers only a subset of available fields
+- **THEN** collection retains only the counters and optional metadata needed for those fields and does not store unrelated traffic, duration or device metadata
+
 ### Requirement: Excluded commercial data
 Commercial storage and exports SHALL exclude application contents, prompts, output, commands, keys, credentials, files, repository names, raw IPs, precise locations, exact session traces, device fingerprints, contact details, authentication identity and payment data. No endpoint SHALL offer a broader arbitrary account export to buyers.
 
@@ -69,6 +73,14 @@ Users SHALL be able to inspect, correct, export and request deletion of account,
 - **WHEN** a rights request concerns a prior buyer export
 - **THEN** the service uses the disclosure ledger and recipient contract process to track required follow-up without falsely promising technical erasure of every buyer copy
 
+#### Scenario: Account closes from the dashboard
+- **WHEN** an authenticated user confirms dashboard account closure after a prior disclosure
+- **THEN** durable close-rights, recipient and operational work exist before session revocation, and the response exposes a private tracking key the user can retain
+
+#### Scenario: An operational identity hold is active
+- **WHEN** deletion work reaches an account with an unexpired operational preservation hold
+- **THEN** relay and session authority are revoked while held identity records remain protected and the tracked result reports the retained exception
+
 ### Requirement: Adult commercial participation
 The initial commercial program SHALL accept only users who affirm adult eligibility through a proportionate age gate. Unknown or known minor eligibility SHALL block commercial collection and transfer. Full birth dates SHALL NOT be collected solely for this gate.
 
@@ -82,6 +94,14 @@ Every operational and commercial data category SHALL have a configured retention
 #### Scenario: Records expire
 - **WHEN** a category's retention period ends
 - **THEN** bounded cleanup removes its expired records and dependent staging while retaining only documented exceptions
+
+#### Scenario: More samples enter the same monthly aggregate
+- **WHEN** later samples are added to a live monthly aggregate
+- **THEN** earlier contributions keep their original expiry bound and later collection cannot extend it
+
+#### Scenario: Cleanup has not removed an expired aggregate
+- **WHEN** access, export or a new sample reaches an expired monthly row
+- **THEN** access and export exclude it, and new collection starts from zero rather than merging expired data
 
 ### Requirement: Honest data descriptions
 Account-linked statistics and buyer-specific pseudonyms SHALL be treated as personal data. Reports SHALL distinguish self-reported fields, measurements and estimates. Cohort output SHALL suppress small or revealing combinations, and no output SHALL be called anonymous without a documented reidentification assessment.

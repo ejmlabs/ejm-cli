@@ -54,15 +54,18 @@ async function completeOperationalTask(env: Env, task: { request_id: string; acc
     if (!quotaResponse.ok) throw new Error("operational_access_unavailable");
     result = { account, identity, providerIdentities: providers.results, devices: devices.results, billing, reservations, retention: "Payment references, consent and disclosure evidence follow configured legal retention policies." };
   } else if (["delete", "close"].includes(task.action)) {
-    await revokeRelayAccount(env, task.account_id);
-    await env.DB.batch([
+    await revokeRelayAccount(env, task.account_id, task.action === "close");
+    const now = Date.now();
+    const changes = await env.DB.batch([
       env.DB.prepare("DELETE FROM connection_tickets WHERE account_id=?").bind(task.account_id),
-      env.DB.prepare('DELETE FROM "account" WHERE "userId"=?').bind(task.account_id),
-      env.DB.prepare("UPDATE relay_devices SET label='Deleted device',os_family=NULL,cli_major=NULL WHERE account_id=?").bind(task.account_id),
-      env.DB.prepare('UPDATE "user" SET name=\'Deleted account\',email=?,image=NULL,"emailVerified"=0 WHERE id=?').bind(`${task.account_id}@deleted.invalid`, task.account_id),
+      env.DB.prepare('DELETE FROM "account" WHERE "userId"=? AND NOT EXISTS(SELECT 1 FROM operational_legal_holds WHERE account_id=? AND expires_at>?)').bind(task.account_id, task.account_id, now),
+      env.DB.prepare("UPDATE relay_devices SET label='Deleted device',os_family=NULL,cli_major=NULL WHERE account_id=? AND NOT EXISTS(SELECT 1 FROM operational_legal_holds WHERE account_id=? AND expires_at>?)").bind(task.account_id, task.account_id, now),
+      env.DB.prepare('UPDATE "user" SET name=\'Deleted account\',email=?,image=NULL,"emailVerified"=0 WHERE id=? AND NOT EXISTS(SELECT 1 FROM operational_legal_holds WHERE account_id=? AND expires_at>?)').bind(`${task.account_id}@deleted.invalid`, task.account_id, task.account_id, now),
+      env.DB.prepare("SELECT MAX(expires_at) AS expiresAt FROM operational_legal_holds WHERE account_id=? AND expires_at>?").bind(task.account_id, now),
     ]);
+    const hold = changes[4]!.results[0] as { expiresAt: number | null };
     state = "exception";
-    result = { deleted: ["Provider credentials", "Session credentials", "Device labels", "Operational email and profile"], retained: ["Minimal closed-account key prevents reopening transfers", "Required payment, consent and disclosure references follow configured category policies"], recipients: "Recipient follow-up is tracked separately; previously released copies cannot be recalled." };
+    result = { deleted: hold.expiresAt === null ? ["Provider credentials", "Session credentials", "Device labels", "Operational email and profile"] : ["Session credentials", "Connection tickets"], retained: ["Minimal closed-account key prevents reopening transfers", "Required payment, consent and disclosure references follow configured category policies"], ...(hold.expiresAt === null ? {} : { legalHold: { expiresAt: hold.expiresAt, retained: ["Provider identity and credentials", "Operational email and profile", "Device labels and metadata"] } }), recipients: "Recipient follow-up is tracked separately; previously released copies cannot be recalled." };
   } else {
     state = "exception"; result = { message: "Provider-owned verified identity corrections require a new verified sign-in or an operator-reviewed correction. No unverified email change is applied." };
   }

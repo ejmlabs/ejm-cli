@@ -4,9 +4,12 @@ This Worker/browser layer is being integrated on actual protected CLI parent
 `78810826cd376588d3303f13bc237309fb5170a8`, tree
 `dca23befbbe5bf065807f8ed06a98aa5b4c7a159`. The parent accepts native source
 and inert install/review inputs. It does not accept this complete Worker,
-new UI installation or browser runtime. Local stage checks are recorded below;
-the normal full gate is required before committing. Hosted checks, protected
-adoption, deployment and authenticated live acceptance remain pending.
+new UI installation or browser runtime. Worker PR #23 head
+`cf1efa10edc61647feac62b35b9e9c3420661283` passed its normal local gate,
+but two complete hosted reviews reported five defects and blocked adoption.
+The [review corrections](#worker-review-corrections) are being prepared locally.
+Corrected-source checks, protected adoption, deployment and authenticated live
+acceptance remain pending.
 The historical closed deployment is recorded in [deployment status](remote-deployment.md).
 
 The approved [notice](relay-notice.md) and [terms](relay-service-terms.md) remain
@@ -95,6 +98,32 @@ two complete exact-head reviews, separate human `/approve`, then protected merge
 A new revision or failed review needs the repository's fresh admission process;
 old approvals do not authorize the Worker revision.
 
+### Worker review corrections
+
+Both reviews in [run 39534461293](https://github.com/ejmlabs/ejm-cli/actions/runs/39534461293)
+completed for Worker head `cf1efa10edc61647feac62b35b9e9c3420661283` and reported
+five distinct defects. The reports blocked adoption. They were complete reviews,
+not capacity or timeout failures. The prepared correction scope is:
+
+- Retire an old socket pair before replacement admission, isolate replacement
+  pairs from delayed close/error callbacks and require both endpoints to start
+  a fresh handshake. Legacy socket attachments close on upgrade; no database
+  migration is required.
+- Collect only usage fields covered by current approved consent, keeping only
+  the counters needed for those fields.
+- Merge only unexpired monthly usage, retain the earliest included contribution's
+  expiry and exclude expired rows from access and exports before cleanup.
+- Honor operational holds during rights deletion, report retained identity as an
+  explicit exception and still revoke service access.
+- Route dashboard closure through durable rights, recipient and operational
+  tracking, displaying its one-time private tracking key before the user leaves.
+
+These corrections are local preparation. Their focused regressions, normal full
+gate and fresh exact-revision hosted admission remain required before separate
+human approval and protected adoption. The earlier local results below describe
+the rejected head; they do not qualify its corrected successor. The correction
+changes no approved policy body, retention limit, admission or commercial flag.
+
 Deploy only production artifacts from the accepted source, with admission closed,
 then bind the Worker version, configuration and artifact hashes. Verify anonymous
 access controls and protected asset denials. Real account/device sign-in, native
@@ -104,13 +133,15 @@ preview. Preserve existing secrets and durable state on retries.
 
 ## Current local checks
 
-The October 20 preparation ran on macOS arm64 with Rust 1.99.1, Node 26.12.0,
+The following October 20 results describe head cf1 before the review corrections.
+Its preparation ran on macOS arm64 with Rust 1.99.1, Node 26.12.0,
 npm 11.20.0 and wasm-bindgen 0.2.129. Local stages passed 133 native unit tests,
 six CLI integration tests, five browser-crypto tests, 118 Worker tests and eleven
 real Chrome cases. The native PTY supervisor passed all seventeen sessions.
 Native-to-Worker and native-to-browser encrypted fixtures used the current locked
-Cargo test-artifact record. No paid provider was called. These stage results do
-not replace the normal full `./scripts/check` required before each commit.
+Cargo test-artifact record. No paid provider was called. The normal full
+`./scripts/check` also passed for cf1 before its commit. Every corrected revision
+still needs its own normal full gate.
 
 The storage fixture permits only the Room's bounded retirement metadata and
 continues scanning every bounded D1/DO row and captured log for content and keys.
@@ -141,8 +172,9 @@ inputs and toolchain, replacing only seven recorded presentation inputs with
 their earlier bytes. Its baseline Worker is 293,843 bytes gzip. Both bundles
 use Node's default gzip compression. No component framework runtime is emitted.
 Local bytes and loopback timings establish neither production CPU nor zero cost.
-Linux hosted execution, exact-head reviews, protected adoption, updated deployment,
-public policy publication and authenticated live acceptance remain separate.
+The two complete hosted reviews rejected cf1. Fresh corrected-source hosted
+acceptance, protected adoption, updated deployment, public policy publication
+and authenticated live acceptance remain separate.
 
 ## Public documentation and policy publication
 

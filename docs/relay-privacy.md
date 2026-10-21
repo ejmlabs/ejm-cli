@@ -1,6 +1,6 @@
 # Relay data choices and rights
 
-This reference describes the Worker source being integrated on protected CLI PR #22. Its exact prerequisites and remaining checks are recorded in [publication prerequisites](relay-publication.md). Local stage checks are recorded there; hosted adoption and live acceptance remain pending. This source activates no commercial program.
+This reference describes the prepared Worker source on protected CLI PR #22. Both complete reviews of Worker head cf1 reported defects; the [local corrections and remaining gates](relay-publication.md#worker-review-corrections) are recorded separately from its earlier checks. Protected adoption and live acceptance remain pending. This source activates no commercial program.
 
 The relay requires an operational account. Commercial participation is optional and off by default. Refusing or withdrawing does not change relay access, price or allowance. The account email, GitHub identity, devices, quotas and billing records stay outside the sale dataset.
 
@@ -28,7 +28,9 @@ Unknown age or a self-reported minor blocks collection and transfer. The gate re
 
 No names, email, contact lists, employer name, provider profile fields, enrichment data, payment data, device fingerprints, exact session traces, raw IPs or precise locations enter commercial storage or projections. No prompts, commands, output, tools, paths, files, repository names, secrets or ciphertext enter these storage paths. Adding an unknown field fails validation. A provider-derived profile fails even when its value happens to match an allowed direct choice. Collection does not prefill GitHub fields.
 
-Usage collection starts only with current usage consent. A bounded monthly accumulator holds actual forwarded counts and day membership so it can produce bands. It holds no per-session trace or application data. Reserved quota is never treated as measured forwarding. A flush includes its measurement block's start time. A block spanning a usage consent or eligibility change is dropped. Adding a buyer or changing usage permission resets retained usage accumulators, so later consent cannot cover earlier collection. Withdrawal deletes accumulated usage when usage permission changes. Exports include only coarse bands and a measurement or estimate label. Idle time that the relay did not observe is not inferred as measured connection time.
+Commercial usage collection is limited to the union of fields covered by current approved buyer usage consents. A bounded monthly accumulator retains only the metadata and counters needed for those fields. For example, permission for OS family alone does not authorize traffic, connected-time or day-membership counters in the commercial accumulator. Raw frame counts used to detect an active day are transient; they are not retained as commercial usage. The accumulator holds no per-session trace or application data. Reserved quota is never treated as measured forwarding.
+
+A flush includes its measurement block's start time. A block spanning a usage consent or eligibility change is dropped. Adding a buyer or changing usage permission resets retained usage accumulators, so later consent cannot cover earlier collection. Withdrawal deletes accumulated usage when usage permission changes. Monthly merges include only unexpired rows and preserve the earliest included contribution's expiry. Later samples can therefore expire sooner than their own retention limit; they cannot extend older samples. Expired usage is excluded from account access and buyer exports even before cleanup deletes its row. Exports include only coarse bands and a measurement or estimate label. Idle time that the relay did not observe is not inferred as measured connection time.
 
 All account-linked rows and buyer pseudonyms are treated as personal data. The service makes no anonymity claim.
 
@@ -58,6 +60,7 @@ Cohort output requires a canonical full eligible cohort, one profile field, at l
 | `POST /api/privacy/profile` | Enter or correct a directly supplied profile |
 | `GET /api/privacy/rights` | Current account's tracked requests, deadlines, results and exceptions |
 | `POST /api/privacy/rights/request` | Request access, export, correction, deletion or account closure |
+| `POST /v1/account/close` | Dashboard closure through the same tracked rights workflow |
 | `GET /privacy/rights` | Public form to track a request with its saved private key after account closure |
 | `POST /api/privacy/rights/status` | Read one request using its ID and private status key in the body |
 
@@ -65,9 +68,13 @@ Authenticated mutations require a same-origin `Origin` header. Every query deriv
 
 A rights request is acknowledged and recorded before returning. Its response includes a random 256-bit private status key once. Save this key to track the request after account closure. Only its SHA-256 hash is stored. The key grants access to that request alone, restores no account or relay authority, and is never placed in a URL. Keep it private. The policy chosen for its jurisdiction sets acknowledgement, response and maximum extension periods. While commercial activation is disabled or a jurisdiction is unknown, the conservative fallback acknowledges immediately and sets a 30-day response deadline with no automatic extension. Unknown jurisdiction still needs operator review. A configured extension requires a notice before the original response deadline and can occur only once. Overdue requests stay visible in account status and the scheduled cleanup report.
 
+Dashboard closure creates the durable rights request, recipient follow-up and operational work before session revocation. Its result page displays the request ID and one-time private status key without automatic navigation. Save both before leaving; signing in again cannot recover the key. The key belongs in neither logs nor URLs.
+
 The authority durably records pending operational tasks. An idempotent D1 queue reaches identity, devices, quota, payment references and account storage. Hourly cleanup retries enqueueing pending tasks if an earlier queue write failed. Closing an account suppresses all transfers, revokes relay authority and closes active rooms before successful acknowledgment. If relay revocation cannot finish, the response reports the pending closure with status 503 and still supplies the private request key; it does not claim closure succeeded. A failed D1 task enqueue does not lose the durable authority task or its tracking key. Profile correction and all consent changes invalidate prepared exports.
 
 A request cannot be marked complete while operational work or recipient follow-up is pending. Each recorded recipient must be confirmed or have an explained exception. Operators cannot silently drop a recipient. Restricted consent, disclosure, rights and statutory payment evidence use their own policies and are never reintroduced into sale projections. Buyer copies, provider logs and backups need recorded contractual or provider follow-up; the service does not promise that every remote copy is technically erased at once.
+
+A live operational hold also applies to direct rights deletion. Held identity remains available for the recorded purpose, with its retained categories and hold expiry reported as explicit exceptions. The hold does not preserve relay access: account, session, device and room authority is still revoked.
 
 ## Retention and bounded cleanup
 
@@ -76,7 +83,7 @@ The hourly job uses expiry indexes and deletes at most 128 rows from each privac
 | Category | Technical rule |
 | --- | --- |
 | Application contents and ciphertext | Never stored |
-| Optional usage accumulators | At most 90 days; usage withdrawal removes the current accumulator immediately |
+| Optional usage accumulators | At most 90 days; monthly rows retain the earliest included contribution's expiry, so newer samples may expire sooner. Usage withdrawal removes the current accumulator immediately. |
 | Withdrawn direct profile | Immediately excluded from sale; purge within the configured period, no more than 30 days |
 | Prepared manifests | Configured lifetime, at most 24 hours; invalidated immediately by a privacy change |
 | Rejoin challenges | 10 minutes |
@@ -140,9 +147,10 @@ The static primitives are accepted through protected UI PR #11 merge
 `79a1aa8b1075f834717bc0c0299dc2c41a22b966`, following historical artwork/source
 baseline `24935aa85355ea99f49bdbecc4186a5e95049393`. CLI PR #22 accepted the consumer source pin and readable install context through
 protected merge `78810826cd376588d3303f13bc237309fb5170a8`. That inert
-prerequisite proves no installation or Worker runtime. The complete source
-installation, builds/tests, hosted adoption and release remain pending. See
-[publication prerequisites](relay-publication.md#protected-shared-source-and-inert-prerequisite).
+prerequisite proves no installation or Worker runtime. Earlier Worker installation
+and local gate results remain historical; the corrected source still needs its
+own checks, hosted adoption and release. See
+[publication prerequisites](relay-publication.md#worker-review-corrections).
 React is build-only; the product retains authentication, privacy policy and HTTP behavior.
 This presentation change neither activates collection nor changes the
 approved notice, terms, retention configuration or their publication state.

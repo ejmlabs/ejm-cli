@@ -6,6 +6,8 @@ import { failure, hashToken, jsonObject, onlyKeys, randomToken, validId } from "
 import type { AccountSession } from "./types.js";
 
 interface Attachment extends Lease {
+  generation: string;
+  paired: boolean;
   burstSecond: number;
   burstCount: number;
   usageStartedAt: number;
@@ -127,64 +129,93 @@ export class Room extends DurableObject<Env> {
     if (this.retirement) { this.ctx.storage.sql.exec("DELETE FROM retirement"); this.retirement = undefined; }
     const sockets = this.ctx.getWebSockets();
     for (const socket of sockets) {
-      const previous = socket.deserializeAttachment() as Attachment;
-      if (previous.expiresAt <= Date.now()) { await this.flush(socket); socket.close(1008, "lease_expired"); continue; }
+      const previous = socket.deserializeAttachment() as Lease | null;
+      if (socket.readyState === WebSocket.OPEN && previous && previous.expiresAt > Date.now() && (previous.accountId !== lease.accountId || previous.room !== lease.room)) return failure(403, "account_mismatch");
+    }
+    const retired = new Set<WebSocket>();
+    for (const socket of sockets) {
+      const previous = this.attachment(socket);
+      if (!previous || socket.readyState !== WebSocket.OPEN || previous.expiresAt <= Date.now()) {
+        for (const peer of this.closeGeneration(socket, 1008, previous ? "lease_expired" : "transport_replaced")) retired.add(peer);
+      }
+    }
+    let peer = this.ctx.getWebSockets().find(socket => socket.readyState === WebSocket.OPEN);
+    // A surviving endpoint has an old cipher even after its partner disappears.
+    if (peer && this.attachment(peer)?.paired && this.ctx.getWebSockets().filter(socket => socket.readyState === WebSocket.OPEN).length === 1) {
+      for (const socket of this.closeGeneration(peer, 1000, "connection_closed")) retired.add(socket);
+      peer = undefined;
+    }
+    // Close the complete old generation before optional collection can wait.
+    for (const socket of retired) await this.flush(socket).catch(() => undefined);
+    if (peer && (peer.readyState !== WebSocket.OPEN || this.attachment(peer)!.expiresAt <= Date.now())) {
+      for (const socket of this.closeGeneration(peer, 1008, "lease_expired")) await this.flush(socket).catch(() => undefined);
+      peer = undefined;
+    }
+    const live = this.ctx.getWebSockets().filter(socket => socket.readyState === WebSocket.OPEN);
+    for (const socket of live) {
+      const previous = this.attachment(socket)!;
       if (previous.accountId !== lease.accountId || previous.room !== lease.room) return failure(403, "account_mismatch");
       if (previous.role === lease.role) return failure(409, "peer_already_connected");
     }
+    if (lease.expiresAt <= Date.now()) return failure(403, "invalid_lease");
     const pair = new WebSocketPair();
     const client = pair[0]; const server = pair[1];
     this.ctx.acceptWebSocket(server, [lease.role]);
-    const attachment: Attachment = { ...lease, burstSecond: 0, burstCount: 0, usageStartedAt: Date.now(), measuredFrames: 0, measuredBytes: 0 };
+    const previous = peer ? this.attachment(peer)! : undefined;
+    const attachment: Attachment = { ...lease, generation: previous?.generation ?? crypto.randomUUID(), paired: !!peer, burstSecond: 0, burstCount: 0, usageStartedAt: Date.now(), measuredFrames: 0, measuredBytes: 0 };
+    if (peer && previous) peer.serializeAttachment({ ...previous, paired: true });
     server.serializeAttachment(attachment);
     return new Response(null, { status: 101, webSocket: client, ...(request.headers.get("x-internal-browser") === "true" ? { headers: { "sec-websocket-protocol": "ejm-relay-v1" } } : {}) });
   }
   override webSocketMessage(socket: WebSocket, message: string | ArrayBuffer): Promise<void> {
-    const work = this.serial.then(() => this.forward(socket, message)).catch(() => { socket.close(1011, "quota_unavailable"); });
+    const work = this.serial.then(() => this.forward(socket, message)).catch(() => { this.closeGeneration(socket, 1011, "quota_unavailable"); });
     this.serial = work;
     return work;
   }
   private async forward(socket: WebSocket, message: string | ArrayBuffer): Promise<void> {
     const now = Date.now();
-    if (this.retirement && this.retirement.expiresAt > now) { socket.close(1000, "sharing_stopped"); return; }
-    let state = socket.deserializeAttachment() as Attachment;
-    if (typeof message === "string" || message.byteLength === 0 || message.byteLength > LIMITS.frameBytes) { socket.close(1009, "binary_frame_limit"); return; }
-    if (state.expiresAt <= now) { await this.flush(socket); socket.close(1008, "lease_expired"); return; }
+    if (this.retirement && this.retirement.expiresAt > now) { this.closeGeneration(socket, 1000, "sharing_stopped"); return; }
+    let state = this.attachment(socket);
+    if (!state || !state.paired || socket.readyState !== WebSocket.OPEN) { this.closeGeneration(socket, 1008, "peer_not_connected"); return; }
+    if (typeof message === "string" || message.byteLength === 0 || message.byteLength > LIMITS.frameBytes) { this.closeGeneration(socket, 1009, "binary_frame_limit"); return; }
+    if (state.expiresAt <= now) {
+      const retired = this.closeGeneration(socket, 1008, "lease_expired");
+      for (const peer of retired) await this.flush(peer).catch(() => undefined);
+      return;
+    }
     const second = Math.floor(now / 1000);
-    const sockets = this.ctx.getWebSockets();
-    const currentBurst = sockets.reduce((count, candidate) => { const value = candidate.deserializeAttachment() as Attachment; return count + (value.burstSecond === second ? value.burstCount : 0); }, 0);
-    if (currentBurst >= LIMITS.burstFrames) { socket.close(1008, "burst_limit"); return; }
-    const peer = sockets.find(candidate => candidate !== socket && (candidate.deserializeAttachment() as Attachment).role !== state.role);
-    if (!peer) { socket.close(1008, "peer_not_connected"); return; }
-    const peerState = peer.deserializeAttachment() as Attachment;
-    if (peerState.accountId !== state.accountId || peerState.room !== state.room || peerState.expiresAt <= now) { socket.close(1008, "peer_lease_expired"); return; }
+    const sockets = this.ctx.getWebSockets().filter(candidate => candidate.readyState === WebSocket.OPEN && this.attachment(candidate)?.generation === state!.generation);
+    const currentBurst = sockets.reduce((count, candidate) => { const value = this.attachment(candidate)!; return count + (value.burstSecond === second ? value.burstCount : 0); }, 0);
+    if (currentBurst >= LIMITS.burstFrames) { this.closeGeneration(socket, 1008, "burst_limit"); return; }
+    const peer = sockets.find(candidate => candidate !== socket && this.attachment(candidate)!.role !== state!.role);
+    if (!peer) { this.closeGeneration(socket, 1008, "peer_not_connected"); return; }
+    const peerState = this.attachment(peer)!;
+    if (!peerState.paired || peerState.accountId !== state.accountId || peerState.room !== state.room || peerState.expiresAt <= now) { this.closeGeneration(socket, 1008, "peer_lease_expired"); return; }
     // No transcript queue. Runtime buffers are checked when the platform exposes them.
     const buffered = (peer as WebSocket & { bufferedAmount?: number }).bufferedAmount;
-    if (buffered !== undefined && buffered > 64 * 1024) { socket.close(1013, "peer_backpressure"); return; }
+    if (buffered !== undefined && buffered > 64 * 1024) { this.closeGeneration(socket, 1013, "peer_backpressure"); return; }
     if (state.frames <= 0 || state.bytes < message.byteLength) {
       await this.flush(socket);
       const response = await this.env.ACCOUNT_QUOTA.get(this.env.ACCOUNT_QUOTA.idFromName(state.accountId)).fetch("https://internal/reserve", { method: "POST", body: JSON.stringify(state) });
-      if (!response.ok) { await response.text(); socket.close(1008, response.status === 429 ? "daily_quota_exhausted" : "authority_expired"); return; }
+      if (!response.ok) { await response.text(); this.closeGeneration(socket, 1008, response.status === 429 ? "daily_quota_exhausted" : "authority_expired"); return; }
       const next = await response.json<Lease>();
       state = { ...state, ...next, usageStartedAt: now, measuredFrames: 0, measuredBytes: 0 };
     }
     const sendingAt = Date.now();
-    if (this.retirement && this.retirement.expiresAt > sendingAt) { socket.close(1000, "sharing_stopped"); return; }
-    if (state.expiresAt <= sendingAt) { socket.close(1008, "lease_expired"); return; }
-    const currentPeer = peer.deserializeAttachment() as Attachment;
-    if (currentPeer.accountId !== state.accountId || currentPeer.room !== state.room || currentPeer.role !== (state.role === "host" ? "controller" : "host") || currentPeer.expiresAt <= sendingAt) { socket.close(1008, "peer_lease_expired"); return; }
+    if (this.retirement && this.retirement.expiresAt > sendingAt) { this.closeGeneration(socket, 1000, "sharing_stopped"); return; }
+    if (state.expiresAt <= sendingAt) { this.closeGeneration(socket, 1008, "lease_expired"); return; }
+    const currentPeer = this.attachment(peer);
+    if (socket.readyState !== WebSocket.OPEN || this.attachment(socket)?.generation !== state.generation || !currentPeer?.paired || peer.readyState !== WebSocket.OPEN || currentPeer.generation !== state.generation || currentPeer.accountId !== state.accountId || currentPeer.room !== state.room || currentPeer.role !== (state.role === "host" ? "controller" : "host") || currentPeer.expiresAt <= sendingAt) { this.closeGeneration(socket, 1008, "peer_lease_expired"); return; }
     state.frames -= 1; state.bytes -= message.byteLength;
     state.burstCount = state.burstSecond === second ? state.burstCount + 1 : 1; state.burstSecond = second;
     state.measuredFrames += 1; state.measuredBytes += message.byteLength;
     socket.serializeAttachment(state);
-    try { peer.send(message); } catch { socket.close(1013, "peer_unavailable"); }
+    try { peer.send(message); } catch { this.closeGeneration(socket, 1013, "peer_unavailable"); }
   }
   override webSocketClose(socket: WebSocket): Promise<void> {
+    const generation = this.attachment(socket)?.generation;
     const work = this.serial.then(async () => {
-      // Each TCP connection carries one fresh Noise handshake. Close both ends
-      // so reconnect cannot deliver handshake bytes into an old peer cipher.
-      const peers = new Set([socket, ...this.ctx.getWebSockets()]);
-      for (const peer of peers) peer.close(1000, "connection_closed");
+      const peers = this.closeGeneration(socket, 1000, "connection_closed", generation);
       // Optional usage collection must never delay transport revocation.
       for (const peer of peers) await this.flush(peer).catch(() => undefined);
     }).catch(() => { socket.close(1011, "connection_unavailable"); });
@@ -192,9 +223,19 @@ export class Room extends DurableObject<Env> {
     return work;
   }
   override webSocketError(socket: WebSocket): Promise<void> { return this.webSocketClose(socket); }
+  private attachment(socket: WebSocket): Attachment | null {
+    const state = socket.deserializeAttachment() as Attachment | null;
+    return state && typeof state.generation === "string" && typeof state.paired === "boolean" ? state : null;
+  }
+  private closeGeneration(socket: WebSocket, code: number, reason: string, generation = this.attachment(socket)?.generation): WebSocket[] {
+    const peers = [socket, ...this.ctx.getWebSockets().filter(peer => peer !== socket && generation !== undefined && this.attachment(peer)?.generation === generation)];
+    socket.close(code, reason);
+    for (const peer of peers.slice(1)) peer.close(1000, "connection_closed");
+    return peers;
+  }
   private async flush(socket: WebSocket): Promise<void> {
-    const state = socket.deserializeAttachment() as Attachment;
-    if (state.measuredFrames === 0) return;
+    const state = socket.deserializeAttachment() as Attachment | null;
+    if (!state || state.measuredFrames === 0) return;
     const request = { accountId: state.accountId, bytes: state.measuredBytes, frames: state.measuredFrames, connectedMs: Math.max(0, Math.min(Date.now(), state.expiresAt) - state.usageStartedAt), quality: "measured", measuredAt: state.usageStartedAt };
     state.measuredFrames = 0; state.measuredBytes = 0; state.usageStartedAt = Date.now();
     socket.serializeAttachment(state);

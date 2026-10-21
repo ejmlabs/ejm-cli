@@ -28,6 +28,10 @@ The relay SHALL forward bounded binary ciphertext only to the admitted opposite 
 - **WHEN** an endpoint sends an oversized frame, unbounded burst or traffic without a peer
 - **THEN** the relay enforces its published policy without accumulating an unbounded transcript or queue
 
+#### Scenario: An expired connection is replaced before its callback arrives
+- **WHEN** an old pair disconnects or expires and a fresh pair is admitted before an old close or error callback arrives
+- **THEN** old callbacks and surviving old peers cannot close or receive frames from the replacement pair, including after hibernation
+
 ### Requirement: Idle connection efficiency
 Idle room connections SHALL remain eligible for platform hibernation without application polling or recurring room timers. Traffic handlers SHALL return promptly after bounded forwarding. Hibernation SHALL preserve admitted identities, roles, expiry and counters.
 

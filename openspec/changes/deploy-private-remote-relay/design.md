@@ -184,6 +184,46 @@ fields, single-row/account/expiry bounds and the absence of content or keys in
 every stored row and captured log. Unexpected Room tables or retirement fields
 must still fail. Keep this fixture correction separate from production behavior.
 
+### Worker review corrections
+
+Both reviews in fresh run `39534461293` completed for Worker head
+`cf1efa10edc61647feac62b35b9e9c3420661283` and blocked adoption on five
+distinct defects. Their complete reports replace the earlier incomplete review
+attempt, not its quality evidence. Address these defects in the CLI owner before
+fresh human admission; keep existing models, timeouts, checks and merge controls.
+
+Bind each admitted socket pair to an opaque generation in existing Cloudflare
+hibernation attachments. Retain whether a socket has already paired, so a lone
+survivor cannot join a new handshake. Retire both old peers before replacement
+admission or an awaited usage flush. Scope close/error callbacks and forwarding
+to their own current generation; a delayed callback must not close a replacement.
+Legacy attachments without this authority fail closed and require reconnect.
+Use platform Web Crypto, with no SQL table, timer or dependency. Preserve live
+same-role rejection, quota accounting and persistent stop-retirement fences.
+
+Collect only the union of fields covered by current approved usage consents.
+Keep nonconsented counters and optional metadata out of commercial storage;
+transient activity detection does not authorize retaining raw traffic. Reuse
+the monthly schema but merge only unexpired rows and preserve the earliest
+included contribution's expiry. Later samples may expire earlier, never later.
+Exclude expired usage from access and buyer exports before cleanup runs.
+
+Reuse the existing operational hold boundary during rights deletion. Revoke
+relay and session authority even when identity records must be retained, and
+record the held categories as explicit exceptions. Route dashboard closure
+through the existing durable close-rights workflow before revoking sessions,
+including recipient follow-up and operational work. Return and display its
+one-time tracking key through existing public UI composition before navigation
+can discard it; never put that key in logs or a URL.
+
+Use existing Workerd, SQLite and browser fixtures for delayed old callbacks,
+old/new peer overlap, consent subsets, original-expiry boundaries, expired-row
+replacement, held deletion and dashboard closure after disclosure. Require
+meaningful failures on the old paths, corrected focused passes, the normal
+combined gate and fresh exact-source hosted acceptance. Commercial collection
+and account admission remain disabled. These corrections close no release task
+by themselves and do not change the approved policy text.
+
 ### Dependency and artifact bounds
 
 Activate the exact 51-line candidate manifest already reviewed with its inherited

@@ -346,6 +346,12 @@ describe("maintained device grant", () => {
 });
 
 describe("durable admission and hibernating forwarding", () => {
+  function frameOrClose(socket: WebSocket): Promise<number[] | null> {
+    return new Promise(resolve => {
+      socket.addEventListener("message", event => resolve(Array.from(new Uint8Array(event.data as ArrayBuffer))), { once: true });
+      socket.addEventListener("close", () => resolve(null), { once: true });
+    });
+  }
   it("keeps dashboard-stopped epochs retired across owned retries and eviction", async () => {
     const owner = await identity(); const other = await identity();
     const rooms = ["opaque_retired_room_0001", "opaque_retired_room_0002", "opaque_retired_room_0003"];
@@ -469,6 +475,87 @@ describe("durable admission and hibernating forwarding", () => {
     const persisted = await runInDurableObject(stub, async (_instance, state) => Array.from(await state.storage.list()));
     expect(JSON.stringify(persisted)).not.toContain("SENTINEL");
     hostSocket.close(); controllerSocket.close();
+  });
+  it.each(["webSocketClose", "webSocketError"] as const)("isolates delayed old %s callbacks from a replacement pair after hibernation", async callback => {
+    const owner = await identity(); const room = `opaque_generation_${callback}`;
+    const oldHost = await connect(room, "host", await ticket(owner, room));
+    const oldController = await connect(room, "controller", await ticket(owner, room, "controller"));
+    oldHost.webSocket!.accept(); oldController.webSocket!.accept();
+    const stub = bindings.ROOM.get(bindings.ROOM.idFromName(room));
+    await evictDurableObject(stub);
+    let departed: WebSocket | undefined;
+    await runInDurableObject(stub, async (instance, state) => {
+      departed = state.getWebSockets("host")[0]!;
+      for (const socket of state.getWebSockets()) socket.serializeAttachment({ ...socket.deserializeAttachment(), expiresAt: Date.now() - 1 });
+      // Let admission finish before explicitly delivering either old callback.
+      vi.spyOn(instance as Room, "webSocketClose").mockResolvedValue(undefined);
+      vi.spyOn(instance as Room, "webSocketError").mockResolvedValue(undefined);
+    });
+    const host = await connect(room, "host", await ticket(owner, room));
+    const controller = await connect(room, "controller", await ticket(owner, room, "controller"));
+    expect(host.status).toBe(101); expect(controller.status).toBe(101);
+    const hostSocket = host.webSocket!; const controllerSocket = controller.webSocket!;
+    hostSocket.accept(); controllerSocket.accept(); hostSocket.binaryType = "arraybuffer"; controllerSocket.binaryType = "arraybuffer";
+    try {
+      const receiving = frameOrClose(controllerSocket);
+      await runInDurableObject(stub, async instance => {
+        const old = departed!; departed = undefined; vi.restoreAllMocks(); await (instance as Room)[callback](old);
+      });
+      if (hostSocket.readyState === WebSocket.OPEN) hostSocket.send(new Uint8Array([31, 37, 41]));
+      expect(await receiving).toEqual([31, 37, 41]);
+      const reply = frameOrClose(hostSocket); controllerSocket.send(new Uint8Array([43, 47]));
+      expect(await reply).toEqual([43, 47]);
+    } finally { hostSocket.close(); controllerSocket.close(); oldHost.webSocket!.close(); oldController.webSocket!.close(); }
+  });
+  it("retires a lone paired survivor before admitting a fresh handshake after hibernation", async () => {
+    const owner = await identity(); const room = "opaque_survivor_room_0001";
+    const oldHost = await connect(room, "host", await ticket(owner, room));
+    const oldController = await connect(room, "controller", await ticket(owner, room, "controller"));
+    oldHost.webSocket!.accept(); oldController.webSocket!.accept(); oldController.webSocket!.binaryType = "arraybuffer";
+    const stub = bindings.ROOM.get(bindings.ROOM.idFromName(room));
+    await evictDurableObject(stub);
+    let callbacks = 0;
+    await runInDurableObject(stub, async instance => {
+      vi.spyOn(instance as Room, "webSocketClose").mockImplementation(async socket => { socket.close(1000, "fixture_disconnect"); callbacks += 1; });
+    });
+    const disconnected = frameOrClose(oldHost.webSocket!);
+    oldHost.webSocket!.close(1000, "fixture_disconnect");
+    expect(await disconnected).toBeNull();
+    expect(await runInDurableObject(stub, async (_instance, state) => { vi.restoreAllMocks(); expect(callbacks).toBe(1); return state.getWebSockets("host").length; })).toBe(0);
+    const oldOutcome = frameOrClose(oldController.webSocket!);
+    const host = await connect(room, "host", await ticket(owner, room));
+    expect(host.status).toBe(101); host.webSocket!.accept();
+    let controller: Response | undefined;
+    try {
+      controller = await connect(room, "controller", await ticket(owner, room, "controller"));
+      expect(controller.status).toBe(101); controller.webSocket!.accept(); controller.webSocket!.binaryType = "arraybuffer";
+      const receiving = frameOrClose(controller.webSocket!); host.webSocket!.send(new Uint8Array([53, 59, 61]));
+      expect(await oldOutcome).toBeNull(); expect(await receiving).toEqual([53, 59, 61]);
+    } finally { host.webSocket!.close(); controller?.webSocket?.close(); if (controller && !controller.webSocket) await controller.text(); oldController.webSocket!.close(); }
+  });
+  it("requires fresh transports when hibernation restores legacy attachments", async () => {
+    const owner = await identity(); const room = "opaque_legacy_pair_00001";
+    const oldHost = await connect(room, "host", await ticket(owner, room));
+    const oldController = await connect(room, "controller", await ticket(owner, room, "controller"));
+    oldHost.webSocket!.accept(); oldController.webSocket!.accept();
+    const stub = bindings.ROOM.get(bindings.ROOM.idFromName(room));
+    await runInDurableObject(stub, async (_instance, state) => {
+      for (const socket of state.getWebSockets()) {
+        const attachment = socket.deserializeAttachment() as Record<string, unknown>;
+        delete attachment.generation; delete attachment.paired; socket.serializeAttachment(attachment);
+      }
+    });
+    await evictDurableObject(stub);
+    const closed = [frameOrClose(oldHost.webSocket!), frameOrClose(oldController.webSocket!)];
+    const host = await connect(room, "host", await ticket(owner, room));
+    let controller: Response | undefined;
+    try {
+      expect(host.status).toBe(101); host.webSocket!.accept();
+      controller = await connect(room, "controller", await ticket(owner, room, "controller"));
+      expect(controller.status).toBe(101); controller.webSocket!.accept(); controller.webSocket!.binaryType = "arraybuffer";
+      const receiving = frameOrClose(controller.webSocket!); host.webSocket!.send(new Uint8Array([67, 71]));
+      expect(await Promise.all(closed)).toEqual([null, null]); expect(await receiving).toEqual([67, 71]);
+    } finally { host.webSocket?.close(); if (!host.webSocket) await host.text(); controller?.webSocket?.close(); if (controller && !controller.webSocket) await controller.text(); oldHost.webSocket!.close(); oldController.webSocket!.close(); }
   });
   it.each([
     { boundary: "expired peer", reason: "peer_lease_expired" },

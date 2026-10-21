@@ -4,12 +4,15 @@ This Worker connects one foreground CLI host to one native or browser controller
 Both endpoints use the same relay account. The host approves the controller
 locally; account recovery grants no stream key or session permission.
 
-This complete Worker/UI source is being integrated on protected CLI PR #22 merge
-`78810826cd376588d3303f13bc237309fb5170a8`, after accepted native PR #21.
-PR #22 accepts inert dependency inputs, not installation or runtime. The
-[current local stages](../docs/relay-publication.md#current-local-checks) cover
-native, WASM, Worker and browser checks. Hosted adoption and updated UI deployment
-remain pending. See [publication prerequisites](../docs/relay-publication.md) for exact
+This complete Worker/UI source is being prepared in CLI PR #23 after protected
+PR #22 merge `78810826cd376588d3303f13bc237309fb5170a8` and accepted native PR #21.
+PR #22 accepted inert dependency inputs, not installation or runtime. The
+[earlier local checks](../docs/relay-publication.md#current-local-checks) cover
+native, WASM, Worker and browser stages and cf1's normal full gate. Both complete
+hosted reviews rejected that head on five defects. The
+[local review corrections](../docs/relay-publication.md#worker-review-corrections)
+still need their own checks and protected adoption; updated UI deployment
+remains pending. See [publication prerequisites](../docs/relay-publication.md) for exact
 receipts and [deployment status](../docs/remote-deployment.md) for historical
 closed uploads. Admission stays closed with a two-account limit. Payments,
 commercial collection and buyer exports remain disabled. Approved policy pages
@@ -47,9 +50,10 @@ Protected ejm-ui merge `79a1aa8b1075f834717bc0c0299dc2c41a22b966`, tree
 `c18c74fd336dbad9515bff8ecf22ca980b889a51`, supplies the shared contracts.
 CLI PR #22 accepted its selector, thirteen metadata bindings and current-owner
 source supplement. The complete 941-file source, lifecycle-disabled installed
-packages and production artifacts still need this Worker's own verification.
-Earlier sample previews and mocked Worker tests do not qualify the complete
-runtime or deployment. Keep review fixtures inert and outside package installs.
+packages and production artifacts were checked locally for rejected head cf1.
+Its successor still needs its own acceptance. Earlier sample previews and mocked
+Worker tests do not qualify the complete runtime or deployment. Keep review
+fixtures inert and outside package installs.
 
 ## Resource policy
 
@@ -70,7 +74,9 @@ runtime or deployment. Keep review fixtures inert and outside package installs.
 
 Reservations debit the account before forwarding. A lost or disconnected allocation stays spent. Reconnecting, hibernation, a second device or another routing ID cannot reset that ledger. Counter updates in socket attachments avoid per-frame application SQL. Quota and ticket state use persistent SQLite in the per-account authority.
 
-A lease is checked on every frame. A revoked account or device cannot renew authority. Existing device/logout authority lasts at most its current lease. Account closure and room stop close both peers before acknowledgement. A peer disconnect closes the other peer, so reconnect starts a fresh Noise transport.
+A lease is checked on every frame. A revoked account or device cannot renew authority. Existing device/logout authority lasts at most its current lease. Account closure and room stop close both peers before acknowledgement.
+
+A disconnected pair retires together. A lone peer that already used the old cipher transport cannot join a replacement handshake. Both endpoints need fresh sockets, one-use tickets and a fresh Noise handshake. Old close/error callbacks affect only their own pair, so they cannot close a replacement pair. Sockets restored from legacy attachments without pair authority close on upgrade and require reconnect. This uses existing socket attachments and needs no database migration. These are prepared [review corrections](../docs/relay-publication.md#worker-review-corrections), with corrected-source acceptance pending.
 
 Dashboard stop retires that routing ID until its original share expiry, including already-redeemed connections delayed until after stop. Account-scoped retries preserve the deadline and leave a newer share intact. The quota authority retains at most 600 retired IDs across the two UTC days an eight-hour share can overlap, removes expired entries through cleanup and fails closed at capacity. Each Room keeps one persistent expiry fence, restored on eviction, with one deadline cleanup alarm and no per-frame SQL. Early alarms preserve the fence; due cleanup removes the idle account linkage. A fresh share remains eligible. Final-source and live acceptance remain pending.
 
@@ -183,10 +189,18 @@ do not infer account ownership from an ID.
 | `POST /v1/devices` | `label`; optional `osFamily` and `cliMajor` | `id`; status 201 for a new device or 200 for this session's existing device. Current terms are required; at most 16 devices may be active. Labels allow 1 to 64 Unicode letters/digits, spaces, `.`, `_` or `-`; OS is `macos`, `linux`, `windows` or `other`; CLI major is an integer from 0 through 1000. |
 | `POST /v1/devices/DEVICE_ID/revoke` | No parsed body; `{}` is sufficient | `revoked:true`, `existingLeaseMaximumSeconds:900`. Deletes that device's session; unknown/already-revoked IDs return `404/device_not_found`. |
 | `POST /v1/logout` | No parsed body; `{}` is sufficient | Same revocation fields for this session's relay device; deletes the session. A lost response leaves server revocation unconfirmed. |
-| `POST /v1/account/close` | `{"confirm":"close"}` | `closed:true`, billing-cancellation state and retained exceptions after relay revocation. Closure is not a promise of immediate deletion or recall of recipient copies. |
+| `POST /v1/account/close` | `{"confirm":"close"}` | `requestId` and one-time private `statusKey`; status 200 only after relay revocation completes. Recipient, operational and billing follow-up can remain pending. Closure promises neither immediate deletion nor recall of recipient copies. |
 | `GET /v1/rooms` | Session credential | `rooms:[]` or one `{id,expiresAt}` for this account. Only opaque routing metadata is exposed. |
 | `POST /v1/rooms/ROOM_ID/tickets` | `role` (`host` or `controller`) and `deviceId` equal to this session's device ID | `ticket`, `expiresAt`, `room`, `role`, `leaseMaximumSeconds:900`. Requires this session's registered device and current terms. The first host ticket creates the share; a controller cannot create it. One active room per account. |
 | `POST /v1/rooms/ROOM_ID/stop` | Registered session device; no parsed body, `{}` is sufficient | `{"stopped":true}` after retiring the owned epoch and closing peers. Owned retries preserve its original deadline; they do not stop a different newer share. |
+
+Account closure uses the [tracked rights workflow](../docs/relay-privacy.md#account-access-correction-and-deletion).
+If revocation cannot finish, status 503 still returns `requestId` and `statusKey`
+with `relayClosureAcknowledged:false` and
+`error:{code:"relay_revocation_pending"}`. Those receipt fields stay at the top
+level. The dashboard shows the receipt on its result page without automatic
+navigation. Save it before leaving; the service stores only the key's hash.
+Pending work remains durable after session revocation.
 
 ### One-use tickets and WSS
 
@@ -306,7 +320,7 @@ logs and issues. Retry sign-in from Account after an error. See the historical
 }
 ```
 
-Active identity remains while needed for the configured service purpose. Unadmitted identities expire under `unadmittedDays`. Closure revokes sessions, devices and tickets, suppresses transfers and queues subscription cancellation. Hourly cleanup purges closed-account devices, provider identity and payment records at their separate deadlines. A pending cancellation retains the minimal payment references needed to retry while ordinary identity deletion continues. A legal hold requires a category, reason, evidence and expiry in `operational_legal_holds`; it conservatively pauses that account's scheduled purge. Rights deletion reports these exceptions instead of claiming full erasure.
+Active identity remains while needed for the configured service purpose. Unadmitted identities expire under `unadmittedDays`. Closure revokes sessions, devices and tickets, suppresses transfers and queues subscription cancellation. Hourly cleanup purges closed-account devices, provider identity and payment records at their separate deadlines. A pending cancellation retains the minimal payment references needed to retry while ordinary identity deletion continues. A legal hold requires a category, reason, evidence and expiry in `operational_legal_holds`; it conservatively pauses that account's scheduled purge. The same boundary applies to direct rights deletion: held identity remains, its retained categories and hold expiry are reported as explicit exceptions, and relay/session revocation still proceeds. Rights deletion reports these exceptions instead of claiming full erasure. See the [prepared corrections](../docs/relay-publication.md#worker-review-corrections) and [tracked closure workflow](../docs/relay-privacy.md#account-access-correction-and-deletion).
 
 `/terms` links to `externalNotice` only when the full operational policy passes
 admission validation. It labels the service terms and operational-policy versions

@@ -3,9 +3,13 @@
 The Worker source provides `/account` for account, device and opaque room
 management, and `/control` for one shared CLI session. The browser controller
 uses the account used to register the host. An invitation alone grants no relay
-access. This source is being integrated on protected CLI PR #22. Its
-[local checks](relay-publication.md#current-local-checks) cover native, Worker,
-WASM and browser stages. Hosted adoption and deployment remain pending. See
+access. This complete Worker/UI source is being prepared in CLI PR #23 after
+protected PR #22 merge `78810826cd376588d3303f13bc237309fb5170a8` and accepted
+native PR #21. PR #22 accepted inert dependency inputs. The Worker's
+[earlier local checks](relay-publication.md#current-local-checks) cover native,
+Worker, WASM and browser stages and cf1's normal full gate. Both complete hosted
+reviews rejected that head; the [local corrections](relay-publication.md#worker-review-corrections)
+still need their own acceptance. Protected adoption and deployment remain pending. See
 [publication status](relay-publication.md) and [deployment status](remote-deployment.md).
 
 Controller HTML and every `/control/assets/` file require the verified account
@@ -40,6 +44,15 @@ storage. The shared appearance bootstrap can read an existing theme choice;
 it writes no new preference. Disconnect clears reachable invitation, prompt,
 key and transcript buffers. JavaScript strings and browser copies prevent a
 forensic erasure guarantee.
+
+Both endpoints retire the old cipher transport when either peer disconnects.
+A lone old peer cannot join a replacement handshake, and late close/error
+callbacks from that old pair cannot close its replacement. Reconnect needs fresh
+sockets, one-use tickets and a new Noise handshake on both endpoints. Sockets
+with legacy attachments close on a Worker upgrade; reconnect restores service
+without a database migration. These are prepared
+[review corrections](relay-publication.md#worker-review-corrections), with
+corrected-source acceptance pending.
 
 Reconnect in the same tab retains the controller identity and mutation sequence
 while using new Noise ephemeral keys, nonces and counters. Reload or navigation

@@ -178,20 +178,32 @@ export class PrivacyService {
   }
 
   recordUsage(input: unknown): unknown {
-    if (this.config === null) return { collected: false };
+    const config = this.config; if (config === null) return { collected: false };
     const sample = usageSample(input); const id = sample.accountId;
     if (sample.measuredAt > this.now() + 60_000 || sample.measuredAt < this.now() - DAY) throw new PrivacyError("stale_usage_sample");
     return this.store.transaction(() => {
+      const now = this.now();
       const subject = this.rows<Subject>("SELECT account_id,generation,adult,opted_out,opted_out_at,closed,profile,profile_purge_at,updated_at FROM privacy_subjects WHERE account_id=?", id)[0];
-      if (!subject || this.blocked(subject) || !this.anyConsent(id, "usage")) return { collected: false };
-      const since = this.rows<{ usage_since: number }>("SELECT usage_since FROM privacy_subjects WHERE account_id=?", id)[0]?.usage_since ?? this.now();
+      if (!subject || this.blocked(subject)) return { collected: false };
+      const fields = new Set<CommercialField>();
+      for (const buyer of config.buyers) {
+        if (buyer.approvedAt <= now && buyer.expiresAt > now && this.consent(id, buyer, "usage")) for (const field of buyer.fields.usage) fields.add(field);
+      }
+      if (fields.size === 0) return { collected: false };
+      const since = this.rows<{ usage_since: number }>("SELECT usage_since FROM privacy_subjects WHERE account_id=?", id)[0]?.usage_since ?? now;
       if (sample.measuredAt < since) return { collected: false, reason: "sample_predates_current_consent" };
       const date = new Date(sample.measuredAt).toISOString(); const month = date.slice(0, 7); const day = date.slice(8, 10);
-      const existing = this.rows<Usage>("SELECT month,bytes,frames,connected_ms,active_days,os_family,cli_major,quality,expires_at FROM privacy_usage WHERE account_id=? AND month=? AND quality=?", id, month, sample.quality)[0];
-      const days = new Set<string>(existing ? JSON.parse(existing.active_days) as string[] : []); if (sample.frames > 0 || sample.connectedMs > 0) days.add(day);
-      const bytes = (existing?.bytes ?? 0) + sample.bytes; const frames = (existing?.frames ?? 0) + sample.frames; const ms = (existing?.connected_ms ?? 0) + sample.connectedMs;
-      if (![bytes, frames, ms].every(Number.isSafeInteger)) throw new PrivacyError("usage_counter_overflow");
-      this.store.exec("INSERT INTO privacy_usage(account_id,month,bytes,frames,connected_ms,active_days,os_family,cli_major,quality,expires_at) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(account_id,month,quality) DO UPDATE SET bytes=excluded.bytes,frames=excluded.frames,connected_ms=excluded.connected_ms,active_days=excluded.active_days,os_family=excluded.os_family,cli_major=excluded.cli_major,expires_at=excluded.expires_at", id, month, bytes, frames, ms, JSON.stringify([...days].sort()), sample.osFamily ?? existing?.os_family ?? null, sample.cliMajor ?? existing?.cli_major ?? null, sample.quality, this.now() + this.retention().usageDays * DAY);
+      const existing = this.rows<Usage>("SELECT month,bytes,frames,connected_ms,active_days,os_family,cli_major,quality,expires_at FROM privacy_usage WHERE account_id=? AND month=? AND quality=? AND expires_at>?", id, month, sample.quality, now)[0];
+      const days = new Set<string>(fields.has("activeDays") && existing ? JSON.parse(existing.active_days) as string[] : []);
+      if (fields.has("activeDays") && (sample.frames > 0 || sample.connectedMs > 0)) days.add(day);
+      const bytes = fields.has("traffic") ? (existing?.bytes ?? 0) + sample.bytes : 0;
+      const ms = fields.has("connectedHours") ? (existing?.connected_ms ?? 0) + sample.connectedMs : 0;
+      if (![bytes, ms].every(Number.isSafeInteger)) throw new PrivacyError("usage_counter_overflow");
+      const os = fields.has("osFamily") ? sample.osFamily ?? existing?.os_family ?? null : null;
+      const cli = fields.has("cliMajor") ? sample.cliMajor ?? existing?.cli_major ?? null : null;
+      const expiry = now + this.retention().usageDays * DAY;
+      const expiresAt = existing ? Math.min(existing.expires_at, expiry) : expiry;
+      this.store.exec("INSERT INTO privacy_usage(account_id,month,bytes,frames,connected_ms,active_days,os_family,cli_major,quality,expires_at) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(account_id,month,quality) DO UPDATE SET bytes=excluded.bytes,frames=excluded.frames,connected_ms=excluded.connected_ms,active_days=excluded.active_days,os_family=excluded.os_family,cli_major=excluded.cli_major,expires_at=excluded.expires_at", id, month, bytes, 0, ms, JSON.stringify([...days].sort()), os, cli, sample.quality, expiresAt);
       this.bump(id); return { collected: true, quality: sample.quality };
     });
   }
@@ -258,7 +270,7 @@ export class PrivacyService {
 
   access(actor: Actor): unknown {
     const id = this.account(actor);
-    return { accountId: id, privacy: this.status(actor), usage: this.rows<Usage>("SELECT month,bytes,frames,connected_ms,active_days,os_family,cli_major,quality,expires_at FROM privacy_usage WHERE account_id=? ORDER BY month LIMIT 8", id), evidence: this.rows("SELECT category,action,scope,created_at,expires_at FROM privacy_evidence WHERE account_id=? ORDER BY created_at DESC LIMIT 512", id), evidenceMayBeTruncated: this.rows<{ total: number }>("SELECT COUNT(*) AS total FROM privacy_evidence WHERE account_id=?", id)[0]!.total > 512, disclosures: this.disclosures(id), rights: this.rightsList(actor), otherStores: "Use a tracked access or export request to include operational identity, device, quota and payment records and a full paginated evidence export.", classification: "personal-data" };
+    return { accountId: id, privacy: this.status(actor), usage: this.rows<Usage>("SELECT month,bytes,frames,connected_ms,active_days,os_family,cli_major,quality,expires_at FROM privacy_usage WHERE account_id=? AND expires_at>? ORDER BY month LIMIT 8", id, this.now()), evidence: this.rows("SELECT category,action,scope,created_at,expires_at FROM privacy_evidence WHERE account_id=? ORDER BY created_at DESC LIMIT 512", id), evidenceMayBeTruncated: this.rows<{ total: number }>("SELECT COUNT(*) AS total FROM privacy_evidence WHERE account_id=?", id)[0]!.total > 512, disclosures: this.disclosures(id), rights: this.rightsList(actor), otherStores: "Use a tracked access or export request to include operational identity, device, quota and payment records and a full paginated evidence export.", classification: "personal-data" };
   }
   evidencePage(actor: Actor, input: unknown): unknown {
     const id = this.account(actor); const value = object(input); exactKeys(value, ["before", "id"]);

@@ -2,8 +2,8 @@ import { DurableObject } from "cloudflare:workers";
 import { parseCookies, serializeCookie } from "better-call";
 import type { AccountSession, Env } from "../types.js";
 import { withCurrentNav } from "../ui.js";
-import { revokeRelayAccount } from "../accounts.js";
-import { DEFAULT_RETENTION, parseConfig } from "./config.js";
+import { followUpRightsRequest, queueOperationalTask } from "../accounts.js";
+import { parseConfig } from "./config.js";
 import { accountPage, optOutPage, errorPage, resultPage, rightsStatusPage, signInRequiredPage } from "./html.js";
 import { exactKeys, object, PrivacyError, PROFILE_FIELDS, text } from "./schema.js";
 import { PrivacyService, type Actor, type OperationalTaskCursor } from "./service.js";
@@ -128,21 +128,16 @@ export async function privacyRoute(request: Request, env: Env, account: AccountS
     const input = readOnly ? action === "evidence" ? Object.fromEntries(new URL(request.url).searchParams) : {} : form ? await formInput(request, action) : await boundedJson(request);
     const upstream = await call(env, action, actor, input);
     const result = await upstream.json() as Record<string, unknown>;
+    let status = upstream.status;
     if (upstream.ok && action === "rights/request" && result.operationalTask) {
-      if (result.kind === "close" && account !== null) {
-        try { await revokeRelayAccount(env, account.accountId); }
-        catch { result.error = "relay_revocation_pending"; result.relayClosureAcknowledged = false; return json(result, 503); }
-      }
-      // The authority durably owns this task. A failed enqueue is retried by cleanup.
-      try { await queueOperationalTask(env, object(result.operationalTask)); }
-      catch { result.operationalQueuePending = true; }
+      status = await followUpRightsRequest(env, result, account!.accountId);
     }
     if (upstream.ok && action === "rejoin" && result.rejoined === true) headers.append("set-cookie", cookie(env, id ?? "", true));
     if (path === "/privacy") { headers.set("content-type", "text/html; charset=utf-8"); return withCurrentNav(new Response(upstream.ok ? accountPage(result, gpc) : errorPage(result.error), { status: upstream.status, headers }), "/privacy"); }
-    if (form) { headers.set("content-type", "text/html; charset=utf-8"); return withCurrentNav(new Response(upstream.ok ? resultPage(result) : errorPage(result.error), { status: upstream.status, headers }), "/privacy"); }
+    if (form) { headers.set("content-type", "text/html; charset=utf-8"); return withCurrentNav(new Response(upstream.ok ? resultPage(result) : errorPage(result.error), { status, headers }), "/privacy"); }
     headers.set("content-type", "application/json");
     if (action === "access") headers.set("content-disposition", 'attachment; filename="ejm-privacy-data.json"');
-    return new Response(JSON.stringify(result), { status: upstream.status, headers });
+    return new Response(JSON.stringify(result), { status, headers });
   } catch (error) {
     if (request.headers.get("content-type")?.startsWith("application/x-www-form-urlencoded")) {
       const headers = privateHeaders(); headers.set("content-type", "text/html; charset=utf-8");
@@ -173,10 +168,6 @@ function privateHeaders(): Headers { return new Headers({ "cache-control": "no-s
 function json(value: unknown, status = 200): Response { const headers = privateHeaders(); headers.set("content-type", "application/json"); return new Response(JSON.stringify(value), { status, headers }); }
 function failure(error: unknown): Response { return json({ error: error instanceof PrivacyError ? error.code : "privacy_operation_failed" }, error instanceof PrivacyError ? error.status : 500); }
 
-async function queueOperationalTask(env: Env, task: Record<string, unknown>): Promise<void> {
-  const days = (parseConfig(env.COMMERCIAL_CONFIG)?.retention ?? DEFAULT_RETENTION).operationalTaskDays;
-  await env.DB.prepare("INSERT OR IGNORE INTO privacy_operational_tasks(request_id,account_id,action,state,requested_at,due_at,expires_at) VALUES(?,?,?,'pending',?,?,?)").bind(text(task.requestId), text(task.accountId), text(task.action), task.requestedAt, task.dueAt, typeof task.expiresAt === "number" ? task.expiresAt : Number(task.requestedAt) + days * 86_400_000).run();
-}
 export async function privacyCleanup(env: Env): Promise<void> {
   const stub = env.PRIVACY_AUTHORITY.get(env.PRIVACY_AUTHORITY.idFromName("privacy-v1"));
   const response = await stub.fetch("https://privacy.internal/internal/cleanup", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
