@@ -66,17 +66,20 @@ Record measured latency and memory with hardware, compiler profile and workload.
 
 ## Native remote publication
 
-The [native remote candidate](native-remote-publication.md) builds on protected
-CLI PR #20 merge `9e3f8ef11dc083c31b651b9dae15a98e086e3359`. It preserves
+The [native source acceptance record](native-remote-publication.md) binds
+protected CLI PR #21's merge, tree and Linux/macOS results after PR #20. It preserves
 C8's 40d source context, Linux setup and PR #6's consolidated publication guide,
 plus the prerequisite's protected UI pin and install context.
 The selected harness pin is actual protected completion API merge
 `42e4f9cf33bd3525aec344cfdffabc251271f782`: 358 tracked files from tree
 `826e02310f1097e13806ca5ca1bf5cc00d71e966`, with the exact native lock.
-Run the unchanged full gate before hosted review and protected native adoption.
-The recorded d8 local pass does not establish this restack's acceptance.
+Retain the unchanged full gate for each following source before hosted review
+and protected adoption. The d8 local pass remains earlier evidence, separate
+from PR #21's exact-source acceptance. The following
+[inert UI/Relay prerequisite](ci-bootstrap.md#current-inert-shared-ui-and-relay-inputs)
+advances static review inputs; Worker/UI and deployment acceptance remain separate.
 
-The prepared queue correction consumes the harness owner's exact current-run
+The native queue correction consumes the harness owner's exact current-run
 completion subscription. It keeps one completion receiver for the revocable
 remote target, polls completion after local input, discards an atomically reported
 local-successor handoff and rechecks the share and current
@@ -85,8 +88,9 @@ new task, channel, queue engine or dependency. The backend contract covers a rea
 internal queued target, two remote successors and revocation during completion.
 The shared text limit is 16 KiB of UTF-8 bytes, checked before acknowledgement.
 Focused backend, recovery and corrected d8 SIGTERM checks are recorded separately.
-The API prerequisite is protected; this candidate requires its own full and hosted gates;
-see the [correction record](native-remote-publication.md#prepared-completion-and-prompt-corrections).
+The [correction record](native-remote-publication.md#prepared-completion-and-prompt-corrections)
+retains the earlier scope; PR #21's acceptance covers the final native source.
+Following changes still need their own full and hosted gates.
 
 The normal gate drives the native private-terminal fixture through
 `scripts/check_terminal.py`; all eight fixture cases and the real-command

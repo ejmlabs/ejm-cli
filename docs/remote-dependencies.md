@@ -1,13 +1,15 @@
 # Native remote dependencies
 
-This records the native candidate's dependency graph. The protected docs/UI
+This records the dependency graph accepted through protected native CLI PR #21;
+the [acceptance record](native-remote-publication.md) binds its merge, tree and
+Linux/macOS checks. The earlier protected docs/UI
 prerequisite kept C8's Cargo manifests, lock and working 4a harness pin unchanged.
-This source builds on its protected CLI merge
-`9e3f8ef11dc083c31b651b9dae15a98e086e3359` and selects the native graph below.
-Exact-source normal and hosted acceptance remain required.
+That PR #20 prerequisite merged as `9e3f8ef11dc083c31b651b9dae15a98e086e3359`;
+native PR #21 followed it with the graph below. Following source changes still
+require their own normal and hosted gates; live acceptance remains separate.
 
 Original dependency review: **2026-10-19 UTC**. The table records exact direct
-versions requested by this candidate's manifest. After the October 20 TLS
+versions requested by the native manifest. After the October 20 TLS
 advisory correction, the current `Cargo.lock` SHA-256 is
 `02ba0f0097754444a40e106d683ce530886ec7c31d30009f0c5cc43750d6118b`.
 The earlier `5143432fc0201bedeef680d18ae1c4681e2215fddd6e2fb45cd4cbf0149f7d1b`
@@ -17,10 +19,12 @@ The pin selects actual protected harness merge
 `826e02310f1097e13806ca5ca1bf5cc00d71e966` supplies the completion API.
 Native preparation began at protected CLI
 `c8e2239392f71df82cbef6166b1827c8e5f5f1c5`, with the same D49 tree as approved
-PR #9. Preserve the lock and run the final restack's exact-source locked gate
-and hosted checks. The [corrected d8 local result](native-remote-publication.md)
-and [earlier passes](native-remote-publication.md#historical-local-pass) do not
-establish this source's acceptance. No new build or runtime result is claimed here.
+PR #9. Preserve the accepted lock through the following inert prerequisite;
+later source changes require their own exact-source locked gate and hosted checks.
+The [corrected d8 local result](native-remote-publication.md) and
+[earlier passes](native-remote-publication.md#historical-local-pass) remain
+historical, separate from PR #21's acceptance. This metadata slice claims no new
+build or runtime result.
 
 Existing Tokio, Serde, URL, harness and terminal packages remain shared. The
 versioned links below are primary API references retained from the source
@@ -75,7 +79,8 @@ OS platform verifier. Empty loaded roots fail closed. Local
 replace the platform roots. The corrected lock updates `rustls-webpki` from
 0.103.15 to 0.103.16 and `webpki-root-certs` from 1.0.9 to 1.0.10, removes
 both `webpki-roots` versions (0.26.11 and 1.0.9) and reduces packages from 469 to 467
-without a new package. Fresh normal and advisory gates remain required.
+without a new package. The accepted native receipt includes the corrected graph's
+normal and advisory gates; following graph changes need fresh checks.
 
 ## Persistent secrets and controlled import
 
@@ -102,8 +107,9 @@ needs libdbus, a session D-Bus and an unlocked Secret Service. The operating
 system library has its own security and distribution review:
 [D-Bus COPYING](https://dbus.freedesktop.org/doc/COPYING) offers AFL-2.1 or
 GPL-2.0-or-later for libdbus; Cargo's Rust license gate does not cover that
-system library. The earlier local pass covers macOS compilation only; Linux
-and Windows compilation and real native-store operation remain unproved.
+system library. The earlier local pass covered macOS compilation only; PR #21
+later passed hosted Linux/macOS checks. Windows compilation and native-store
+operation beyond the tested fixtures remain unproved.
 The store documents a [KDE Wallet UTF-8 restriction](https://docs.rs/dbus-secret-service-keyring-store/1.0.1/dbus_secret_service_keyring_store/#usage-with-kde-wallet);
 legacy key records use canonical versioned ASCII Base64 while retaining exact
 32-byte legacy read compatibility.
@@ -122,8 +128,9 @@ self-signed certificate and key are public, test-only material; see the
 [test-data notice](../crates/ejm-cli/src/remote/testdata/README.md). The existing
 fixture now checks that an untrusted peer receives neither HTTP bearer/OAuth
 data nor a WSS ticket, with a narrowly trusted HTTP control. Earlier HTTP-only
-coverage passed in the [d8 gate](native-remote-publication.md); the extension
-requires fresh checks. No provider calls or native credential store are used.
+coverage passed in the [d8 gate](native-remote-publication.md); PR #21's accepted
+native source includes the checked extension. No provider calls or native
+credential store are used by that fixture.
 
 The preceding [terminal slice](terminal-input.md) owns Termwiz, Rustix,
 Crossterm and WinSafe input adaptation, including input resets before private
@@ -139,5 +146,8 @@ Keep Rust `1.99.1`, rustfmt and Clippy from `rust-toolchain.toml`. Resolve only
 the intended native graph against the exact published harness source. Run
 `cargo deny --locked --all-features check`, the full [contribution
 gate](contributing.md), the native protected-input/PTY scenarios and hosted
-platform checks on the resulting source. No Worker, npm, browser or WASM
-package is introduced by this native layer.
+platform checks on each following source. The original native layer introduced
+no Worker, npm, browser or WASM package. The following
+[inert UI/Relay prerequisite](ci-bootstrap.md#current-inert-shared-ui-and-relay-inputs)
+adds install review data without a runnable Relay manifest; full Worker/UI
+acceptance and deployment remain pending.

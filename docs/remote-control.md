@@ -1,19 +1,20 @@
 # Remote control
 
-This guide describes native candidate source based on protected CLI PR #20 merge
-`9e3f8ef11dc083c31b651b9dae15a98e086e3359`. Exact-source normal and hosted
-acceptance must precede adoption; binary distribution and live acceptance remain
-pending. Use this workflow only after building the reviewed native source.
+This guide describes the native source accepted through protected CLI PR #21.
+The [acceptance record](native-remote-publication.md) binds its merge, tree and
+Linux/macOS results after PR #20's docs/UI prerequisite. Worker/browser adoption,
+binary distribution and live acceptance remain pending. Use this workflow only
+after building the reviewed native source and selecting a compatible relay.
 
 Remote access shares one selected CLI session through an account-gated relay.
 Local use needs no relay account. Native preparation began on protected CLI
-`c8e2239392f71df82cbef6166b1827c8e5f5f1c5`. This candidate selects
+`c8e2239392f71df82cbef6166b1827c8e5f5f1c5`. The accepted source selects
 harness merge `42e4f9cf33bd3525aec344cfdffabc251271f782` and its exact
-358-file completion API tree `826e0231...`. Earlier lock and gate results do not
-accept this revision. A compatible account service is required;
-no relay or browser UI is included. See [candidate status](native-remote-publication.md)
-for the blocked reviews and required fresh gates. The workflow below applies
-after those prerequisites pass.
+358-file completion API tree `826e0231...`. Earlier lock and gate results remain
+historical beside PR #21's separate native acceptance. A compatible account
+service is required; the native layer includes no relay or browser UI.
+The following [inert UI/Relay inputs](ci-bootstrap.md#current-inert-shared-ui-and-relay-inputs)
+still need their own gates before the later full Worker source and deployment.
 
 ## Sign in and host
 
@@ -33,10 +34,10 @@ one when none exists. See the recovery steps below.
 
 On Linux and macOS, Ctrl-C or SIGTERM cancels remote commands and releases
 their protected terminal mode. Signal ownership begins before memory-only host
-sign-in and initial sharing. The [corrected local macOS gate](native-remote-publication.md)
-covered the production loop, startup PTY and restoration. The final native
-source after the protected docs/UI prerequisite still needs its normal gate,
-hosted platform acceptance and release checks.
+sign-in and initial sharing. Earlier local macOS checks covered the production
+loop, startup PTY and restoration. PR #21's
+[native acceptance](native-remote-publication.md) records the final normal and
+hosted Linux/macOS checks; later source and release gates remain separate.
 
 Sign in through GitHub, approve the device code you requested, and accept the
 relay service terms. The relay requests the verified primary email with the
@@ -209,7 +210,8 @@ plaintext from the forwarding protocol.
 
 A compromised endpoint or altered client can read its own plaintext. The
 native installation and update channel must be trusted. Earlier local contract
-tests are recorded separately; they do not accept this candidate.
+tests remain separate from the accepted native source record and establish no
+formal cryptographic audit or live deployment acceptance.
 Snow states that it has not received a formal audit. Reachable
 invitation/plaintext buffers are cleared where practical; Snow does not promise
 forensic erasure of all internal key state.
@@ -236,7 +238,8 @@ output. A gap alone never establishes Idle. Each full replay page waits for the
 display cursor before the next read. A short or late snapshot cannot resume live
 output while a newer suppressed sequence remains unrecovered. Control results
 still arrive through the bounded channel; recovery never resubmits a mutation.
-Final-source local and hosted checks remain required.
+These contracts are included in PR #21's accepted native source. Following
+source changes require fresh local and hosted checks.
 
 ## Relay prerequisites and evidence
 
@@ -252,8 +255,8 @@ The loopback HTTP exception is compiled only for local tests.
 
 Relay operation, browser delivery, account capacity, daily quotas, payment and
 commercial policies belong to the separate Worker/browser publication layer.
-This source preparation does not deploy that service or activate data collection.
-Free hosting and production latency have not been measured for this candidate.
+Native source acceptance does not deploy that service or activate data collection.
+Free hosting and production latency have not been measured for this release.
 See [native dependencies](remote-dependencies.md) and
 [publication gates](native-remote-publication.md). There is no claim that a live
 service, public binary or updated docs site is available.

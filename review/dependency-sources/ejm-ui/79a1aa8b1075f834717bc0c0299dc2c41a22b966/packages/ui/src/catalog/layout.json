@@ -1,0 +1,22 @@
+{
+  "Art": ["default"],
+  "ActionRows": ["default"],
+  "ActionRow": ["default"],
+  "Band": ["default"],
+  "DocumentContent": ["default"],
+  "Fact": ["default"],
+  "Facts": ["default"],
+  "Hero": ["default"],
+  "Page": ["default"],
+  "Illustration": ["default"],
+  "ProductShot": ["default"],
+  "ProductStage": ["default"],
+  "ProductWindow": ["default"],
+  "Row": ["default", "selected", "disabled", "focused"],
+  "Rows": ["default"],
+  "Rule": ["default"],
+  "SectionHead": ["default"],
+  "Stat": ["default", "loading", "error", "empty"],
+  "Status": ["ok", "warn", "error", "info", "pending"],
+  "Text": ["default"]
+}
