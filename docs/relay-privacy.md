@@ -136,9 +136,14 @@ unchanged eligible subjects, so they cannot block a later profile whose buyer
 scope changed. Scan progress and deadline updates commit together and survive
 authority eviction. A full scan can require several hourly passes.
 
-Repeated withdrawal keeps or shortens the current profile deletion deadline.
-It cannot move that deadline later. Fresh valid consent or an explicit eligible
-profile update can establish a new retention baseline under the existing rules.
+Withdrawal retries, opt-out, GPC and loss of adult eligibility keep or shorten
+the current profile deletion deadline. They cannot move that deadline later.
+Fresh valid consent or an explicit eligible profile update can establish a new
+retention baseline under the existing rules.
+
+Operational legal holds also protect identities that have not accepted Relay
+terms, including their provider links and sessions. Once a hold expires, the
+configured identity retention rules apply again through bounded cleanup.
 
 Export-part cleanup inspects at most 128 indexed candidates before checking
 request protection. A durable cursor advances past pending parts without

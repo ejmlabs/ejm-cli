@@ -262,11 +262,20 @@ describe("coarse measurements, estimates and retention", () => {
   it("purges withdrawn profiles, usage and expired manifests in bounded indexed batches", () => {
     const { service, advance, store } = fixture(); enroll(service, actor()); consent(service, actor(), configuration(), "usage");
     service.recordUsage({ accountId: "account-a", bytes: 100, frames: 1, connectedMs: 1000, quality: "measured", measuredAt: START }); prepare(service);
+    const optOut = actor("profile-optout"); const gpc = actor("profile-gpc");
+    for (const who of [optOut, gpc]) { enroll(service, who); service.withdraw(who, { category: "profile" }); }
     service.withdraw(actor(), { category: "profile" }); advance(20 * DAY);
     service.withdraw(actor(), { category: "profile" });
     expect(store.exec<{ profile_purge_at: number }>("SELECT profile_purge_at FROM privacy_subjects WHERE account_id='account-a'")[0]?.profile_purge_at).toBe(START + 30 * DAY);
     expect(store.exec<{ withdrawn_at: number }>("SELECT withdrawn_at FROM privacy_consents WHERE account_id='account-a' AND category='profile'")[0]?.withdrawn_at).toBe(START);
-    advance(11 * DAY); service.cleanup(1);
+    advance(9 * DAY); service.optOut(optOut); service.optOut({ ...gpc, gpc: true });
+    expect(store.exec<{ profile_purge_at: number }>("SELECT profile_purge_at FROM privacy_subjects WHERE account_id IN (?,?) ORDER BY account_id", optOut.accountId, gpc.accountId).map((row) => row.profile_purge_at)).toEqual([START + 30 * DAY, START + 30 * DAY]);
+    expect(store.exec<{ withdrawn_at: number }>("SELECT withdrawn_at FROM privacy_consents WHERE account_id IN (?,?) AND category='profile' ORDER BY account_id", optOut.accountId, gpc.accountId).map((row) => row.withdrawn_at)).toEqual([START, START]);
+    advance(2 * DAY);
+    for (const remaining of [2, 1, 0]) {
+      expect(service.cleanup(1)).toMatchObject({ batchLimitPerCategory: 1, profileBatchLimit: 1 });
+      expect(store.exec("SELECT account_id FROM privacy_subjects WHERE profile IS NOT NULL")).toHaveLength(remaining);
+    }
     expect(store.exec<{ profile: string | null }>("SELECT profile FROM privacy_subjects WHERE account_id='account-a'")[0]?.profile).toBeNull();
     expect(store.exec("SELECT id FROM privacy_manifests")).toHaveLength(0);
     advance(61 * DAY); service.cleanup(1); expect(store.exec("SELECT account_id FROM privacy_usage")).toHaveLength(0);

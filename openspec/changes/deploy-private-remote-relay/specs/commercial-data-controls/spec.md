@@ -123,6 +123,10 @@ Every operational and commercial data category SHALL have a configured retention
 - **WHEN** a user repeats withdrawal without intervening fresh valid consent or an eligible profile update
 - **THEN** the earliest current deletion deadline remains in force and the profile is removed when that deadline becomes due
 
+#### Scenario: Opt-out follows profile withdrawal
+- **WHEN** a first opt-out or GPC signal suppresses participation after profile withdrawal without intervening fresh valid consent
+- **THEN** the earlier profile deletion deadline and original withdrawal time remain in force, and cleanup removes the profile when that deadline becomes due
+
 #### Scenario: More samples enter the same monthly aggregate
 - **WHEN** later samples are added to a live monthly aggregate
 - **THEN** earlier contributions keep their original expiry bound and later collection cannot extend it

@@ -14,6 +14,13 @@ Relay use SHALL require a verified account identity and acceptance of service te
 - **WHEN** a user completes verified sign-in and accepts service terms
 - **THEN** the account can use its permitted free or paid relay allowance while all commercial data choices remain off
 
+### Requirement: Operational identity retention
+Operational identity cleanup SHALL honor active documented legal holds before and after account admission. An expired hold SHALL permit normal bounded retention cleanup, including dependent authentication records.
+
+#### Scenario: An unadmitted identity has a legal hold
+- **WHEN** an identity without accepted terms reaches its retention deadline under an active operational legal hold
+- **THEN** cleanup retains its identity, provider link and sessions until the hold expires, while unheld expired identities remain eligible for deletion
+
 ### Requirement: Bounded native device login
 Native sign-in SHALL use a maintained device-authorization flow with explicit browser approval, cancellation, expiry and polling limits. The host SHALL validate authorization origins before opening or displaying them. Bearer tokens and secret device codes SHALL NOT enter arguments, logs or the transcript.
 

@@ -441,6 +441,43 @@ original deadline. Check unchanged eligible generations and deadlines. Require
 intended failures on 9a61, corrected focused passes and the unchanged normal gate
 once before fresh human admission. Keep task 2.4 and the release gates open.
 
+### Suppression retention correction
+
+Both complete reviews in run `39627652123` found two distinct medium retention
+defects in `b35d129203f6c6bfe5e71e1eac7817ed56612eb2`. A first opt-out or GPC
+signal after profile withdrawal can replace the existing deletion deadline with
+a later one. Use the same conditional SQLite update for withdrawal and shared
+suppression, filling a missing deadline or shortening a later one. Keep the
+original withdrawal time and fresh valid consent/profile-update baseline rules.
+The shared suppression path also covers loss of adult eligibility and closure;
+closure still deletes the profile immediately. Add no dependency, table or index.
+
+Extend the existing bounded-retention case with separate direct opt-out and GPC
+subjects, preserving its original usage-expiry assertions. Prove both keep the
+withdrawal deadline and are actually purged when it becomes due. Require the
+intended failure on b35d, a corrected focused pass and the normal gate once after
+both confirmed corrections are applied. Fresh admission, complete reviews and
+separate protected adoption remain required; no release task is completed.
+
+### Unadmitted identity hold correction
+
+The second b35d review found that unadmitted identity cleanup ignores live
+operational legal holds. An operator can record a hold for a verified identity
+before Relay terms acceptance; the existing hold schema has no admission foreign
+key. Deleting that user also cascades to its provider identity and sessions.
+Apply the same live-hold exclusion used by closed-account cleanup to the existing
+unadmitted delete, using its indexed account and expiry lookup. Retain the
+100-identity limit, expiry semantics and expired-hold cleanup. CLI owns this
+Worker adapter; no harness or UI contract, API, schema, index or pin changes.
+
+Extend only the existing operational-retention case with held and unheld
+unadmitted identities and their auth records. Prove live holds preserve those
+records, while unheld records expire and held records expire after the hold.
+Keep its closed-account and pending-cancellation assertions. Require an intended
+failure on unchanged b35d, one corrected focused invocation for both affected
+cases and one normal gate before fresh exact-source admission. All release
+controls and task checkboxes remain open.
+
 ### Dependency and artifact bounds
 
 Activate the exact 51-line candidate manifest already reviewed with its inherited

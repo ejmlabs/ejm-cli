@@ -125,9 +125,14 @@ export class PrivacyService {
     });
   }
 
+  private scheduleProfilePurge(id: string): void {
+    const purgeAt = this.now() + this.retention().profileWithdrawalDays * DAY;
+    this.store.exec("UPDATE privacy_subjects SET profile_purge_at=? WHERE account_id=? AND profile IS NOT NULL AND (profile_purge_at IS NULL OR profile_purge_at>?)", purgeAt, id, purgeAt);
+  }
+
   private suppressData(id: string, reason: string): void {
     this.store.exec("UPDATE privacy_consents SET withdrawn_at=COALESCE(withdrawn_at,?) WHERE account_id=?", this.now(), id);
-    this.store.exec("UPDATE privacy_subjects SET profile_purge_at=? WHERE account_id=? AND profile IS NOT NULL", this.now() + this.retention().profileWithdrawalDays * DAY, id);
+    this.scheduleProfilePurge(id);
     this.store.exec("DELETE FROM privacy_usage WHERE account_id=?", id);
     this.store.exec("DELETE FROM privacy_rejoins WHERE account_id=?", id);
     this.evidence(id, "all", reason, "all current commercial permissions suppressed");
@@ -141,10 +146,7 @@ export class PrivacyService {
       this.store.exec("UPDATE privacy_consents SET withdrawn_at=COALESCE(withdrawn_at,?) WHERE account_id=? AND category=? AND (? IS NULL OR buyer_id=?)", this.now(), id, kind, buyerId, buyerId);
       this.evidence(id, kind, "withdrawn", buyerId ?? "all buyers"); this.bump(id);
       if (kind === "usage") { this.store.exec("DELETE FROM privacy_usage WHERE account_id=?", id); this.store.exec("UPDATE privacy_subjects SET usage_since=? WHERE account_id=?", this.now(), id); }
-      if (kind === "profile" && !this.anyConsent(id, "profile")) {
-        const purgeAt = this.now() + this.retention().profileWithdrawalDays * DAY;
-        this.store.exec("UPDATE privacy_subjects SET profile_purge_at=? WHERE account_id=? AND profile IS NOT NULL AND (profile_purge_at IS NULL OR profile_purge_at>?)", purgeAt, id, purgeAt);
-      }
+      if (kind === "profile" && !this.anyConsent(id, "profile")) this.scheduleProfilePurge(id);
       else if (kind === "profile") this.store.exec("UPDATE privacy_subjects SET profile_purge_at=? WHERE account_id=? AND profile IS NOT NULL", this.profileExpiry(id), id);
       return { withdrawn: true, serviceAccessChanged: false };
     });

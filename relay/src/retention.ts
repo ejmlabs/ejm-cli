@@ -20,7 +20,7 @@ export async function retentionCleanup(env: Env, now: number): Promise<void> {
   const policy = retentionPolicy(env);
   if (!policy) return;
   const day = 86_400_000;
-  await env.DB.prepare('DELETE FROM "user" WHERE id IN(SELECT u.id FROM "user" u WHERE u."createdAt"<? AND NOT EXISTS(SELECT 1 FROM relay_accounts a WHERE a.id=u.id) ORDER BY u."createdAt" LIMIT 100)').bind(new Date(now - policy.unadmittedDays * day).toISOString()).run();
+  await env.DB.prepare('DELETE FROM "user" WHERE id IN(SELECT u.id FROM "user" u WHERE u."createdAt"<? AND NOT EXISTS(SELECT 1 FROM relay_accounts a WHERE a.id=u.id) AND NOT EXISTS(SELECT 1 FROM operational_legal_holds h WHERE h.account_id=u.id AND h.expires_at>?) ORDER BY u."createdAt" LIMIT 100)').bind(new Date(now - policy.unadmittedDays * day).toISOString(), now).run();
   const subjects = await env.DB.prepare("SELECT id,closed_at FROM relay_accounts a WHERE status='closed' AND cleanup_after<=? AND NOT EXISTS(SELECT 1 FROM operational_legal_holds h WHERE h.account_id=a.id AND h.expires_at>?) ORDER BY cleanup_after,closed_at,id LIMIT 1").bind(now, now).all<{ id: string; closed_at: number }>();
   for (const subject of subjects.results) {
     const pendingCancellation = await env.DB.prepare("SELECT account_id FROM relay_billing_cancellations WHERE account_id=? AND state='pending'").bind(subject.id).first();

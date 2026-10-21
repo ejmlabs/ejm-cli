@@ -130,6 +130,24 @@ admission, complete reviews, final approval, protected adoption and deployment
 remain required. Approved policy bodies and retention periods are unchanged;
 commercial collection and billing remain disabled.
 
+Both reviews of `b35d129203f6c6bfe5e71e1eac7817ed56612eb2` completed in
+[run 39627652123](https://github.com/ejmlabs/ejm-cli/actions/runs/39627652123).
+Linux/macOS quality, registry and standards passed. The reviews reported two
+distinct medium defects:
+
+- Opt-out or GPC after withdrawal could extend the deletion deadline.
+  Withdrawal and suppression now share the conditional deadline update.
+  The existing retention case adds separate opt-out and GPC subjects while
+  preserving its original usage-expiry assertions.
+- Unadmitted identity pruning ignored live operational legal holds. The existing
+  bounded delete now uses the same indexed hold exclusion as closed accounts.
+  Its existing case checks held and unheld identities, provider links and
+  sessions, including cleanup after hold expiry.
+
+No cases, dependencies, D1 migrations or owner pin changes are added. Fresh
+corrected-source admission, complete reviews, final approval, protected adoption
+and deployment remain required.
+
 ### Worker review corrections
 
 Both reviews in [run 39534461293](https://github.com/ejmlabs/ejm-cli/actions/runs/39534461293)

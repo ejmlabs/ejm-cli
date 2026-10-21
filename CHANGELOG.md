@@ -11,7 +11,7 @@ Changes follow [Semantic Versioning](https://semver.org/). Each repository is ve
 
 ### Fixed
 
-- Prepare durable profile-retention scan progress and preserve the current deletion deadline on repeated withdrawal. The [complete 9a61 reviews](docs/relay-publication.md#profile-retention-correction) found both defects; protected acceptance and deployment remain pending.
+- Prepare durable profile-retention scan progress, preserve deletion deadlines across withdrawal, opt-out and GPC, and honor live holds on unadmitted identities. The [retention reviews and corrections](docs/relay-publication.md#profile-retention-correction) remain subject to protected acceptance and deployment.
 - Prepare bounded native relay retirement on ordinary stop and graceful exit, and authoritative browser recovery after Events gaps. Preserve reconnect reservations and uncertain actions. The [complete e0bf retry reviews](docs/relay-publication.md#native-retirement-and-browser-gap-correction) found both defects; corrected-source acceptance and deployment remain pending.
 - Prepare atomic device revocation and credential deletion, and preserve every accepted Unicode device label in rights exports. Protected acceptance and deployment remain pending.
 - Prepare the [device-history and quota corrections](docs/relay-publication.md#device-history-and-quota-review-corrections): keep active devices visible, page complete rights exports durably, bound cleanup scans and reject frames beyond a renewed reservation. Protected acceptance and deployment remain pending.
