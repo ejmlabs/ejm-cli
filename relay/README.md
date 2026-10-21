@@ -8,11 +8,12 @@ This complete Worker/UI source is being prepared in CLI PR #23 after protected
 PR #22 merge `78810826cd376588d3303f13bc237309fb5170a8` and accepted native PR #21.
 PR #22 accepted inert dependency inputs, not installation or runtime. The
 [earlier local checks](../docs/relay-publication.md#current-local-checks) cover
-native, WASM, Worker and browser stages and cf1's normal full gate. Both complete
-hosted reviews rejected that head on five defects. The
-[local review corrections](../docs/relay-publication.md#worker-review-corrections)
-still need their own checks and protected adoption; updated UI deployment
-remains pending. See [publication prerequisites](../docs/relay-publication.md) for exact
+native, WASM, Worker and browser stages and cf1's normal full gate. The
+[first corrections](../docs/relay-publication.md#worker-review-corrections) passed
+their normal local gate at 9336, but both complete hosted reviews found further
+defects. The [second corrections](../docs/relay-publication.md#second-worker-review-corrections)
+remain prepared, with checks and protected adoption pending. Updated UI
+deployment remains pending. See [publication prerequisites](../docs/relay-publication.md) for exact
 receipts and [deployment status](../docs/remote-deployment.md) for historical
 closed uploads. Admission stays closed with a two-account limit. Payments,
 commercial collection and buyer exports remain disabled. Approved policy pages
@@ -27,6 +28,13 @@ The browser uses Snow compiled to WebAssembly. The operator serves the browser c
 D1 holds verified primary email, GitHub account reference, terms, registered devices, expiring authentication state, hashed connection tickets, payment references and rights tasks. Provider OAuth tokens are discarded after identity verification. Session IP addresses and arbitrary user agents are not retained. No application transcript, plaintext, ciphertext, invitation PSK, endpoint identity key, session title, path or application request ID belongs in service storage or diagnostics.
 
 Optional commercial records live in the separate `PrivacyAuthority`. Collection and release remain disabled with `COMMERCIAL_CONFIG="{}"`. Account identity and payment records are not commercial export sources. See [privacy operations](../docs/relay-privacy.md), [browser control](../docs/relay-web.md) and [native use](../docs/remote-control.md).
+
+The prepared disclosure correction rechecks included usage rows and their
+deadlines inside the final transaction, after asynchronous payload hashing.
+Fresh time, current consent and subject generation must still permit release;
+expired or deleted usage cannot be disclosed. See the
+[second review corrections](../docs/relay-publication.md#second-worker-review-corrections)
+for pending verification. Retention durations and approved policy text are unchanged.
 
 ## Shared screens
 
@@ -76,9 +84,36 @@ Reservations debit the account before forwarding. A lost or disconnected allocat
 
 A lease is checked on every frame. A revoked account or device cannot renew authority. Existing device/logout authority lasts at most its current lease. Account closure and room stop close both peers before acknowledgement.
 
-A disconnected pair retires together. A lone peer that already used the old cipher transport cannot join a replacement handshake. Both endpoints need fresh sockets, one-use tickets and a fresh Noise handshake. Old close/error callbacks affect only their own pair, so they cannot close a replacement pair. Sockets restored from legacy attachments without pair authority close on upgrade and require reconnect. This uses existing socket attachments and needs no database migration. These are prepared [review corrections](../docs/relay-publication.md#worker-review-corrections), with corrected-source acceptance pending.
+A disconnected pair retires together. A lone peer that already used the old
+cipher transport cannot join a replacement handshake. Both endpoints need fresh
+sockets, one-use tickets and a fresh Noise handshake. Old close/error callbacks
+affect only their own pair, so they cannot close a replacement pair. Sockets
+restored from legacy attachments without pair authority close on upgrade.
 
-Dashboard stop retires that routing ID until its original share expiry, including already-redeemed connections delayed until after stop. Account-scoped retries preserve the deadline and leave a newer share intact. The quota authority retains at most 600 retired IDs across the two UTC days an eight-hour share can overlap, removes expired entries through cleanup and fails closed at capacity. Each Room keeps one persistent expiry fence, restored on eviction, with one deadline cleanup alarm and no per-frame SQL. Early alarms preserve the fence; due cleanup removes the idle account linkage. A fresh share remains eligible. Final-source and live acceptance remain pending.
+Each Room retains one account owner and the share's original expiry independently
+of sockets. The Worker claims that owner after quota issuance and before
+publishing a ticket. Disconnect, eviction and ticket retries do not release
+ownership or extend the deadline. Another account cannot claim or stop that
+share, even while no peers are connected. Legacy Rooms without ownership state
+fail closed for old tickets and connections; start a fresh share with a new ID.
+The prepared correction uses existing Durable Object storage and requires no D1
+migration. See [review corrections](../docs/relay-publication.md#second-worker-review-corrections)
+for pending checks and acceptance.
+
+Dashboard stop accepts a verified session for the owning account without enrolling
+a transport device. Browser mutations still require the exact Origin. Connection
+tickets and WebSockets still require the registered device; account stop grants
+no stream key or controller approval.
+
+Dashboard stop retires that routing ID until its original share expiry, including
+already-redeemed connections delayed until after stop. Account-scoped retries
+preserve the deadline and leave a newer share intact. The quota authority retains
+at most 600 retired IDs across the two UTC days an eight-hour share can overlap,
+removes expired entries through cleanup and fails closed at capacity. Each Room
+keeps one persistent expiry fence, restored on eviction, with one deadline cleanup
+alarm and no per-frame SQL. Early alarms preserve the fence; due cleanup removes
+the idle account linkage. A fresh share remains eligible. These are prepared
+contracts; corrected-source and live acceptance remain pending.
 
 Room objects use `acceptWebSocket`, attachment restoration and bounded handlers. They have no room polling, outbound WebSocket or recurring timer. Slow-reader buffering is bounded by the platform and checked where the runtime exposes `bufferedAmount`; the service keeps no transcript queue. Idle connections can hibernate. Availability still depends on provider quotas and the host process.
 
@@ -109,6 +144,11 @@ For a standalone relay phase, capture a fresh locked native build from the repos
 ```
 
 Run these commands with the exact source and reviewed harness checkout being checked. Do not reuse an artifact record from another source snapshot. The standalone phase does not replace the root native or PTY gates. Keep total Cargo jobs at two or fewer and run no two Cargo gates against the same target directory.
+
+From the repository root, `pwsh -File relay/scripts/check.ps1` delegates to
+`python3 scripts/check.py --relay`. It requires Python 3.11 or later available as
+`python3` and the same current `EJM_NATIVE_TEST_ARTIFACTS` record described above.
+Running this shortcut does not establish Windows native or terminal acceptance.
 
 Useful focused commands from `relay/`, after the locked installation:
 
@@ -192,7 +232,7 @@ do not infer account ownership from an ID.
 | `POST /v1/account/close` | `{"confirm":"close"}` | `requestId` and one-time private `statusKey`; status 200 only after relay revocation completes. Recipient, operational and billing follow-up can remain pending. Closure promises neither immediate deletion nor recall of recipient copies. |
 | `GET /v1/rooms` | Session credential | `rooms:[]` or one `{id,expiresAt}` for this account. Only opaque routing metadata is exposed. |
 | `POST /v1/rooms/ROOM_ID/tickets` | `role` (`host` or `controller`) and `deviceId` equal to this session's device ID | `ticket`, `expiresAt`, `room`, `role`, `leaseMaximumSeconds:900`. Requires this session's registered device and current terms. The first host ticket creates the share; a controller cannot create it. One active room per account. |
-| `POST /v1/rooms/ROOM_ID/stop` | Registered session device; no parsed body, `{}` is sufficient | `{"stopped":true}` after retiring the owned epoch and closing peers. Owned retries preserve its original deadline; they do not stop a different newer share. |
+| `POST /v1/rooms/ROOM_ID/stop` | Verified owning account session; no transport device enrollment or parsed body required, `{}` is sufficient | `{"stopped":true}` after retiring the owned epoch and closing peers. Owned retries preserve its original deadline; they do not stop a different newer share. |
 
 Account closure uses the [tracked rights workflow](../docs/relay-privacy.md#account-access-correction-and-deletion).
 If revocation cannot finish, status 503 still returns `requestId` and `statusKey`
@@ -201,6 +241,16 @@ with `relayClosureAcknowledged:false` and
 level. The dashboard shows the receipt on its result page without automatic
 navigation. Save it before leaving; the service stores only the key's hash.
 Pending work remains durable after session revocation.
+
+Quota revocation retains a bounded set of pending Room closure targets until the
+Room acknowledges closure or verified original expiry invalidates every transport
+lease. Each account revocation attempt processes one unexpired target; a failed
+or remaining unexpired target keeps operational work pending for durable retry.
+Bounded cleanup removes expired targets, and an old retry cannot retire a later
+owner of a reused routing ID. The rights workflow schedules account-closure
+retries. After an ordinary **Stop sharing** error, retry that action; later account
+closure also processes its pending target. This is a prepared
+[second review correction](../docs/relay-publication.md#second-worker-review-corrections).
 
 ### One-use tickets and WSS
 
@@ -232,7 +282,7 @@ These are common relay errors, not an exhaustive framework error catalogue.
 | Status/code | Recovery |
 | --- | --- |
 | `421/configured_origin_required`; `403/origin_required`, `origin_not_allowed` or `browser_origin_required` | Correct the URL/Origin and credential transport; do not follow a credential-bearing redirect. |
-| `401/sign_in_required`; `401/registered_device_required` or `403/registered_device_required`; `401/registered_browser_required` | Sign in and register the current session's device. A closed account or revoked device needs operator/user recovery, not a new ticket loop. |
+| `401/sign_in_required`; `401/registered_device_required` or `403/registered_device_required`; `401/registered_browser_required` | Sign in; register the current session's device for transport routes. Account-level room stop needs no transport enrollment. A closed account or revoked device needs operator/user recovery, not a new ticket loop. |
 | `400/current_terms_required` or `403/current_terms_required`; `503/admission_closed`, `operational_retention_not_approved` or `relay_capacity_exhausted` | Review current terms and operator status. An open, approved admission window is required for terms admission; capacity counts admitted accounts, not GitHub identities. |
 | `400/invalid_device_metadata`, `invalid_ticket_scope` or `confirmation_required`; `409/device_limit` | Correct the documented body or revoke an unused device before registering another. |
 | `401/ticket_required` or `invalid_ticket`; `403/account_mismatch`, `device_mismatch` or `account_or_device_inactive` | Obtain a fresh correctly scoped ticket only after checking session, terms, device and account. Never substitute another account's ticket. |
@@ -334,6 +384,11 @@ before configuring its reference. Displaying a notice does not open admission.
 
 The configured cron, `17 * * * *`, runs once an hour at minute 17 and budgets operational cleanup, retention and privacy enqueueing together. One populated invocation is bounded to at most 38 parent D1 statements and 11 internal Durable Object calls, with their combined count below 50. Every statement inside a D1 batch counts separately. The published [free D1 ceiling](https://developers.cloudflare.com/d1/platform/limits/) is 50 queries per Worker invocation, leaving at least 12 query slots of headroom. The cron makes no direct external requests. Durable Object SQL and any configured Stripe reconciliation run in their own bounded invocations; the launch keeps Stripe disabled. These bounds do not prove production CPU time or daily row-read/write headroom.
 
+The prepared closure correction adds one bounded Room-to-quota acknowledgement
+per close attempt inside the Room's invocation. The parent bounds above exclude
+this nested work, which also consumes provider capacity. Include it when measuring
+production request and row usage.
+
 | Work per invocation                                 | Batch | Maximum attempts per day at hourly cadence |
 | --------------------------------------------------- | ----: | -----------------------------------------: |
 | Account quota cleanup                               |     2 |                                         48 |
@@ -431,11 +486,13 @@ emit only allowlisted safe categories/status/counts. See the
 For rollback, close new admission and select a compatible reviewed version with
 `wrangler deployments list`, then use `wrangler rollback VERSION_ID` through the
 same pinned local executable. Preserve secrets, D1/DO state and ticket/quota
-ledgers. Code rollback does not reverse migrations, payment state, rights evidence
-or delivered exports. Never rename/delete namespaces or reset state to retry.
-Historical versions lacking the signup guard or share-retirement fences are
-unsafe while affected epochs remain valid. Prefer a compatible closed forward
-fix, or have owners stop affected shares locally before restoring older code.
+ledgers, Room ownership and pending closure targets. Code rollback does not reverse
+migrations, payment state, rights evidence or delivered exports. Never rename/delete
+namespaces or reset state to retry. Versions lacking the signup guard,
+share-retirement fences, durable Room ownership or pending closure handling are
+unsupported while affected state remains live. Prefer a compatible closed forward
+fix. Owners must stop affected shares locally or wait through their original
+expiry before considering older code; preserve any outstanding rights work.
 Stop rooms on transport incompatibility and pair again when keys/epochs change.
 
 ## Dependencies

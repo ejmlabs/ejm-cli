@@ -12,6 +12,7 @@ interface Consent extends Record<string, unknown> { account_id: string; buyer_id
 interface Manifest extends Record<string, unknown> { id: string; operator_id: string; buyer_id: string; category: Category; fields: string; scope: string; candidates: string; state: string; created_at: number; expires_at: number }
 interface Candidate { id: string; generation: number }
 interface Usage extends Record<string, unknown> { month: string; bytes: number; frames: number; connected_ms: number; active_days: string; os_family: string | null; cli_major: number | null; quality: "measured" | "estimated"; expires_at: number }
+interface UsageReference { accountId: string; month: string; quality: Usage["quality"]; expiresAt: number }
 interface Rights extends Record<string, unknown> { id: string; account_id: string; kind: string; jurisdiction: string; state: string; requested_at: number; acknowledged_at: number | null; acknowledgement_due: number; response_due: number; extended: number; extension_notice: string | null; retained_exceptions: string; recipients: string; operational_state: string; completed_at: number | null; expires_at: number }
 
 /** One SQLite-backed authority serializes every privacy write and disclosure commit. */
@@ -230,7 +231,7 @@ export class PrivacyService {
     if (manifest.state !== "prepared" || manifest.expires_at <= this.now()) throw new PrivacyError("manifest_not_releasable", 409);
     return manifest;
   }
-  private projection(id: string, buyer: Buyer, kind: Category, fields: CommercialField[]): Record<string, unknown> {
+  private projection(id: string, buyer: Buyer, kind: Category, fields: CommercialField[], includedUsage: UsageReference[]): Record<string, unknown> {
     const subject = this.eligible(id, buyer, kind);
     let pseudonym = this.rows<{ pseudonym: string }>("SELECT pseudonym FROM privacy_pseudonyms WHERE account_id=? AND buyer_id=?", id, buyer.id)[0]?.pseudonym;
     if (!pseudonym) { pseudonym = crypto.randomUUID(); this.store.exec("INSERT INTO privacy_pseudonyms(account_id,buyer_id,pseudonym,expires_at) VALUES(?,?,?,?)", id, buyer.id, pseudonym, this.now() + this.retention().disclosureDays * DAY); }
@@ -244,6 +245,7 @@ export class PrivacyService {
     }
     const summaries = this.rows<Usage>("SELECT month,bytes,frames,connected_ms,active_days,os_family,cli_major,quality,expires_at FROM privacy_usage WHERE account_id=? AND expires_at>? ORDER BY month LIMIT 8", id, this.now());
     if (summaries.length === 0) throw new PrivacyError("usage_unavailable", 409);
+    for (const summary of summaries) includedUsage.push({ accountId: id, month: summary.month, quality: summary.quality, expiresAt: summary.expires_at });
     return { subject: pseudonym, summaries: summaries.map((summary) => ({ month: summary.month, quality: summary.quality, provenance: summary.quality === "measured" ? "server-forwarding-counters" : "reservation-estimate", fields: usageProjection({ bytes: summary.bytes, connectedMs: summary.connected_ms, days: (JSON.parse(summary.active_days) as string[]).length, osFamily: summary.os_family, cliMajor: summary.cli_major }, fields) })) };
   }
 
@@ -253,7 +255,8 @@ export class PrivacyService {
     const id = text(value.manifestId); const manifest = this.manifest(id, operator); const buyer = approvedBuyer(this.config, manifest.buyer_id, this.now());
     if (manifest.scope !== buyerScope(buyer, manifest.category)) throw new PrivacyError("buyer_scope_changed", 409);
     const candidates = JSON.parse(manifest.candidates) as Candidate[]; const fields = fieldSet(JSON.parse(manifest.fields), manifest.category);
-    const records = this.store.transaction(() => candidates.map((candidate) => { this.eligible(candidate.id, buyer, manifest.category, candidate.generation); return this.projection(candidate.id, buyer, manifest.category, fields); }));
+    const includedUsage: UsageReference[] = [];
+    const records = this.store.transaction(() => candidates.map((candidate) => { this.eligible(candidate.id, buyer, manifest.category, candidate.generation); return this.projection(candidate.id, buyer, manifest.category, fields, includedUsage); }));
     const payload = JSON.stringify({ schema: "ejm-commercial-v1", buyer: buyer.name, purpose: buyer.purpose, category: manifest.category, noticeVersion: buyer.noticeVersion, retentionDays: buyer.retentionDays, dataClassification: "personal-data", records });
     if (new TextEncoder().encode(payload).byteLength > 262_144) throw new PrivacyError("export_bytes_exceeded");
     const digest = [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(payload)))].map((byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -262,6 +265,7 @@ export class PrivacyService {
       const current = this.manifest(id, operator); const currentBuyer = approvedBuyer(this.config, current.buyer_id, this.now());
       if (current.scope !== buyerScope(currentBuyer, current.category)) throw new PrivacyError("buyer_scope_changed", 409);
       for (const candidate of candidates) { this.eligible(candidate.id, currentBuyer, current.category, candidate.generation); if (this.disclosures(candidate.id).length >= 512) throw new PrivacyError("disclosure_rights_capacity_reached", 429); }
+      if (includedUsage.length > 0 && this.rows("SELECT 1 AS unavailable FROM json_each(?) AS included WHERE NOT EXISTS(SELECT 1 FROM privacy_usage WHERE account_id=json_extract(included.value,'$.accountId') AND month=json_extract(included.value,'$.month') AND quality=json_extract(included.value,'$.quality') AND expires_at=json_extract(included.value,'$.expiresAt') AND expires_at>?) LIMIT 1", JSON.stringify(includedUsage), this.now()).length > 0) throw new PrivacyError("usage_unavailable", 409);
       this.store.exec("INSERT INTO privacy_ledger(id,manifest_id,buyer_id,purpose,category,fields,notice_version,subjects,digest,released_at,expires_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)", crypto.randomUUID(), id, buyer.id, buyer.purpose, manifest.category, manifest.fields, buyer.noticeVersion, JSON.stringify(candidates.map((candidate) => candidate.id)), digest, this.now(), this.now() + this.retention().disclosureDays * DAY);
       this.store.exec("UPDATE privacy_manifests SET state='released' WHERE id=?", id);
     });

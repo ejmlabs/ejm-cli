@@ -56,13 +56,13 @@ try {
       const names = await storage.exec("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%'");
       for (const row of names) {
         const name = String(row.name);
-        if (binding === "ROOM" && !["__miniflare_do_name", "retirement"].includes(name)) throw new Error("native_fixture_room_has_application_storage");
+        if (binding === "ROOM" && !["__miniflare_do_name", "owner", "retirement"].includes(name)) throw new Error("native_fixture_room_has_application_storage");
         const rows = await storage.exec(`SELECT * FROM ${quoteIdentifier(name)} LIMIT 1001`);
         if (rows.length > 1000) throw new Error("native_fixture_unexpected_storage_size");
-        if (binding === "ROOM" && name === "retirement") {
-          const columns = await storage.exec('PRAGMA table_info("retirement")');
+        if (binding === "ROOM" && ["owner", "retirement"].includes(name)) {
+          const columns = await storage.exec(`PRAGMA table_info(${quoteIdentifier(name)})`);
           const expected = ["singleton", "account_id", "expires_at"];
-          if (columns.length !== expected.length || columns.some(column => !expected.includes(String(column.name))) || rows.length > 1 || rows.some(row => row.singleton !== 1 || row.account_id !== fixture.accountId || !Number.isSafeInteger(row.expires_at) || Number(row.expires_at) <= 0 || Number(row.expires_at) > Date.now() + LIMITS.shareMs)) throw new Error("native_fixture_invalid_room_retirement_metadata");
+          if (columns.length !== expected.length || columns.some(column => !expected.includes(String(column.name))) || rows.length > 1 || rows.some(row => row.singleton !== 1 || row.account_id !== fixture.accountId || !Number.isSafeInteger(row.expires_at) || Number(row.expires_at) <= 0 || Number(row.expires_at) > Date.now() + LIMITS.shareMs)) throw new Error(name === "owner" ? "native_fixture_invalid_room_owner_metadata" : "native_fixture_invalid_room_retirement_metadata");
         }
         rejectPayload(rows, forbidden); storageTables++;
       }

@@ -4,6 +4,7 @@ import { applyD1Migrations, evictDurableObject, reset, runDurableObjectAlarm, ru
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import worker from "../src/index.js";
 import { createAuth, authOptions } from "../src/auth.js";
+import { revokeRelayAccount } from "../src/accounts.js";
 import { credentialHeaders, hashToken, mutationAllowed } from "../src/http.js";
 import { AccountQuota, leaseExpiry, windowBoundary } from "../src/quota.js";
 import { Room } from "../src/rooms.js";
@@ -299,6 +300,33 @@ describe("OAuth admission boundary", () => {
     expect(after.status).toBe(401); await after.text();
     expect(await counts()).toEqual({ users: 1, accounts: 1, sessions: 1, admitted: 1 });
   });
+  it("lets a fresh GitHub session stop its account's share without transport enrollment", async () => {
+    mockGithub();
+    const first = await complete(bindings, await start(bindings));
+    const firstCookie = first.headers.getSetCookie().map(value => value.split(";")[0]!).join("; ");
+    expect((await call("/v1/account/terms", "POST", { version: bindings.TERMS_VERSION }, undefined, { cookie: firstCookie, origin })).status).toBe(200);
+    const device = await call("/v1/devices", "POST", { label: "Fixture host" }, undefined, { cookie: firstCookie, origin });
+    const deviceId = (await device.json<{ id: string }>()).id;
+    const room = "opaque_fresh_browser_stop_01";
+    const issued = await call(`/v1/rooms/${room}/tickets`, "POST", { role: "host", deviceId }, undefined, { cookie: firstCookie, origin });
+    expect(issued.status).toBe(200); await issued.text();
+    const config = { ...bindings, ADMISSION_ENABLED: "false" };
+    const fresh = await complete(config, await start(config));
+    const browserCookie = fresh.headers.getSetCookie().map(value => value.split(";")[0]!).join("; ");
+    expect(await (await call("/v1/account", "GET", undefined, undefined, { cookie: browserCookie }, config)).json()).toMatchObject({ deviceId: null });
+    expect(await (await call("/v1/rooms", "GET", undefined, undefined, { cookie: browserCookie }, config)).json()).toMatchObject({ rooms: [{ id: room }] });
+    for (const supplied of [undefined, "https://attacker.invalid", "null"]) {
+      const headers = new Headers({ cookie: browserCookie }); if (supplied) headers.set("origin", supplied);
+      expect((await call(`/v1/rooms/${room}/stop`, "POST", {}, undefined, headers, config)).status).toBe(403);
+    }
+    expect((await call(`/v1/rooms/${room}/stop`, "POST", {}, undefined, { cookie: browserCookie, origin }, config)).status).toBe(200);
+    const current = await bindings.DB.prepare('SELECT id FROM "user"').first<{ id: string }>();
+    const context = await createAuth(bindings).$context;
+    const session = await context.internalAdapter.createSession(current!.id);
+    expect((await call(`/v1/rooms/${room}/stop`, "POST", {}, session.token, undefined, config)).status).toBe(200);
+    expect((await call(`/v1/rooms/${room}/tickets`, "POST", { role: "host", deviceId }, session.token, undefined, config)).status).toBe(403);
+    expect(await bindings.DB.prepare("SELECT COUNT(*) AS n FROM relay_devices").first()).toEqual({ n: 1 });
+  });
 });
 
 describe("maintained device grant", () => {
@@ -352,6 +380,111 @@ describe("durable admission and hibernating forwarding", () => {
       socket.addEventListener("close", () => resolve(null), { once: true });
     });
   }
+  it.each([false, true])("preserves the account owner after Room eviction with disconnected transports=%s", async disconnected => {
+    const owner = await identity(); const other = await identity(); const room = "opaque_durable_owner_0001";
+    await ticket(owner, room);
+    const stub = bindings.ROOM.get(bindings.ROOM.idFromName(room));
+    if (disconnected) {
+      const host = await connect(room, "host", await ticket(owner, room));
+      const controller = await connect(room, "controller", await ticket(owner, room, "controller"));
+      host.webSocket!.accept(); controller.webSocket!.accept();
+      const closed = [frameOrClose(host.webSocket!), frameOrClose(controller.webSocket!)];
+      host.webSocket!.close(); controller.webSocket!.close();
+      expect(await Promise.all(closed)).toEqual([null, null]);
+      expect(await runInDurableObject(stub, async (_instance, state) => state.getWebSockets().length)).toBe(0);
+    }
+    await runInDurableObject(stub, async () => undefined);
+    await evictDurableObject(stub);
+    const collision = await call(`/v1/rooms/${room}/tickets`, "POST", { role: "host", deviceId: other.deviceId }, other.token);
+    expect(collision.status).toBe(403); await collision.text();
+    expect((await call(`/v1/rooms/${room}/stop`, "POST", {}, other.token)).status).toBe(403);
+    expect(await bindings.DB.prepare("SELECT COUNT(*) AS n FROM connection_tickets WHERE account_id=? AND room=?").bind(other.accountId, room).first()).toEqual({ n: 0 });
+    expect(await (await call("/v1/rooms", "GET", undefined, other.token)).json()).toEqual({ rooms: [] });
+    const host = await connect(room, "host", await ticket(owner, room));
+    const controller = await connect(room, "controller", await ticket(owner, room, "controller"));
+    expect(host.status).toBe(101); expect(controller.status).toBe(101);
+    host.webSocket!.accept(); controller.webSocket!.accept(); controller.webSocket!.binaryType = "arraybuffer";
+    const receiving = frameOrClose(controller.webSocket!); host.webSocket!.send(new Uint8Array([79, 83]));
+    expect(await receiving).toEqual([79, 83]); host.webSocket!.close(); controller.webSocket!.close();
+    await ticket(other, "opaque_collision_recovery_01");
+  });
+  it("retains the original owner deadline after failed ticket publication and cleans it only at expiry", async () => {
+    const owner = await identity(); const room = "opaque_owner_publish_0001";
+    await bindings.DB.prepare("CREATE TRIGGER fixture_ticket_publish_failure BEFORE INSERT ON connection_tickets BEGIN SELECT RAISE(ABORT,'Offline fixture publication failure'); END").run();
+    expect((await call(`/v1/rooms/${room}/tickets`, "POST", { role: "host", deviceId: owner.deviceId }, owner.token)).status).toBe(503);
+    const stub = bindings.ROOM.get(bindings.ROOM.idFromName(room));
+    const original = await runInDurableObject(stub, async (_instance, state) => state.storage.sql.exec<{ account_id: string; expires_at: number }>("SELECT account_id,expires_at FROM owner").one());
+    expect(original.account_id).toBe(owner.accountId);
+    await bindings.DB.prepare("DROP TRIGGER fixture_ticket_publish_failure").run();
+    await evictDurableObject(stub); await ticket(owner, room);
+    const extension = await stub.fetch("https://internal/claim", { method: "POST", body: JSON.stringify({ accountId: owner.accountId, expiresAt: original.expires_at + 1, created: true }) });
+    expect(extension.status).toBe(409); await extension.text();
+    expect(await runDurableObjectAlarm(stub)).toBe(true);
+    expect(await runInDurableObject(stub, async (_instance, state) => ({ owner: state.storage.sql.exec("SELECT account_id,expires_at FROM owner").one(), alarm: await state.storage.getAlarm() }))).toEqual({ owner: original, alarm: original.expires_at });
+    vi.spyOn(Date, "now").mockReturnValue(original.expires_at);
+    try {
+      expect(await runDurableObjectAlarm(stub)).toBe(true);
+      expect(await runInDurableObject(stub, async (_instance, state) => ({ rows: state.storage.sql.exec("SELECT * FROM owner").toArray(), alarm: await state.storage.getAlarm() }))).toEqual({ rows: [], alarm: null });
+    } finally { vi.restoreAllMocks(); }
+  });
+  it("retires ownerless legacy transports and requires a fresh owned share ID", async () => {
+    const owner = await identity(); const room = "opaque_unowned_legacy_001";
+    const host = await connect(room, "host", await ticket(owner, room));
+    const controller = await connect(room, "controller", await ticket(owner, room, "controller"));
+    host.webSocket!.accept(); controller.webSocket!.accept();
+    const pending = await ticket(owner, room);
+    const closed = [frameOrClose(host.webSocket!), frameOrClose(controller.webSocket!)];
+    const stub = bindings.ROOM.get(bindings.ROOM.idFromName(room));
+    await runInDurableObject(stub, async (_instance, state) => { state.storage.sql.exec("DELETE FROM owner"); });
+    await evictDurableObject(stub);
+    const old = await connect(room, "host", pending); expect(old.status).toBe(403); await old.text();
+    expect(await Promise.all(closed)).toEqual([null, null]);
+    const retry = await call(`/v1/rooms/${room}/tickets`, "POST", { role: "host", deviceId: owner.deviceId }, owner.token);
+    expect(retry.status).toBe(409); expect(await retry.json()).toMatchObject({ error: { code: "fresh_share_required" } });
+    expect((await call(`/v1/rooms/${room}/stop`, "POST", {}, owner.token)).status).toBe(200);
+    const fresh = await connect("opaque_fresh_legacy_0001", "host", await ticket(owner, "opaque_fresh_legacy_0001"));
+    expect(fresh.status).toBe(101); fresh.webSocket!.accept(); fresh.webSocket!.close();
+  });
+  it("retries a failed nested close acknowledgement without retiring a newer share", async () => {
+    const owner = await identity(); const room = "opaque_close_ack_old_0001"; await ticket(owner, room);
+    const quota = bindings.ACCOUNT_QUOTA.get(bindings.ACCOUNT_QUOTA.idFromName(owner.accountId)); let attempts = 0;
+    await runInDurableObject(quota, async instance => {
+      const original = (instance as AccountQuota).fetch.bind(instance);
+      vi.spyOn(instance as AccountQuota, "fetch").mockImplementation(request => {
+        if (new URL(request.url).pathname === "/ack-close" && ++attempts === 1) return Promise.resolve(Response.json({ error: "fixture_ack_unavailable" }, { status: 503 }));
+        return original(request);
+      });
+    });
+    expect((await call(`/v1/rooms/${room}/stop`, "POST", {}, owner.token)).status).toBe(503);
+    const next = "opaque_close_ack_next_001"; await ticket(owner, next);
+    expect((await call(`/v1/rooms/${room}/stop`, "POST", {}, owner.token)).status).toBe(200);
+    expect(attempts).toBe(2);
+    expect(await (await call("/v1/rooms", "GET", undefined, owner.token)).json()).toMatchObject({ rooms: [{ id: next }] });
+    expect(await runInDurableObject(quota, async (_instance, state) => state.storage.sql.exec("SELECT * FROM pending_close").toArray())).toEqual([]);
+    const connected = await connect(next, "host", await ticket(owner, next));
+    expect(connected.status).toBe(101); connected.webSocket!.accept(); connected.webSocket!.close();
+  });
+  it("expires an old pending close before the same routing ID belongs to a later account", async () => {
+    const owner = await identity(); const other = await identity(); const room = "opaque_expired_close_reuse_01";
+    await ticket(owner, room);
+    const quota = bindings.ACCOUNT_QUOTA.get(bindings.ACCOUNT_QUOTA.idFromName(owner.accountId));
+    const stop = await quota.fetch("https://internal/stop", { method: "POST", body: JSON.stringify({ accountId: owner.accountId, room }) });
+    expect(stop.status).toBe(200); const stopped = await stop.json<{ expiresAt: number }>();
+    expect(await runInDurableObject(quota, async (_instance, state) => state.storage.sql.exec("SELECT room,expires_at FROM pending_close").toArray())).toEqual([{ room, expires_at: stopped.expiresAt }]);
+    vi.spyOn(Date, "now").mockReturnValue(stopped.expiresAt);
+    try {
+      await ticket(other, room); let closes = 0;
+      const namespace = bindings.ROOM;
+      const config = { ...bindings, ROOM: { idFromName: (name: string) => namespace.idFromName(name), get: (id: DurableObjectId) => ({ fetch: async (input: RequestInfo, init?: RequestInit) => { closes += 1; return namespace.get(id).fetch(input, init); } }) } as unknown as DurableObjectNamespace };
+      await revokeRelayAccount(config, owner.accountId, true);
+      expect(closes).toBe(0);
+      expect(await runInDurableObject(quota, async (_instance, state) => state.storage.sql.exec("SELECT * FROM pending_close").toArray())).toEqual([]);
+      const stub = bindings.ROOM.get(bindings.ROOM.idFromName(room));
+      expect(await runInDurableObject(stub, async (_instance, state) => state.storage.sql.exec<{ account_id: string; expires_at: number }>("SELECT account_id,expires_at FROM owner").one())).toEqual({ account_id: other.accountId, expires_at: stopped.expiresAt + LIMITS.shareMs });
+      const connected = await connect(room, "host", await ticket(other, room));
+      expect(connected.status).toBe(101); connected.webSocket!.accept(); connected.webSocket!.close();
+    } finally { vi.restoreAllMocks(); }
+  });
   it("keeps dashboard-stopped epochs retired across owned retries and eviction", async () => {
     const owner = await identity(); const other = await identity();
     const rooms = ["opaque_retired_room_0001", "opaque_retired_room_0002", "opaque_retired_room_0003"];

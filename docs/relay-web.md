@@ -7,9 +7,11 @@ access. This complete Worker/UI source is being prepared in CLI PR #23 after
 protected PR #22 merge `78810826cd376588d3303f13bc237309fb5170a8` and accepted
 native PR #21. PR #22 accepted inert dependency inputs. The Worker's
 [earlier local checks](relay-publication.md#current-local-checks) cover native,
-Worker, WASM and browser stages and cf1's normal full gate. Both complete hosted
-reviews rejected that head; the [local corrections](relay-publication.md#worker-review-corrections)
-still need their own acceptance. Protected adoption and deployment remain pending. See
+Worker, WASM and browser stages and cf1's normal full gate. The
+[first corrections](relay-publication.md#worker-review-corrections) passed their
+normal local gate at 9336, but both complete hosted reviews found further defects.
+The [second corrections](relay-publication.md#second-worker-review-corrections)
+remain prepared, with checks, protected adoption and deployment pending. See
 [publication status](relay-publication.md) and [deployment status](remote-deployment.md).
 
 Controller HTML and every `/control/assets/` file require the verified account
@@ -49,15 +51,19 @@ Both endpoints retire the old cipher transport when either peer disconnects.
 A lone old peer cannot join a replacement handshake, and late close/error
 callbacks from that old pair cannot close its replacement. Reconnect needs fresh
 sockets, one-use tickets and a new Noise handshake on both endpoints. Sockets
-with legacy attachments close on a Worker upgrade; reconnect restores service
-without a database migration. These are prepared
-[review corrections](relay-publication.md#worker-review-corrections), with
-corrected-source acceptance pending.
+with legacy attachments close on a Worker upgrade. A Room's account owner and
+original expiry persist independently of sockets; disconnect and reconnect do
+not release ownership or extend that deadline. Legacy Rooms without ownership
+state reject old tickets and connections. Start a fresh host share with a new
+invitation and routing ID rather than trying to recover disconnected ownership.
+These prepared [review corrections](relay-publication.md#second-worker-review-corrections)
+require no D1 migration; corrected-source acceptance remains pending.
 
-Reconnect in the same tab retains the controller identity and mutation sequence
-while using new Noise ephemeral keys, nonces and counters. Reload or navigation
-clears pairing and creates a new identity, which the old share rejects. Start a
-new host share and pair its new invitation after a reload.
+For a compatible owned share, reconnect in the same tab retains the controller
+identity and mutation sequence while using new Noise ephemeral keys, nonces and
+counters. Reload or navigation clears pairing and creates a new identity, which
+the old share rejects. Start a new host share and pair its new invitation after
+a reload.
 
 ## Access and actions
 
@@ -82,9 +88,13 @@ See the [native queue contract](remote-control.md#native-controller).
 Host stop, expiry, revocation and transport loss disable actions. A lease lasts
 at most fifteen minutes. The same tab may reconnect to an active share with a
 fresh ticket. Initial enrollment lasts five minutes; a share lasts at most eight
-hours. Dashboard **Stop sharing** retires the routing ID through that expiry.
-It does not cancel an already-started run or discard the local remote queue;
-use local `/remote stop` to discard queued prompts, then create a fresh share.
+hours. A fresh signed-in dashboard session for the owning account can use
+**Stop sharing** without enrolling a browser controller device. It retires the
+routing ID through its original expiry, including while no peers are connected.
+Browser stop still requires the exact Origin. It grants no stream key, controller
+approval or execution authority. This account-level action does not cancel an
+already-started run or discard the local remote queue; use local `/remote stop`
+to discard queued prompts, then create a fresh share.
 
 ## Transport and bounds
 

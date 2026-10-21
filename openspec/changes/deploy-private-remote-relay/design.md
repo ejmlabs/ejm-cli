@@ -224,6 +224,45 @@ combined gate and fresh exact-source hosted acceptance. Commercial collection
 and account admission remain disabled. These corrections close no release task
 by themselves and do not change the approved policy text.
 
+### Follow-up Worker review corrections
+
+Both reviews in run `39539622114` completed for
+`9336df2fdd551fdc7a0d5d870788301d116b555c`. They found four medium
+blockers and one low advisory. Correct them before another human admission;
+do not treat a completed review as acceptance when it reports blockers.
+
+Persist one bounded Room owner and original share deadline independently of
+socket attachments. Claim it in the Worker after account quota issuance and
+before publishing a ticket. Never await Room claims from inside account quota
+serialization, since Room forwarding already awaits that quota authority.
+Check the durable owner on claim, connection and closure, including after
+disconnection or eviction. Repeated claims cannot extend the share deadline.
+Unowned legacy transports fail closed and need a fresh owned host share.
+
+Allow a verified account session to stop its own share without registering a
+relay transport device. Preserve the outer mutation-origin checks, account
+ownership and quota checks. Device-bound tickets and local controller pairing
+remain required for transport and execution authority.
+
+Revoke future quota authority first, but retain a bounded pending room closure
+until the Room acknowledges retirement or its original share deadline makes
+every transport lease invalid. Failed closure before that deadline must remain
+retryable through the existing rights workflow and cannot become completed
+operational work merely because a previous attempt revoked quota successfully.
+Bounded quota cleanup may remove safely expired targets; an expired retry must
+never contact or retire a later owner of the same routing ID.
+
+Record the usage rows and deadlines included in a disclosure projection. After
+the awaited digest, recheck their current presence and retention eligibility
+inside the final disclosure transaction, with fresh time and the existing
+consent and generation checks. Expired or deleted rows cannot be disclosed.
+
+Invoke the existing Python gate from the PowerShell relay shortcut and retain
+its prerequisite validation and exit status. Prove the real old paths fail,
+then pass focused tests and the unchanged full gate. Reuse existing platform
+storage and crypto, add no service, dependency, recurring timer or D1 migration,
+and keep all release, policy and admission controls unchanged.
+
 ### Dependency and artifact bounds
 
 Activate the exact 51-line candidate manifest already reviewed with its inherited

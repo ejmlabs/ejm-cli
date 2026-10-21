@@ -111,14 +111,15 @@ export async function revokeRelayAccount(env: Env, accountId: string, privacyAlr
     env.DB.prepare('DELETE FROM "session" WHERE "userId"=?').bind(accountId),
   ]);
   await env.DB.prepare("INSERT INTO relay_billing_cancellations(account_id,state,created_at,updated_at) SELECT account_id,'pending',?,? FROM relay_billing WHERE account_id=? ON CONFLICT(account_id) DO UPDATE SET state='pending',updated_at=excluded.updated_at").bind(now, now, accountId).run();
-  const response = await env.ACCOUNT_QUOTA.get(env.ACCOUNT_QUOTA.idFromName(accountId)).fetch("https://internal/revoke", { method: "POST", body: JSON.stringify({ accountId }) });
+  const quota = env.ACCOUNT_QUOTA.get(env.ACCOUNT_QUOTA.idFromName(accountId));
+  const response = await quota.fetch("https://internal/revoke", { method: "POST", body: JSON.stringify({ accountId }) });
   if (!response.ok) { await response.text(); throw new Error("quota_authority_unavailable"); }
   const current = await response.json<{ room?: string; expiresAt?: number }>();
   if (current.room && validId(current.room)) {
-    const room = await env.ROOM.get(env.ROOM.idFromName(current.room)).fetch("https://internal/close", { method: "POST", body: JSON.stringify({ accountId, expiresAt: current.expiresAt }) });
-    await room.text();
-    if (!room.ok) throw new Error("room_revocation_unavailable");
+    const room = await env.ROOM.get(env.ROOM.idFromName(current.room)).fetch("https://internal/close", { method: "POST", body: JSON.stringify({ accountId, room: current.room, expiresAt: current.expiresAt }) });
+    if (!room.ok) { await room.text(); throw new Error("room_revocation_unavailable"); }
+    if ((await room.json<{ pending: boolean }>()).pending !== false) throw new Error("room_revocation_pending");
   }
-  const cancel = await env.ACCOUNT_QUOTA.get(env.ACCOUNT_QUOTA.idFromName(accountId)).fetch("https://internal/billing/cancel", { method: "POST", body: JSON.stringify({ accountId }) });
+  const cancel = await quota.fetch("https://internal/billing/cancel", { method: "POST", body: JSON.stringify({ accountId }) });
   await cancel.text();
 }

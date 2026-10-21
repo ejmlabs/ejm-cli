@@ -47,6 +47,10 @@ Each sale export SHALL require an approved recipient, permitted purpose, field s
 - **WHEN** a user withdraws after a dataset is staged but before release
 - **THEN** the staged artifact is invalidated and cannot be downloaded or retried with that user's records
 
+#### Scenario: Usage expires while a disclosure is prepared
+- **WHEN** an included usage row expires or is removed during asynchronous disclosure preparation
+- **THEN** the final disclosure transaction revalidates the included rows and their deadlines and refuses to release expired or missing data
+
 #### Scenario: Buyer is unapproved
 - **WHEN** an operator requests export to an unknown recipient or unsupported purpose
 - **THEN** release is denied without producing a downloadable dataset

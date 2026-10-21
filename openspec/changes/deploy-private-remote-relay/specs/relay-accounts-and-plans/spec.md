@@ -47,6 +47,10 @@ Users SHALL be able to list safe relay device metadata, revoke devices, log out 
 - **WHEN** an account is recovered on a new device
 - **THEN** the device can authenticate to account services but cannot decrypt or control an existing shared session until locally paired
 
+#### Scenario: Fresh browser account stops sharing
+- **WHEN** a verified account session without a registered transport device stops a share owned by that account
+- **THEN** the account service retires that share under its mutation-origin checks without enrolling a controller or granting decryption or execution authority
+
 ### Requirement: Server-owned plans and checkout
 The server SHALL choose prices, plan identifiers and account mapping for hosted checkout. Customers SHALL use the payment processor for payment details and subscription management. Missing billing configuration SHALL disable checkout clearly without granting a paid plan.
 

@@ -8,11 +8,15 @@ Provide a low-cost hosted path between paired native clients while forwarding on
 ## ADDED Requirements
 
 ### Requirement: Account-gated relay admission
-Each endpoint SHALL authenticate an active relay account before joining a room. A room SHALL belong to one account and admit at most one host and one controller for that account. Transport admission SHALL NOT grant access to encrypted content or host permissions.
+Each endpoint SHALL authenticate an active relay account before joining a room. A room SHALL belong durably to one account through its original share deadline, independently of connected transports, and admit at most one host and one controller for that account. Transport admission SHALL NOT grant access to encrypted content or host permissions.
 
 #### Scenario: Unauthenticated or cross-account connection
 - **WHEN** an endpoint lacks a valid room credential or belongs to another account
 - **THEN** the relay rejects its connection before room admission
+
+#### Scenario: Another account names a disconnected share
+- **WHEN** another account requests host authority or stop for a share whose transports have disconnected
+- **THEN** its durable owner and original deadline remain unchanged, and the other account cannot connect or retire that share
 
 ### Requirement: Scoped one-use connection tickets
 Connection tickets SHALL be short-lived, single-use and bound to account, registered device, room and role. Redemption SHALL be atomic and survive hibernation. Tokens SHALL NOT appear in URLs, command arguments, analytics or application logs.
@@ -76,6 +80,10 @@ The relay SHALL stop renewing access after logout, device revocation, account su
 #### Scenario: Account or subscription is revoked
 - **WHEN** account authority ends while a room remains connected
 - **THEN** further leases are refused and forwarding ends no later than the current lease expiry
+
+#### Scenario: Account quota revocation succeeds but Room closure fails
+- **WHEN** account closure revokes quota authority but cannot obtain the Room retirement acknowledgement
+- **THEN** the existing workflow retains and retries the closure target until acknowledgement or its original share deadline invalidates every transport lease, and an expired target cannot retire a later owner of the same routing ID
 
 ### Requirement: Content-free operations
 Service diagnostics SHALL use an explicit field allowlist and bounded retention. They SHALL exclude payloads, credentials, invitation material and host application identifiers. Operational connection data SHALL remain separate from opt-in commercial summaries.

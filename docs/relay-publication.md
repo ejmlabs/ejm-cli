@@ -4,12 +4,12 @@ This Worker/browser layer is being integrated on actual protected CLI parent
 `78810826cd376588d3303f13bc237309fb5170a8`, tree
 `dca23befbbe5bf065807f8ed06a98aa5b4c7a159`. The parent accepts native source
 and inert install/review inputs. It does not accept this complete Worker,
-new UI installation or browser runtime. Worker PR #23 head
-`cf1efa10edc61647feac62b35b9e9c3420661283` passed its normal local gate,
-but two complete hosted reviews reported five defects and blocked adoption.
-The [review corrections](#worker-review-corrections) are being prepared locally.
-Corrected-source checks, protected adoption, deployment and authenticated live
-acceptance remain pending.
+new UI installation or browser runtime. Worker PR #23's first correction head
+`9336df2fdd551fdc7a0d5d870788301d116b555c` passed its normal local gate,
+but both complete hosted reviews reported four medium blockers and one low
+advisory. The [second review corrections](#second-worker-review-corrections)
+are being prepared locally. Their checks, fresh hosted acceptance, protected
+adoption, deployment and authenticated live acceptance remain pending.
 The historical closed deployment is recorded in [deployment status](remote-deployment.md).
 
 The approved [notice](relay-notice.md) and [terms](relay-service-terms.md) remain
@@ -103,7 +103,7 @@ old approvals do not authorize the Worker revision.
 Both reviews in [run 39534461293](https://github.com/ejmlabs/ejm-cli/actions/runs/39534461293)
 completed for Worker head `cf1efa10edc61647feac62b35b9e9c3420661283` and reported
 five distinct defects. The reports blocked adoption. They were complete reviews,
-not capacity or timeout failures. The prepared correction scope is:
+not capacity or timeout failures. The first correction scope was:
 
 - Retire an old socket pair before replacement admission, isolate replacement
   pairs from delayed close/error callbacks and require both endpoints to start
@@ -118,11 +118,47 @@ not capacity or timeout failures. The prepared correction scope is:
 - Route dashboard closure through durable rights, recipient and operational
   tracking, displaying its one-time private tracking key before the user leaves.
 
-These corrections are local preparation. Their focused regressions, normal full
-gate and fresh exact-revision hosted admission remain required before separate
-human approval and protected adoption. The earlier local results below describe
-the rejected head; they do not qualify its corrected successor. The correction
-changes no approved policy body, retention limit, admission or commercial flag.
+These first corrections passed the normal local `./scripts/check` at head
+`9336df2fdd551fdc7a0d5d870788301d116b555c`, tree
+`11e3b1a9980cddecc358db2136ee9d57c29cddba`, on macOS arm64 on October 21,
+2026 UTC, from 03:21:57 through 03:23:07. The gate recorded unchanged source.
+Both fresh hosted reviews then found further defects and blocked adoption.
+The earlier results below remain cf1-only history. No approved policy body,
+retention duration, admission or commercial flag changed.
+
+### Second Worker review corrections
+
+Both reviews in [run 39539622114](https://github.com/ejmlabs/ejm-cli/actions/runs/39539622114)
+completed for head `9336df2fdd551fdc7a0d5d870788301d116b555c`. They reported
+four distinct medium blockers and one low advisory. Both reports were complete;
+no runtime timeout or capacity failure caused their result. The prepared fixes are:
+
+- Persist each Room's account owner and original share deadline independently
+  of sockets. Enforce that owner after disconnection and eviction, and claim
+  the Room before publishing a ticket. Retries cannot extend its deadline.
+- Allow a fresh verified account session to stop its owned share without
+  enrolling a transport device. Preserve exact-Origin checks, device-bound
+  connection tickets and local controller pairing.
+- Retain pending Room closure targets after quota revocation until the Room
+  acknowledges closure or verified original expiry invalidates every transport
+  lease. Failed or remaining unexpired targets keep account-closure work pending
+  through the existing durable rights workflow. Expired targets are removed
+  without letting an old retry retire a later owner of the routing ID.
+- Revalidate included usage rows and their deadlines inside the final disclosure
+  transaction after the awaited digest. Expired or missing rows cannot be released.
+- Invoke `scripts/check.py --relay` through `python3` from the PowerShell shortcut. A real
+  macOS PowerShell smoke showed that the old wrapper failed before reaching the
+  gate; the corrected wrapper reached its prerequisite check and propagated
+  exit status 1. This does not verify Windows runtime or a complete gate run.
+
+The lifecycle and disclosure corrections remain local preparation. Their focused
+regressions, the normal full gate and fresh exact-head hosted reviews remain
+required before separate human approval and protected adoption. They add no D1
+migration, dependency or service and change no approved policy body, retention
+duration or release control. Unowned legacy Room state requires a fresh share ID.
+Preserve ownership, pending closure and retirement records; rollback to code that
+ignores them is unsupported while that state remains live. See
+[deployment and rollback](../relay/README.md#deployment-and-rollback).
 
 Deploy only production artifacts from the accepted source, with admission closed,
 then bind the Worker version, configuration and artifact hashes. Verify anonymous
@@ -140,11 +176,12 @@ six CLI integration tests, five browser-crypto tests, 118 Worker tests and eleve
 real Chrome cases. The native PTY supervisor passed all seventeen sessions.
 Native-to-Worker and native-to-browser encrypted fixtures used the current locked
 Cargo test-artifact record. No paid provider was called. The normal full
-`./scripts/check` also passed for cf1 before its commit. Every corrected revision
-still needs its own normal full gate.
+`./scripts/check` also passed for cf1 before its commit. These results do not
+qualify later source; the first correction's bounded local result is recorded
+[above](#worker-review-corrections).
 
-The storage fixture permits only the Room's bounded retirement metadata and
-continues scanning every bounded D1/DO row and captured log for content and keys.
+The cf1 storage fixture permitted only the Room's bounded retirement metadata and
+scanned every bounded D1/DO row and captured log for content and keys.
 Two controls confirmed rejection of an unexpected Room table and an extra
 retirement field. Separate old-code controls reproduced expiry during D1/quota
 waits; corrected tests reject expired tickets, sessions and either endpoint's

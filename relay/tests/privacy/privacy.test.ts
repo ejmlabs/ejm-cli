@@ -152,6 +152,28 @@ describe("bounded manual disclosure and withdrawal races", () => {
     expect(store.exec("SELECT id FROM privacy_ledger")).toHaveLength(0);
     await expect(service.release(operator, { manifestId: manifest.manifestId, approved: true })).rejects.toThrow("manifest_not_releasable");
   });
+  for (const cleanup of [false, true]) {
+    it(`rejects usage expiring during disclosure preparation ${cleanup ? "after cleanup" : "before cleanup"}`, async () => {
+      const config = configuration(); config.retention.usageDays = 1;
+      const { service, store, advance, clock } = fixture(config); enroll(service, actor(), config); consent(service, actor(), config, "usage");
+      const sample = { accountId: "account-a", bytes: 1000, frames: 1, connectedMs: 1000, quality: "measured", measuredAt: START };
+      service.recordUsage(sample); advance(1); service.recordUsage({ ...sample, quality: "estimated", measuredAt: clock() });
+      advance(DAY - 2); const manifest = prepare(service, ["account-a"], "usage", ["traffic"]);
+      const generation = () => store.exec<{ generation: number }>("SELECT generation FROM privacy_subjects WHERE account_id='account-a'")[0]!.generation;
+      const originalGeneration = generation();
+      const pending = service.release(operator, { manifestId: manifest.manifestId, approved: true });
+      advance(1); if (cleanup) service.cleanup(1);
+      expect(generation()).toBe(originalGeneration);
+      expect(store.exec("SELECT quality FROM privacy_usage WHERE quality='measured'")).toHaveLength(cleanup ? 0 : 1);
+      await expect(pending).rejects.toThrow("usage_unavailable");
+      expect(store.exec("SELECT id FROM privacy_ledger")).toHaveLength(0);
+      expect(store.exec("SELECT state FROM privacy_manifests WHERE id=?", manifest.manifestId)).toMatchObject([{ state: "prepared" }]);
+      const released = await service.release(operator, { manifestId: manifest.manifestId, approved: true }) as { payload: { records: { summaries: { quality: string }[] }[] } };
+      expect(released.payload.records[0]?.summaries).toMatchObject([{ quality: "estimated" }]);
+      expect(released.payload.records[0]?.summaries).toHaveLength(1);
+      expect(store.exec("SELECT id FROM privacy_ledger")).toHaveLength(1);
+    });
+  }
   it("commits the whole cohort or none when deletion or correction races release", async () => {
     for (const action of ["delete", "correct"] as const) {
       const { service, store } = fixture(); enroll(service, actor()); enroll(service, actor("account-b")); const manifest = prepare(service, ["account-a", "account-b"]);

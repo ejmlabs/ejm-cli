@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
-import { applyD1Migrations, reset, runInDurableObject } from "cloudflare:test";
-import { beforeEach, expect, it } from "vitest";
+import { applyD1Migrations, evictDurableObject, reset, runInDurableObject } from "cloudflare:test";
+import { beforeEach, expect, it, vi } from "vitest";
 import worker from "../../src/index.js";
 import { createAuth } from "../../src/auth.js";
 import { operationalCleanup } from "../../src/cleanup.js";
@@ -9,7 +9,7 @@ import type { Env } from "../../src/types.js";
 const bindings = env as unknown as Env & { TEST_MIGRATIONS: { name: string; queries: string[] }[] };
 const origin = bindings.RELAY_ORIGIN;
 const privacy = () => bindings.PRIVACY_AUTHORITY.get(bindings.PRIVACY_AUTHORITY.idFromName("privacy-v1"));
-beforeEach(async () => { await reset(); await applyD1Migrations(bindings.DB, bindings.TEST_MIGRATIONS); });
+beforeEach(async () => { vi.restoreAllMocks(); await reset(); await applyD1Migrations(bindings.DB, bindings.TEST_MIGRATIONS); });
 
 function call(path: string, token?: string, body?: unknown, config: Env = bindings): Promise<Response> {
   const headers = new Headers({ origin });
@@ -67,6 +67,43 @@ it("returns a private receipt when revocation fails and finishes the durable tas
   await operationalCleanup(config);
   expect(await tracked(receipt.requestId, receipt.statusKey)).toMatchObject({ operational_state: "exception" });
   expect(await bindings.DB.prepare("SELECT state FROM privacy_operational_tasks WHERE request_id=?").bind(receipt.requestId).first()).toEqual({ state: "exception" });
+});
+
+it("retains a Room closure target after quota revocation and retries before acknowledging rights completion", async () => {
+  const account = await owner(); const room = "opaque_rights_revoke_retry_01";
+  async function connect(role: string): Promise<WebSocket> {
+    const issued = await call(`/v1/rooms/${room}/tickets`, account.token, { role, deviceId: account.deviceId });
+    expect(issued.status).toBe(200); const ticket = await issued.json<{ ticket: string }>();
+    const response = await worker.fetch(new Request(`${origin}/v1/rooms/${room}/${role}`, { headers: { authorization: `Bearer ${ticket.ticket}`, upgrade: "websocket" } }), bindings);
+    expect(response.status).toBe(101); response.webSocket!.accept(); return response.webSocket!;
+  }
+  const host = await connect("host"); const controller = await connect("controller");
+  const closed = [host, controller].map(socket => new Promise<CloseEvent>(resolve => socket.addEventListener("close", resolve, { once: true })));
+  const namespace = bindings.ROOM; let attempts = 0;
+  const config = { ...bindings, ROOM: { idFromName: (name: string) => namespace.idFromName(name), get: (id: DurableObjectId) => ({ fetch: async (input: RequestInfo, init?: RequestInit) => {
+    const request = new Request(input, init);
+    if (new URL(request.url).pathname === "/close" && ++attempts <= 2) return Response.json({ error: "fixture_room_unavailable" }, { status: 503 });
+    return namespace.get(id).fetch(request);
+  } }) } as unknown as DurableObjectNamespace };
+  const quota = bindings.ACCOUNT_QUOTA.get(bindings.ACCOUNT_QUOTA.idFromName(account.id));
+  try {
+    const response = await call("/v1/account/close", account.token, { confirm: "close" }, config);
+    expect(response.status).toBe(503);
+    const receipt = await response.json<{ requestId: string; statusKey: string }>();
+    expect(receipt).toMatchObject({ error: { code: "relay_revocation_pending" }, relayClosureAcknowledged: false });
+    expect((await call("/v1/account", account.token)).status).toBe(401);
+    await evictDurableObject(quota);
+    await operationalCleanup(config);
+    expect(attempts).toBe(2);
+    expect(await tracked(receipt.requestId, receipt.statusKey)).toMatchObject({ operational_state: "pending" });
+    const retry = await bindings.DB.prepare("SELECT json_extract(result,'$.retryAfter') AS retry_at FROM privacy_operational_tasks WHERE request_id=?").bind(receipt.requestId).first<{ retry_at: number }>();
+    vi.spyOn(Date, "now").mockReturnValue(retry!.retry_at + 1);
+    await operationalCleanup(config);
+    expect(attempts).toBe(3);
+    expect((await Promise.all(closed)).every(event => event.code === 1000)).toBe(true);
+    expect(await tracked(receipt.requestId, receipt.statusKey)).toMatchObject({ operational_state: "exception" });
+    expect(await runInDurableObject(quota, async (_instance, state) => ({ current: state.storage.sql.exec("SELECT * FROM room").toArray(), pending: state.storage.sql.exec("SELECT * FROM pending_close").toArray() }))).toEqual({ current: [], pending: [] });
+  } finally { vi.restoreAllMocks(); host.close(); controller.close(); }
 });
 
 it("keeps account access and a readable form error when tracked closure cannot be admitted", async () => {

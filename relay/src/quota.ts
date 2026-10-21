@@ -35,6 +35,7 @@ export class AccountQuota extends DurableObject<Env> {
     ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS room(singleton INTEGER PRIMARY KEY CHECK(singleton=1),room TEXT NOT NULL,expires_at INTEGER NOT NULL)");
     ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS retired(room TEXT PRIMARY KEY,expires_at INTEGER NOT NULL)");
     ctx.storage.sql.exec("CREATE INDEX IF NOT EXISTS retired_expiry ON retired(expires_at)");
+    ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS pending_close(room TEXT PRIMARY KEY,expires_at INTEGER NOT NULL)");
   }
   override fetch(request: Request): Promise<Response> {
     const work = this.serial.then(() => this.handle(request)).catch(() => failure(503, "quota_authority_unavailable"));
@@ -67,9 +68,29 @@ export class AccountQuota extends DurableObject<Env> {
     }
     if (path.startsWith("/billing/")) return serializedBilling(this.env, path, data);
     if (path === "/revoke") {
+      this.cleanup(now);
       const row = this.ctx.storage.sql.exec<{ room: string; expires_at: number }>("SELECT room,expires_at FROM room WHERE singleton=1").toArray()[0];
-      this.ctx.storage.sql.exec("DELETE FROM room"); this.ctx.storage.sql.exec("DELETE FROM tickets");
-      return Response.json({ room: row?.room, expiresAt: row?.expires_at });
+      if (row) {
+        if (this.retiredCount() >= LIMITS.dailyControls * 2) return failure(503, "retirement_capacity_exhausted");
+        this.retire(row.room, row.expires_at);
+      }
+      this.ctx.storage.sql.exec("DELETE FROM tickets");
+      const pending = this.ctx.storage.sql.exec<{ room: string; expires_at: number }>("SELECT room,expires_at FROM pending_close ORDER BY expires_at,room LIMIT 1").toArray()[0];
+      return Response.json({ room: pending?.room, expiresAt: pending?.expires_at });
+    }
+    if (path === "/ack-close") {
+      if (!validId(data.room) || !Number.isSafeInteger(data.expiresAt)) return failure(400, "invalid_retirement");
+      this.ctx.storage.sql.exec("DELETE FROM pending_close WHERE room=? AND expires_at=?", data.room, data.expiresAt as number);
+      this.cleanup(now);
+      return Response.json({ pending: this.ctx.storage.sql.exec("SELECT room FROM pending_close LIMIT 1").toArray().length !== 0 });
+    }
+    if (path === "/discard-issued") {
+      if (!validId(data.room) || typeof data.hash !== "string" || !Number.isSafeInteger(data.expiresAt)) return failure(400, "invalid_scope");
+      this.ctx.storage.transactionSync(() => {
+        this.ctx.storage.sql.exec("DELETE FROM room WHERE room=? AND expires_at=? AND EXISTS(SELECT 1 FROM tickets WHERE hash=? AND used=0 AND json_extract(scope,'$.room')=?)", data.room as string, data.expiresAt as number, data.hash as string, data.room as string);
+        this.ctx.storage.sql.exec("DELETE FROM tickets WHERE json_extract(scope,'$.room')=? AND NOT EXISTS(SELECT 1 FROM room WHERE room=?)", data.room as string, data.room as string);
+      });
+      return Response.json({ discarded: true });
     }
     if (path === "/stop") {
       this.cleanup(now);
@@ -78,11 +99,7 @@ export class AccountQuota extends DurableObject<Env> {
       const current = retired ?? this.ctx.storage.sql.exec<{ expires_at: number }>("SELECT expires_at FROM room WHERE room=?", data.room).toArray()[0];
       if (!current) return failure(403, "room_not_owned");
       if (!retired && this.retiredCount() >= LIMITS.dailyControls * 2) return failure(503, "retirement_capacity_exhausted");
-      this.ctx.storage.transactionSync(() => {
-        this.ctx.storage.sql.exec("INSERT INTO retired(room,expires_at) VALUES(?,?) ON CONFLICT(room) DO NOTHING", data.room as string, current.expires_at);
-        this.ctx.storage.sql.exec("DELETE FROM room WHERE room=?", data.room as string);
-        this.ctx.storage.sql.exec("DELETE FROM tickets WHERE json_extract(scope,'$.room')=?", data.room as string);
-      });
+      if (!retired) this.retire(data.room, current.expires_at);
       return Response.json({ stopped: true, expiresAt: current.expires_at });
     }
     this.cleanup(now);
@@ -109,7 +126,7 @@ export class AccountQuota extends DurableObject<Env> {
         if (!current) this.ctx.storage.sql.exec("INSERT INTO room(singleton,room,expires_at) VALUES(1,?,?)", scope.room, issuedAt + LIMITS.shareMs);
         this.ctx.storage.sql.exec("INSERT INTO tickets(hash,scope,expires_at,used) VALUES(?,?,?,0)", scope.hash, JSON.stringify({ accountId: scope.accountId, deviceId: scope.deviceId, sessionId: scope.sessionId, room: scope.room, role: scope.role, expiresAt }), expiresAt);
       });
-      return Response.json({ expiresAt });
+      return Response.json({ expiresAt, shareExpiresAt: current?.expires_at ?? issuedAt + LIMITS.shareMs, created: !current });
     }
     if (path === "/redeem") {
       if (typeof data.hash !== "string") return failure(401, "invalid_ticket");
@@ -151,10 +168,19 @@ export class AccountQuota extends DurableObject<Env> {
     return Response.json(lease);
   }
   private cleanup(now: number): void {
+    this.ctx.storage.sql.exec("DELETE FROM pending_close WHERE expires_at<=?", now);
     this.ctx.storage.sql.exec("DELETE FROM retired WHERE expires_at<=?", now);
     this.ctx.storage.sql.exec("DELETE FROM tickets WHERE hash IN (SELECT hash FROM tickets WHERE expires_at<=? ORDER BY expires_at LIMIT 128)", now);
     this.ctx.storage.sql.exec("DELETE FROM windows WHERE day<?", Math.floor(now / 86_400_000) - 2);
     this.ctx.storage.sql.exec("DELETE FROM room WHERE expires_at<=?", now);
+  }
+  private retire(room: string, expiresAt: number): void {
+    this.ctx.storage.transactionSync(() => {
+      this.ctx.storage.sql.exec("INSERT INTO retired(room,expires_at) VALUES(?,?) ON CONFLICT(room) DO NOTHING", room, expiresAt);
+      this.ctx.storage.sql.exec("INSERT INTO pending_close(room,expires_at) VALUES(?,?) ON CONFLICT(room) DO NOTHING", room, expiresAt);
+      this.ctx.storage.sql.exec("DELETE FROM room WHERE room=?", room);
+      this.ctx.storage.sql.exec("DELETE FROM tickets WHERE json_extract(scope,'$.room')=?", room);
+    });
   }
   private retiredCount(): number { return this.ctx.storage.sql.exec<{ n: number }>("SELECT COUNT(*) AS n FROM retired").one().n; }
 }
