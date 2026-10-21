@@ -4,6 +4,8 @@ Changes follow [Semantic Versioning](https://semver.org/). Each repository is ve
 
 ## [Unreleased]
 
+- Use `ejm.package.json` and an explicit package registry through `--registry` or `EJM_REGISTRY_URL`. Local packages need no registry. Credentials remain scoped to their origin.
+
 ### Added
 
 - Shared repository standards, explicit human admission, protected merge gates, two-pass Codex review, and a draft source release pipeline.

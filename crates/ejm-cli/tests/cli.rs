@@ -8,16 +8,23 @@ use std::{
     process::{Command, Output},
 };
 
-fn cli(state: &Path, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_ejm-cli"))
+#[path = "cli/packages.rs"]
+mod packages;
+
+fn command(state: &Path) -> Command {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_ejm-cli"));
+    command
         .arg("--state-dir")
         .arg(state)
         .arg("--replay")
-        .args(args)
         .env_remove("EJM_CLI_API_KEY")
         .env_remove("OPENAI_API_KEY")
-        .output()
-        .unwrap()
+        .env_remove("EJM_REGISTRY_URL");
+    command
+}
+
+fn cli(state: &Path, args: &[&str]) -> Output {
+    command(state).args(args).output().unwrap()
 }
 
 fn json_events(output: &Output) -> Vec<serde_json::Value> {

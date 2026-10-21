@@ -4,9 +4,8 @@ use anyhow::{Context, Result, ensure};
 use clap::Subcommand;
 use ejm_harness_exec::Governor;
 use ejm_harness_packages::{
-    DEFAULT_REGISTRY, PackageGrants, PackageManager, RegistryClient, delete_registry_token,
-    install_source, load_registry_token, migrate_registry_token, pack_directory,
-    save_registry_token,
+    PackageGrants, PackageManager, RegistryClient, delete_registry_token, install_source,
+    load_registry_token, migrate_registry_token, pack_directory, save_registry_token,
 };
 use tokio_util::sync::CancellationToken;
 
@@ -89,19 +88,25 @@ pub fn manager(args: &Args) -> Result<PackageManager> {
     PackageManager::new(args.state_dir().join("packages"))
 }
 
-pub async fn run(args: &Args, command: &PackageCommand) -> Result<bool> {
+pub async fn run(args: &Args, command: &PackageCommand, origin: Option<&str>) -> Result<bool> {
+    let registry = origin.map(RegistryClient::new).transpose()?;
+    let required_registry = || {
+        registry
+            .as_ref()
+            .context("set --registry ORIGIN or EJM_REGISTRY_URL for registry operations")
+    };
+    require_registry(command, required_registry)?;
     let manager = manager(args)?;
-    let registry = RegistryClient::new(DEFAULT_REGISTRY)?;
     match command {
-        PackageCommand::Search { query } => show(&registry.search(query, None).await?)?,
-        PackageCommand::Info { name, version } => show(&registry.version(name, version).await?)?,
-        PackageCommand::Install { source } => install(args, &manager, &registry, source).await?,
+        PackageCommand::Search { query } => show(&required_registry()?.search(query, None).await?)?,
+        PackageCommand::Info { name, version } => {
+            show(&required_registry()?.version(name, version).await?)?;
+        }
+        PackageCommand::Install { source } => {
+            install(args, &manager, registry.as_ref(), source).await?;
+        }
         PackageCommand::Update { name, version } => {
-            ensure!(
-                manager.list()?.iter().any(|record| &record.name == name),
-                "package is not installed"
-            );
-            install(args, &manager, &registry, &format!("{name}@{version}")).await?;
+            update(args, &manager, required_registry()?, name, version).await?;
         }
         PackageCommand::List => show(&manager.list()?)?,
         PackageCommand::Enable {
@@ -141,50 +146,98 @@ pub async fn run(args: &Args, command: &PackageCommand) -> Result<bool> {
             manager.remove(name)?;
             println!("Removed the registration. Active sessions retain their snapshot until exit.");
         }
-        PackageCommand::Pack { directory, output } => {
-            use std::io::Write;
-            let bytes = pack_directory(directory)?;
-            let mut file = std::fs::OpenOptions::new()
-                .create_new(true)
-                .write(true)
-                .open(output)
-                .context("create new package archive")?;
-            file.write_all(&bytes)?;
-            println!(
-                "{} bytes: {}",
-                bytes.len(),
-                safe_text(&output.display().to_string())
-            );
+        PackageCommand::Pack { directory, output } => pack_archive(directory, output)?,
+        PackageCommand::Login { no_browser } => {
+            login(&manager, required_registry()?, *no_browser).await?;
         }
-        PackageCommand::Login { no_browser } => login(&manager, &registry, *no_browser).await?,
         PackageCommand::MigrateCredentials {
             old_clients_stopped,
-        } => migrate_credentials(&manager, &registry, *old_clients_stopped)?,
-        PackageCommand::Logout => logout(&manager, &registry).await?,
+        } => migrate_credentials(&manager, required_registry()?, *old_clients_stopped)?,
+        PackageCommand::Logout => logout(&manager, required_registry()?).await?,
         PackageCommand::Whoami => show(
-            &registry
-                .me(&load_registry_token(manager.root(), registry.origin())?)
+            &required_registry()?
+                .me(&load_registry_token(
+                    manager.root(),
+                    required_registry()?.origin(),
+                )?)
                 .await?,
         )?,
         PackageCommand::Publisher {
             handle,
             display_name,
         } => show(
-            &registry
+            &required_registry()?
                 .claim_publisher(
                     handle,
                     display_name,
-                    &load_registry_token(manager.root(), registry.origin())?,
+                    &load_registry_token(manager.root(), required_registry()?.origin())?,
                 )
                 .await?,
         )?,
         PackageCommand::Publish { directory } => {
+            let registry = required_registry()?;
             let bytes = pack_directory(directory)?;
             let token = load_registry_token(manager.root(), registry.origin())?;
             show(&registry.publish(bytes, &token).await?)?;
         }
     }
     Ok(true)
+}
+
+async fn update(
+    args: &Args,
+    manager: &PackageManager,
+    registry: &RegistryClient,
+    name: &str,
+    version: &str,
+) -> Result<()> {
+    ensure!(
+        manager.list()?.iter().any(|record| record.name == name),
+        "package is not installed"
+    );
+    install(args, manager, Some(registry), &format!("{name}@{version}")).await?;
+    Ok(())
+}
+
+fn require_registry<'a>(
+    command: &PackageCommand,
+    registry: impl Fn() -> Result<&'a RegistryClient>,
+) -> Result<()> {
+    match command {
+        PackageCommand::Install { source } if source.starts_with('@') => {
+            registry()?;
+        }
+        PackageCommand::Search { .. }
+        | PackageCommand::Info { .. }
+        | PackageCommand::Update { .. }
+        | PackageCommand::Login { .. }
+        | PackageCommand::MigrateCredentials { .. }
+        | PackageCommand::Logout
+        | PackageCommand::Whoami
+        | PackageCommand::Publisher { .. }
+        | PackageCommand::Publish { .. } => {
+            registry()?;
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+fn pack_archive(directory: &std::path::Path, output: &std::path::Path) -> Result<()> {
+    use std::io::Write;
+    let bytes = pack_directory(directory)?;
+    let mut file = std::fs::OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .open(output)
+        .context("create new package archive")?;
+    file.write_all(&bytes)?;
+    println!(
+        "{} bytes: {}",
+        bytes.len(),
+        safe_text(&output.display().to_string())
+    );
+    Ok(())
 }
 
 fn finish_logout(revoked: Result<()>, clear: impl FnOnce() -> Result<()>) -> Result<()> {
@@ -222,7 +275,7 @@ fn migrate_credentials(
 async fn install(
     args: &Args,
     manager: &PackageManager,
-    registry: &RegistryClient,
+    registry: Option<&RegistryClient>,
     source: &str,
 ) -> Result<()> {
     let governor = Arc::new(Governor::new(args.resources())?);
@@ -330,7 +383,8 @@ mod tests {
             Some(Command::Package {
                 command: PackageCommand::MigrateCredentials {
                     old_clients_stopped: true
-                }
+                },
+                ..
             })
         ));
         Ok(())

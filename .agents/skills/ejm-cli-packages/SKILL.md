@@ -15,3 +15,5 @@ Read `crates/ejm-cli/src/packages.rs`, `crates/ejm-cli/src/extensions.rs` and th
 - `ensure!` on state before acting, for example that a package is installed before `update`.
 
 Test enable, disable and failure paths with local fixtures and never publish from a test. Use `$ejm-cli-harness` when a change needs a harness API, and finish with `./scripts/check`.
+
+Package manifests use `ejm.package.json`. Registry operations require the package-scoped `--registry ORIGIN` flag or `EJM_REGISTRY_URL`, with flag precedence and no default. Local package operations need no registry. Credentials remain scoped to their original origin.

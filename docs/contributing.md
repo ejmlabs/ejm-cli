@@ -1,6 +1,6 @@
 # Contributing to ejm-cli
 
-ejm-cli is a separate Rust project that consumes the public ejm-harness crates. Check out `ejm-cli` and `ejm-harness` as siblings. The CLI must build without source files from a Gerry platform product.
+ejm-cli is a separate Rust project that consumes the public ejm-harness crates. Check out `ejm-cli` and `ejm-harness` as siblings. The CLI must build using only its declared public dependencies. Keep unrelated proprietary products out of its source and examples.
 
 ## Tools and the required gate
 
@@ -108,3 +108,5 @@ This native slice adds no unconditional Node, browser or Worker gate.
 ## Project skills
 
 The skills in `.agents/skills` route implementation, review, terminal and theme work, sign-in, packages, performance, testing, dependencies, the sibling harness, docs and claims, the marketing site, and releases. The six `openspec-*` skills handle exploration, proposals, plan updates, implementation, spec sync and archival. All feature and bugfix work follows OpenSpec because this project has an `openspec/` directory. `AGENTS.md` lists which skill fits each task. The gate checks each skill's frontmatter and references, that the exact set matches `scripts/check_architecture.py`, and that `AGENTS.md` routes to every skill. Keep them concise and specific to this project. Read only the skill that matches the task, and update the owning reference when a convention changes. When you add a skill, add it to the check script and to the table in `AGENTS.md`.
+
+Package manifests use `ejm.package.json`. Registry operations require the package-scoped `--registry ORIGIN` flag or `EJM_REGISTRY_URL`, with flag precedence and no default. Local package operations need no registry. Credentials remain scoped to their original origin.

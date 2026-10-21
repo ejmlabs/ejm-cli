@@ -161,3 +161,5 @@ See [SUPPORT.md](SUPPORT.md) for questions and bug reports.
 ## License
 
 [MIT](LICENSE). See [third-party notices](THIRD_PARTY_NOTICES.md) for bundled assets.
+
+Package manifests use `ejm.package.json`. Registry operations require the package-scoped `--registry ORIGIN` flag or `EJM_REGISTRY_URL`, with flag precedence and no default. Local package operations need no registry. Credentials remain scoped to their original origin.
