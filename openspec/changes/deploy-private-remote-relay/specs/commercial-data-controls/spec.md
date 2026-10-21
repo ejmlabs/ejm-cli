@@ -115,6 +115,14 @@ Every operational and commercial data category SHALL have a configured retention
 - **WHEN** a category's retention period ends
 - **THEN** bounded cleanup removes its expired records and dependent staging while retaining only documented exceptions
 
+#### Scenario: Eligible profiles fill the first scan page
+- **WHEN** unchanged eligible subjects precede a profile whose buyer scope no longer permits retention
+- **THEN** bounded scans resume past the unchanged page across authority recreation and shorten the later profile's deadline without changing eligible profiles' generations or deadlines
+
+#### Scenario: A user repeats profile withdrawal
+- **WHEN** a user repeats withdrawal without intervening fresh valid consent or an eligible profile update
+- **THEN** the earliest current deletion deadline remains in force and the profile is removed when that deadline becomes due
+
 #### Scenario: More samples enter the same monthly aggregate
 - **WHEN** later samples are added to a live monthly aggregate
 - **THEN** earlier contributions keep their original expiry bound and later collection cannot extend it

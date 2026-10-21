@@ -141,7 +141,10 @@ export class PrivacyService {
       this.store.exec("UPDATE privacy_consents SET withdrawn_at=COALESCE(withdrawn_at,?) WHERE account_id=? AND category=? AND (? IS NULL OR buyer_id=?)", this.now(), id, kind, buyerId, buyerId);
       this.evidence(id, kind, "withdrawn", buyerId ?? "all buyers"); this.bump(id);
       if (kind === "usage") { this.store.exec("DELETE FROM privacy_usage WHERE account_id=?", id); this.store.exec("UPDATE privacy_subjects SET usage_since=? WHERE account_id=?", this.now(), id); }
-      if (kind === "profile" && !this.anyConsent(id, "profile")) this.store.exec("UPDATE privacy_subjects SET profile_purge_at=? WHERE account_id=? AND profile IS NOT NULL", this.now() + this.retention().profileWithdrawalDays * DAY, id);
+      if (kind === "profile" && !this.anyConsent(id, "profile")) {
+        const purgeAt = this.now() + this.retention().profileWithdrawalDays * DAY;
+        this.store.exec("UPDATE privacy_subjects SET profile_purge_at=? WHERE account_id=? AND profile IS NOT NULL AND (profile_purge_at IS NULL OR profile_purge_at>?)", purgeAt, id, purgeAt);
+      }
       else if (kind === "profile") this.store.exec("UPDATE privacy_subjects SET profile_purge_at=? WHERE account_id=? AND profile IS NOT NULL", this.profileExpiry(id), id);
       return { withdrawn: true, serviceAccessChanged: false };
     });
@@ -482,13 +485,18 @@ export class PrivacyService {
       this.cleanupOperationalParts(limit);
       // Table names come from this fixed list. Expiry indexes bound each scan.
       for (const table of categories) this.store.exec(`DELETE FROM ${table} WHERE rowid IN (SELECT rowid FROM ${table} WHERE expires_at<=? ${table === "privacy_rights" ? "AND state='completed'" : ""} ORDER BY expires_at LIMIT ?)`, this.now(), limit);
-      // A disabled program or changed buyer scope cannot retain an active sale profile forever.
-      for (const subject of this.rows<{ account_id: string; profile_purge_at: number | null }>("SELECT account_id,profile_purge_at FROM privacy_subjects WHERE profile IS NOT NULL ORDER BY updated_at LIMIT ?", limit)) {
-        if (!this.anyConsent(subject.account_id, "profile")) {
+      // Page every subject before profile checks so unchanged rows cannot block progress.
+      let after = this.rows<{ account_id: string }>("SELECT account_id FROM privacy_profile_cleanup_cursor WHERE id=1")[0]!.account_id;
+      const candidates = () => this.rows<{ account_id: string; profile_purge_at: number | null; has_profile: number }>("SELECT account_id,profile_purge_at,profile IS NOT NULL AS has_profile FROM privacy_subjects WHERE account_id>? ORDER BY account_id LIMIT ?", after, limit);
+      let subjects = candidates();
+      if (subjects.length === 0 && after !== "") { after = ""; subjects = candidates(); }
+      for (const subject of subjects) {
+        if (subject.has_profile === 1 && !this.anyConsent(subject.account_id, "profile")) {
           const purgeAt = this.now() + this.retention().profileWithdrawalDays * DAY;
           if (subject.profile_purge_at === null || subject.profile_purge_at > purgeAt) { this.store.exec("UPDATE privacy_subjects SET profile_purge_at=? WHERE account_id=?", purgeAt, subject.account_id); this.bump(subject.account_id); }
         }
       }
+      this.store.exec("UPDATE privacy_profile_cleanup_cursor SET account_id=? WHERE id=1", subjects.at(-1)?.account_id ?? "");
       this.store.exec("UPDATE privacy_subjects SET profile=NULL,profile_purge_at=NULL,generation=generation+1 WHERE account_id IN (SELECT account_id FROM privacy_subjects WHERE profile_purge_at<=? ORDER BY profile_purge_at LIMIT ?)", this.now(), limit);
       this.store.exec("DELETE FROM privacy_subjects WHERE account_id IN (SELECT account_id FROM privacy_subjects WHERE closed=1 AND expires_at<=? ORDER BY expires_at LIMIT ?) AND NOT EXISTS(SELECT 1 FROM privacy_rights WHERE privacy_rights.account_id=privacy_subjects.account_id AND state!='completed')", this.now(), limit);
       return { categories: [...categories, "privacy_operational_parts"], batchLimitPerCategory: limit, profileBatchLimit: limit, overdueRights: this.rows("SELECT id,account_id,response_due FROM privacy_rights WHERE state!='completed' AND response_due<? ORDER BY response_due LIMIT 128", this.now()) };

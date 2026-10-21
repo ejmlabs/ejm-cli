@@ -262,7 +262,11 @@ describe("coarse measurements, estimates and retention", () => {
   it("purges withdrawn profiles, usage and expired manifests in bounded indexed batches", () => {
     const { service, advance, store } = fixture(); enroll(service, actor()); consent(service, actor(), configuration(), "usage");
     service.recordUsage({ accountId: "account-a", bytes: 100, frames: 1, connectedMs: 1000, quality: "measured", measuredAt: START }); prepare(service);
-    service.withdraw(actor(), { category: "profile" }); advance(31 * DAY); service.cleanup(1);
+    service.withdraw(actor(), { category: "profile" }); advance(20 * DAY);
+    service.withdraw(actor(), { category: "profile" });
+    expect(store.exec<{ profile_purge_at: number }>("SELECT profile_purge_at FROM privacy_subjects WHERE account_id='account-a'")[0]?.profile_purge_at).toBe(START + 30 * DAY);
+    expect(store.exec<{ withdrawn_at: number }>("SELECT withdrawn_at FROM privacy_consents WHERE account_id='account-a' AND category='profile'")[0]?.withdrawn_at).toBe(START);
+    advance(11 * DAY); service.cleanup(1);
     expect(store.exec<{ profile: string | null }>("SELECT profile FROM privacy_subjects WHERE account_id='account-a'")[0]?.profile).toBeNull();
     expect(store.exec("SELECT id FROM privacy_manifests")).toHaveLength(0);
     advance(61 * DAY); service.cleanup(1); expect(store.exec("SELECT account_id FROM privacy_usage")).toHaveLength(0);
@@ -285,6 +289,30 @@ describe("coarse measurements, estimates and retention", () => {
     expect(store.exec<{ profile: string | null }>("SELECT profile FROM privacy_subjects WHERE account_id='account-a'")[0]?.profile).toBeNull();
     expect(disabled.status(actor())).toMatchObject({ programEnabled: false });
     expect(store.exec<{ retention: string }>("SELECT retention FROM privacy_policy WHERE id=1")[0]?.retention).toContain('"profileWithdrawalDays":10');
+    const active = configuration(); active.buyers.push({ ...active.buyers[0]!, id: "buyer-b", name: "Fixture buyer B" });
+    const restored = new PrivacyService(store, active, clock);
+    const eligible = Array.from({ length: 128 }, (_, index) => `eligible-${String(index).padStart(3, "0")}`);
+    for (const id of eligible) enroll(restored, actor(id), active);
+    const eligibleRows = () => store.exec<{ account_id: string; profile: string | null; generation: number; profile_purge_at: number | null }>("SELECT account_id,profile,generation,profile_purge_at FROM privacy_subjects WHERE account_id LIKE 'eligible-%' ORDER BY account_id");
+    const retained = eligibleRows();
+    expect(retained).toHaveLength(128);
+    advance(1);
+    const later = actor("later-profile");
+    restored.adult(later, { adult: true }); consent(restored, later, active, "profile", "buyer-b");
+    restored.profile(later, { provenance: "direct-user", fields: { role: "engineering" } });
+    const profile = () => store.exec<{ profile: string | null; profile_purge_at: number | null }>("SELECT profile,profile_purge_at FROM privacy_subjects WHERE account_id=?", later.accountId)[0]!;
+    const originalDeadline = active.buyers[1]!.expiresAt + 30 * DAY;
+    expect(profile().profile_purge_at).toBe(originalDeadline);
+    active.buyers[1]!.purpose = "Fixture revised developer-market research";
+    const shortenedDeadline = clock() + 30 * DAY;
+    new PrivacyService(store, active, clock).cleanup();
+    expect(profile().profile_purge_at).toBe(originalDeadline);
+    new PrivacyService(store, active, clock).cleanup();
+    expect(profile().profile_purge_at).toBe(shortenedDeadline);
+    expect(eligibleRows()).toEqual(retained);
+    advance(31 * DAY); new PrivacyService(store, active, clock).cleanup();
+    expect(profile().profile).toBeNull();
+    expect(eligibleRows()).toEqual(retained);
   });
 });
 

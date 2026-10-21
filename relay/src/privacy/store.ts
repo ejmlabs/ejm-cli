@@ -6,6 +6,8 @@ export const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS privacy_subjects (account_id TEXT PRIMARY KEY, generation INTEGER NOT NULL DEFAULT 0, adult INTEGER NOT NULL DEFAULT 0, opted_out INTEGER NOT NULL DEFAULT 0, opted_out_at INTEGER, closed INTEGER NOT NULL DEFAULT 0, profile TEXT, profile_purge_at INTEGER, usage_since INTEGER NOT NULL DEFAULT 0, expires_at INTEGER, updated_at INTEGER NOT NULL)`,
   `CREATE INDEX IF NOT EXISTS privacy_subject_purge ON privacy_subjects(profile_purge_at)`,
   `CREATE INDEX IF NOT EXISTS privacy_subject_expiry ON privacy_subjects(expires_at)`,
+  `CREATE TABLE IF NOT EXISTS privacy_profile_cleanup_cursor (id INTEGER PRIMARY KEY CHECK(id=1), account_id TEXT NOT NULL)`,
+  `INSERT OR IGNORE INTO privacy_profile_cleanup_cursor(id,account_id) VALUES(1,'')`,
   `CREATE TABLE IF NOT EXISTS privacy_browsers (browser_id TEXT PRIMARY KEY, opted_out INTEGER NOT NULL, opted_out_at INTEGER NOT NULL, expires_at INTEGER NOT NULL)`,
   `CREATE INDEX IF NOT EXISTS privacy_browser_expiry ON privacy_browsers(expires_at)`,
   `CREATE TABLE IF NOT EXISTS privacy_consents (account_id TEXT NOT NULL, buyer_id TEXT NOT NULL, category TEXT NOT NULL, scope TEXT NOT NULL, accepted_at INTEGER NOT NULL, withdrawn_at INTEGER, expires_at INTEGER NOT NULL, PRIMARY KEY(account_id,buyer_id,category))`,

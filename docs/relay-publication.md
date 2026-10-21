@@ -106,6 +106,30 @@ two complete exact-head reviews, separate human `/approve`, then protected merge
 A new revision or failed review needs the repository's fresh admission process;
 old approvals do not authorize the Worker revision.
 
+### Profile retention correction
+
+Both reviews in [run 39619449723](https://github.com/ejmlabs/ejm-cli/actions/runs/39619449723)
+completed for `9a61b44d5f0d308aeb17b1bec1cbae5ee7ca6ee0`. Linux/macOS
+quality, registry and standards passed. Each review reported one medium
+profile-retention defect and blocked adoption:
+
+- Unchanged eligible profiles could fill every cleanup page, delaying a later
+  profile whose buyer scope changed. A durable subject primary-key cursor now
+  advances through bounded pages before checking profile eligibility.
+- Repeated withdrawal could extend the current profile deletion deadline.
+  Withdrawal now fills a missing deadline or shortens a later one while
+  preserving the original withdrawal timestamp and deliberate fresh-consent
+  retention rules.
+
+Both corrections use the existing privacy authority transaction. The additive
+singleton cursor table needs no D1 migration or secondary index. The two
+affected existing regressions cover scan progress across service recreation,
+unchanged eligible profiles and actual deletion at the original withdrawal
+deadline. No test cases are added. Corrected-source checks, fresh hosted
+admission, complete reviews, final approval, protected adoption and deployment
+remain required. Approved policy bodies and retention periods are unchanged;
+commercial collection and billing remain disabled.
+
 ### Worker review corrections
 
 Both reviews in [run 39534461293](https://github.com/ejmlabs/ejm-cli/actions/runs/39534461293)

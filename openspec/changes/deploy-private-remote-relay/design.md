@@ -412,6 +412,35 @@ e0bf and corrected passes, then run the unchanged normal gate once after both
 fixes. Fresh exact-head admission, complete reviews, approval, protected adoption
 and deployment remain required. All eleven release tasks stay open.
 
+### Profile retention correction
+
+Both bounded reviews in run `39619449723` completed for
+`9a61b44d5f0d308aeb17b1bec1cbae5ee7ca6ee0`. Each reported one medium
+profile-retention defect. This correction belongs to the ejm-cli Worker privacy
+authority; its public API, approved policy periods and sibling inputs stay fixed.
+
+Reuse the existing SQLite transaction and subject primary key. A singleton
+durable cursor selects at most the existing cleanup limit of subjects by
+`account_id` before checking profile presence and consent. Advance past every
+inspected subject, including unchanged eligible subjects and subjects without a
+profile, with at most one bounded wrap. Commit cursor progress with deadline
+updates and purges. This adds one small SQLite cursor table and no secondary
+index, D1 migration, background task, service or dependency. Do not use
+`updated_at` writes merely to rotate inspection order.
+
+In the existing last-consent withdrawal branch, fill a missing deletion deadline
+or shorten a later deadline. Repeating withdrawal must not extend the current
+deadline. Preserve the original consent withdrawal timestamp. Fresh valid consent
+or an explicit eligible profile update may establish its existing new retention
+baseline; do not impose a lifetime minimum across those deliberate actions.
+
+Extend only the existing buyer-expiry retention and profile-withdrawal tests.
+Prove the unchanged eligible prefix cannot starve a later scope-invalidated
+profile across service recreation, and repeated withdrawal still purges at the
+original deadline. Check unchanged eligible generations and deadlines. Require
+intended failures on 9a61, corrected focused passes and the unchanged normal gate
+once before fresh human admission. Keep task 2.4 and the release gates open.
+
 ### Dependency and artifact bounds
 
 Activate the exact 51-line candidate manifest already reviewed with its inherited

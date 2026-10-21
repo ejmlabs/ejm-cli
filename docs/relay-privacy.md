@@ -130,6 +130,16 @@ index requires no account-data rewrite.
 
 The hourly job uses expiry indexes and deletes at most 128 rows from each privacy category per invocation, plus at most 128 due profile purges and closed-account tombstones. Backlogs are operational work, not a claim of instant deletion. Monitor the oldest due row and run bounded catch-up before a published deadline is missed. Operational quotas and webhook records have separate cleanup in the relay service.
 
+Profile eligibility checks inspect at most 128 subject rows per hourly pass,
+including subjects without profiles. A durable primary-key cursor advances past
+unchanged eligible subjects, so they cannot block a later profile whose buyer
+scope changed. Scan progress and deadline updates commit together and survive
+authority eviction. A full scan can require several hourly passes.
+
+Repeated withdrawal keeps or shortens the current profile deletion deadline.
+It cannot move that deadline later. Fresh valid consent or an explicit eligible
+profile update can establish a new retention baseline under the existing rules.
+
 Export-part cleanup inspects at most 128 indexed candidates before checking
 request protection. A durable cursor advances past pending parts without
 deleting them, so they cannot cause an unbounded scan or starve later completed
