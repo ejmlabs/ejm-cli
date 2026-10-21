@@ -1,6 +1,6 @@
 # Contributing to ejm-cli
 
-ejm-cli is a separate Rust project that consumes the public ejm-harness crates. Check out `ejm-cli` and `ejm-harness` as siblings. The CLI must build without source files from a Gerry platform product.
+ejm-cli is a separate Rust project that consumes the public ejm-harness crates. Check out `ejm-cli` and `ejm-harness` as siblings. The CLI must build using only its declared public dependencies. Keep unrelated proprietary products out of its source and examples.
 
 ## Tools and the required gate
 
@@ -22,7 +22,7 @@ The hook installer changes only this repository's `core.hooksPath`. It does not 
 
 The workflows reject a missing or mutable harness revision. The installed selector reads the pin from the exact admitted CLI commit and verifies that it equals or precedes protected main in the fixed official harness repository. Preparation binds the checked-out commit, tree and source archive digest into the admitted context. The [readable dependency review prerequisite](ci-bootstrap.md#readable-dependency-review-prerequisite) records protected PR #9's 40d callers and source context. Its Linux Secret Service setup and unchanged baseline gate passed on Linux and macOS with the working 4a harness. That run used installed b2; it does not prove the later native vault gate or installed 40d readable harness extraction. Keep those exact-source checks separate.
 
-A private harness checkout needs a scoped read credential; public source does not. See [CONTRIBUTING.md](../CONTRIBUTING.md) for human admission and approval, and [RELEASING.md](../RELEASING.md) for remote checks and publication gates. The PTY gate checks interaction and terminal restoration on its host. Local macOS results do not prove Linux behavior. Windows terminal behavior requires separate evidence.
+The harness and shared UI repositories are public and need no special read credential. See [CONTRIBUTING.md](../CONTRIBUTING.md) for human admission and approval, and [RELEASING.md](../RELEASING.md) for remote checks and publication gates. The PTY gate checks interaction and terminal restoration on its host. Local macOS results do not prove Linux behavior. Windows terminal behavior requires separate evidence.
 
 For the prepared CI action, source scope, and protected adoption order, see [CI setup and protected adoption](ci-bootstrap.md). It retains the current reviewed harness pin. Source preparation is separate from hosted product verification.
 
@@ -104,6 +104,38 @@ CARGO_TEST_MESSAGES_JSONL` exposes the same validated path to other supervisors.
 The supervisor never builds or calls a model provider. Worker/browser source
 and Workerd/native round-trip fixtures belong to the following publication layer.
 This native slice adds no unconditional Node, browser or Worker gate.
+
+## Public docs maintenance
+
+Review public docs with every change. Update affected setup, configuration, workflows, APIs, examples, errors, limits and recovery in the same change. Keep implemented source, test evidence and released services distinct. Explain when there is no docs impact. Include docs in normal release review and verify publication before claiming the live site changed.
+
+Guides live in `site/content/`. `site/build/docs-pages.mjs` maps route metadata and canonical `docs/*.md` references. Keep detailed contracts in those references. Vite and the public `@ejm/site`, `@ejm/ssg` and `@ejm/ui` packages build every route into ignored `site/dist`; never commit or hand edit that output.
+
+Check out the exact public UI revision in `.github/ui-source.json` beside the CLI, install its root lockfile, then run:
+
+```sh
+npm --prefix ../ejm-ui ci --ignore-scripts
+npm --prefix site ci --ignore-scripts
+npm --prefix site run check
+```
+
+Use Node 24 for site work. The gate checks types, build, generated headers and built HTML. Keep gzip route budgets at 95 KiB JavaScript, 14 KiB CSS, 70 KiB fonts and 30 KiB HTML. Also run the shared activated transfer/performance gate and check actual phone/desktop dimensions, both themes, keyboard focus, contents, deep fragments with history, copy controls, overflow and no-script content.
+
+Sites consume public shared exports. Shared packages own tokens, layouts, controls, theme behavior, assets, analytics, headers, demos and prerendering. Do not copy shared implementations, add local CSS or pass visual overrides. Keep fixed prose in `Static` and required interaction outside it. The home recording is a labelled local example; no model runs in the browser and it does not prove native setup or hosted inference.
+
+The trusted workflow reads `.github/ui-source.json` from protected main. Merge a reviewed pin adoption PR before a site PR uses the new API. Its adoption run uses the old pin; a fresh admitted site PR must verify the installed revision. Keep hosted governance pins, legal metadata, runtime dependencies and security overrides intact.
+
+### Cloudflare site hosting
+
+The `ejmlabs-cli` Worker serves `site/dist` at `https://cli.ejmlabs.com` through `site/wrangler.jsonc`. Run the site gate and an installed Wrangler dry run before authorized deployment:
+
+```sh
+wrangler deploy --config site/wrangler.jsonc --dry-run
+```
+
+Keep `workers_dev` and `preview_urls` explicitly false and preserve custom-domain zone protections. After publication, verify the provider mapping and both flags, canonical home/docs/reference routes, a missing route, security/cache headers and activated playback assets. Bind the deployed bytes and Worker version to the product commit, UI commit and lockfiles. Check that the former alternate hostname does not serve the site. A request from one network does not prove worldwide reachability.
+
+For recovery, restore the last verified compatible build on the canonical Worker, retain both disabled alternate origins and verify the restored routes and headers. Site publication is separate from native binary, package or source-version release. Follow [RELEASING.md](../RELEASING.md) for those gates.
 
 ## Project skills
 

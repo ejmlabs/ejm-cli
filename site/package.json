@@ -1,0 +1,41 @@
+{
+  "name": "@ejmlabs/cli-site",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "cli.ejmlabs.com: the ejm-cli product site, a prerendered Vite and React site on ejm-ui.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "ejm-ssg dev",
+    "build": "ejm-ssg build",
+    "budget": "ejm-ssg budget",
+    "typecheck": "tsc -p tsconfig.json --pretty false",
+    "test": "vitest run",
+    "check": "npm run typecheck && npm run build && ejm-site-headers dist/_headers --check && npm test"
+  },
+  "dependencies": {
+    "@ejm/core": "file:../../ejm-ui/packages/core",
+    "@ejm/demos": "file:../../ejm-ui/packages/demos",
+    "@ejm/shots": "file:../../ejm-ui/packages/shots",
+    "@ejm/site": "file:../../ejm-ui/packages/site",
+    "@ejm/ssg": "file:../../ejm-ui/packages/ssg",
+    "@ejm/tokens": "file:../../ejm-ui/packages/tokens",
+    "@ejm/ui": "file:../../ejm-ui/packages/ui",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "4.3.3",
+    "@types/node": "26.6.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.2",
+    "parse5": "8.0.1",
+    "tailwindcss": "4.3.3",
+    "typescript": "5.9.3",
+    "vite": "8.3.4",
+    "vitest": "5.0.5"
+  }
+}

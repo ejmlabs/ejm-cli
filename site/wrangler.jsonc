@@ -2,6 +2,8 @@
   "name": "ejmlabs-cli",
   "account_id": "478a0db3a110d8503c16abbc1db27af4",
   "compatibility_date": "2026-10-18",
-  "assets": { "directory": "./dist" },
+  "workers_dev": false,
+  "preview_urls": false,
+  "assets": { "directory": "./dist", "not_found_handling": "404-page" },
   "routes": [{ "pattern": "cli.ejmlabs.com", "custom_domain": true }]
 }

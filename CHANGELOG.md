@@ -4,6 +4,13 @@ Changes follow [Semantic Versioning](https://semver.org/). Each repository is ve
 
 ## [Unreleased]
 
+### Website
+
+- Include the unchanged approved Relay privacy notice and service terms with
+  explicit pending publication status and effective date.
+
+- Rebuild the public CLI site and guides on shared UI exports, with direct source/contribution links, a labelled local recording, static documentation and unchanged route budgets. Keep the guides aligned with the accepted native runtime and preserve separate service and installer release gates.
+
 ### Added
 
 - Shared repository standards, explicit human admission, protected merge gates, two-pass Codex review, and a draft source release pipeline.

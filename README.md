@@ -9,8 +9,8 @@ account or server. Hosted models need provider access.
 
 ## Status
 
-The project is being prepared for public use. Build from source with access to
-both repositories. There is no supported binary installer or package-manager
+The CLI and harness source repositories are public. Build from compatible
+sibling checkouts. There is no supported binary installer or package-manager
 distribution. See [the release policy](RELEASING.md) for version and release gates.
 
 ## Requirements
@@ -32,6 +32,7 @@ Clone both repositories into the same parent directory:
 git clone https://github.com/ejmlabs/ejm-harness.git
 git clone https://github.com/ejmlabs/ejm-cli.git
 cd ejm-cli
+git -C ../ejm-harness checkout --detach "$(cat .github/harness-revision)"
 cargo build --release --locked
 ./target/release/ejm-cli --replay
 ./target/release/ejm-cli --replay run "Hello"
@@ -60,6 +61,7 @@ Native execution runs as the current user and is not a security sandbox.
 ### Terminal experience
 
 - Unicode composer, multiline input, bracketed paste, and sent-message history.
+  Up and Down recall sent messages outside the command picker.
 - Streaming transcript with code, Markdown, and diff styling.
 - Visible run state and separate agent, model, and local tool counts.
 - Saved sessions, steering, queued turns, and cancellation.
@@ -129,6 +131,8 @@ dependency policy, release builds, and real PTY checks run through one command:
 
 ## Documentation
 
+- [User guide](https://cli.ejmlabs.com/docs/user-guide/): source setup, providers, grants and recovery.
+- [Developer guide](https://cli.ejmlabs.com/docs/developer-guide/): changes, ownership and site checks.
 - [CLI reference](docs/ejm-cli.md): controls, providers, sessions, packages and trust.
 - [Performance evidence](docs/benchmarks.md): measurements, method and limits.
 - [Development guide](docs/contributing.md): tools, ownership and the required gate.
