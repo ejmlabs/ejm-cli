@@ -155,6 +155,13 @@ async function formInput(request: Request, action: string): Promise<unknown> {
   if (action === "consent") return { ...entries, accepted: entries.accepted === "true", fields: JSON.parse(entries.fields ?? "null") as unknown };
   if (action === "adult") return { ...entries, adult: entries.adult === "true" };
   if (action === "rejoin") return entries.confirmed === undefined ? entries : { ...entries, confirmed: entries.confirmed === "true" };
+  if (action === "rights/status") {
+    exactKeys(entries, ["requestId", "statusKey", "part"]);
+    const { part, ...identity } = entries;
+    if (part === undefined || part === "") return identity;
+    if (!/^\d+$/u.test(part) || !Number.isSafeInteger(Number(part))) throw new PrivacyError("invalid_part");
+    return { ...identity, part: Number(part) };
+  }
   return entries;
 }
 async function boundedText(request: Request): Promise<string> {

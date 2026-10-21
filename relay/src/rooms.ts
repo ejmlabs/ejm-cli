@@ -243,6 +243,7 @@ export class Room extends DurableObject<Env> {
     if (state.expiresAt <= sendingAt) { this.closeGeneration(socket, 1008, "lease_expired"); return; }
     const currentPeer = this.attachment(peer);
     if (socket.readyState !== WebSocket.OPEN || this.attachment(socket)?.generation !== state.generation || !currentPeer?.paired || peer.readyState !== WebSocket.OPEN || currentPeer.generation !== state.generation || currentPeer.accountId !== state.accountId || currentPeer.room !== state.room || currentPeer.role !== (state.role === "host" ? "controller" : "host") || currentPeer.expiresAt <= sendingAt) { this.closeGeneration(socket, 1008, "peer_lease_expired"); return; }
+    if (state.frames <= 0 || state.bytes < message.byteLength) { this.closeGeneration(socket, 1008, "daily_quota_exhausted"); return; }
     state.frames -= 1; state.bytes -= message.byteLength;
     state.burstCount = state.burstSecond === second ? state.burstCount + 1 : 1; state.burstSecond = second;
     state.measuredFrames += 1; state.measuredBytes += message.byteLength;

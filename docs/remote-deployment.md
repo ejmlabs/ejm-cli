@@ -20,11 +20,12 @@ stage checks are recorded separately. See [source publication prerequisites](rel
 | New source | Accepted native PR #21 and inert UI prerequisite PR #22; [current local stages](relay-publication.md#current-local-checks) passed; hosted adoption pending |
 | Public docs | Local source only; active site's exact source/assets are unresolved; publication unverified |
 
-The recorded D1 schema comparison covered 15 application tables and 23 explicit
-indexes. It was historical schema-only evidence. Secret-installation checks
-read no SQL rows and do not refresh that comparison. Inspect migration state
-before applying only genuinely pending migrations; never recreate the database
-as a retry.
+The October 21 read-only preflight for head 8a2 matched 15 application tables,
+23 explicit indexes and all three then-committed migrations, with no pending
+migration. It read schema and migration metadata, not application records, and
+wrote no rows. The next device-history correction adds a paging index and needs
+a fresh comparison before that reviewed migration is applied. Secret-name
+checks do not refresh schema evidence. Never recreate the database as a retry.
 
 ## Historical closed deployments
 

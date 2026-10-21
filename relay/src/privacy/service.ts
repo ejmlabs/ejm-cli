@@ -4,8 +4,14 @@ import { initialize, type Binding, type SqlStore } from "./store.js";
 
 const DAY = 86_400_000;
 export const MAX_EXPORT = 128;
+export const MAX_OPERATIONAL_PART_BYTES = 48 * 1024;
 const MAX_RIGHTS = 32;
 export interface OperationalTaskCursor { requestedAt: number; requestId: string }
+export interface OperationalDeviceCursor { createdAt: number; id: string }
+interface OperationalDevice { id: string; label: string; created_at: number; revoked_at: number | null; os_family: string | null; cli_major: number | null }
+export interface OperationalDevicePart { number: number; after: OperationalDeviceCursor | null; through: OperationalDeviceCursor | null; capturedAt: number; records: OperationalDevice[]; next: OperationalDeviceCursor | null; complete: boolean }
+export interface OperationalDeviceAcknowledgement { saved: true; part: number; next: OperationalDeviceCursor | null; through: OperationalDeviceCursor | null; capturedAt: number; state: "pending" | "completed" }
+interface OperationalDeviceManifest { version: 1; partCount: number; deviceCount: number; complete: boolean; through: OperationalDeviceCursor | null; capturedAt: number }
 export interface Actor { accountId: string | null; browserId: string | null; operator: boolean; gpc: boolean }
 interface Subject extends Record<string, unknown> { account_id: string; generation: number; adult: number; opted_out: number; opted_out_at: number | null; closed: number; profile: string | null; profile_purge_at: number | null; updated_at: number }
 interface Consent extends Record<string, unknown> { account_id: string; buyer_id: string; category: Category; scope: string; accepted_at: number; withdrawn_at: number | null; expires_at: number }
@@ -309,12 +315,21 @@ export class PrivacyService {
   }
 
   async rightsStatus(input: unknown): Promise<unknown> {
-    const value = object(input); exactKeys(value, ["requestId", "statusKey"]);
+    const value = object(input); exactKeys(value, ["requestId", "statusKey", "part"]);
+    if (value.part !== undefined && (typeof value.part !== "number" || !Number.isSafeInteger(value.part) || value.part < 0)) throw new PrivacyError("invalid_part");
     const key = text(value.statusKey, 64); if (!/^[a-f0-9]{64}$/u.test(key)) throw new PrivacyError("request_not_found", 404);
     const hash = await sha256(key);
     const row = this.rows<Rights>("SELECT id,account_id,kind,jurisdiction,state,requested_at,acknowledged_at,acknowledgement_due,response_due,extended,extension_notice,retained_exceptions,recipients,operational_state,operational_result,completed_at,expires_at FROM privacy_rights WHERE id=? AND status_token_hash=? AND (expires_at>? OR state!='completed')", text(value.requestId), hash, this.now())[0];
     if (!row) throw new PrivacyError("request_not_found", 404);
-    const result = this.rightsView(row); delete result.account_id; return result;
+    const result = this.rightsView(row); delete result.account_id;
+    const selected = value.part as number | undefined ?? 0;
+    const stored = this.rows<{ payload: string }>("SELECT payload FROM privacy_operational_parts WHERE request_id=? AND part=?", row.id, selected)[0];
+    if (stored) {
+      const part = JSON.parse(stored.payload) as OperationalDevicePart;
+      result.operational_result = { ...object(result.operational_result), devices: part.records };
+      result.part = part.number; result.nextPart = part.complete ? null : part.number + 1;
+    } else if (value.part !== undefined) throw new PrivacyError("operational_part_not_found", 404);
+    return result;
   }
 
   close(id: string, closeAccount = true): unknown {
@@ -396,17 +411,75 @@ export class PrivacyService {
     return rows.map((row) => ({ requestId: row.id, accountId: row.account_id, action: row.kind, requestedAt: row.requested_at, dueAt: row.response_due, expiresAt: row.requested_at + this.retention().operationalTaskDays * DAY }));
   }
   operationalUpdate(input: unknown): unknown {
-    const value = object(input); exactKeys(value, ["requestId", "state", "result"]);
+    const value = object(input); exactKeys(value, ["requestId", "accountId", "state", "result", "part"]);
+    if (value.part !== undefined) return this.operationalPart(value);
     if (value.state !== "completed" && value.state !== "exception") throw new PrivacyError("invalid_operational_state");
-    const result = JSON.stringify(value.result ?? null); if (result.length > 65_536) throw new PrivacyError("operational_result_too_large");
-    this.store.exec("UPDATE privacy_rights SET operational_state=?,operational_result=? WHERE id=?", value.state, result, text(value.requestId));
+    const id = text(value.requestId);
+    const row = this.rows<{ kind: string }>("SELECT kind FROM privacy_rights WHERE id=?", id)[0];
+    if (!row) throw new PrivacyError("request_not_found", 404);
+    // Older Workers cannot declare a newly paged capture complete without its terminal part.
+    if (row.kind === "access" || row.kind === "export") throw new PrivacyError("operational_part_required", 409);
+    const result = JSON.stringify(value.result ?? null); if (new TextEncoder().encode(result).byteLength > 65_536) throw new PrivacyError("operational_result_too_large");
+    this.store.exec("UPDATE privacy_rights SET operational_state=?,operational_result=? WHERE id=?", value.state, result, id);
     return { saved: true };
+  }
+
+  private operationalPart(value: Record<string, unknown>): OperationalDeviceAcknowledgement {
+    const id = text(value.requestId); const accountId = text(value.accountId); const raw = object(value.part);
+    const number = operationalInteger(raw.number, "invalid_part");
+    return this.store.transaction(() => {
+      const row = this.rows<Rights>("SELECT id,account_id,kind,state,operational_state,operational_result,expires_at FROM privacy_rights WHERE id=?", id)[0];
+      if (!row || row.account_id !== accountId || !["access", "export"].includes(row.kind)) throw new PrivacyError("request_not_found", 404);
+      const stored = this.rows<{ payload: string }>("SELECT payload FROM privacy_operational_parts WHERE request_id=? AND part=?", id, number)[0];
+      // A lost reply or failed D1 cursor write must replay the saved page, never re-read it.
+      if (stored) return operationalAcknowledgement(JSON.parse(stored.payload) as OperationalDevicePart);
+      if (row.state === "completed" || row.operational_state !== "pending") throw new PrivacyError("operational_export_completed", 409);
+      const part = operationalDevicePart(raw);
+      if (value.state !== (part.complete ? "completed" : "pending")) throw new PrivacyError("invalid_operational_state");
+      const previous = row.operational_result ? object(JSON.parse(row.operational_result as string)) : null;
+      const manifest = previous?.deviceExport as OperationalDeviceManifest | undefined;
+      if (part.number !== (manifest?.partCount ?? 0)) throw new PrivacyError("operational_part_out_of_order", 409);
+      if (part.number === 0) {
+        if (part.after !== null) throw new PrivacyError("invalid_export_cursor");
+      } else {
+        const prior = this.rows<{ payload: string }>("SELECT payload FROM privacy_operational_parts WHERE request_id=? AND part=?", id, part.number - 1)[0];
+        if (!prior) throw new PrivacyError("operational_part_out_of_order", 409);
+        const before = JSON.parse(prior.payload) as OperationalDevicePart;
+        if (before.complete || !sameOperationalCursor(part.after, before.next) || !sameOperationalCursor(part.through, before.through) || part.capturedAt !== before.capturedAt) throw new PrivacyError("invalid_export_cursor");
+      }
+      const base = part.number === 0 ? object(value.result ?? {}) : previous!;
+      if (part.number === 0) exactKeys(base, ["account", "identity", "providerIdentities", "billing", "reservations", "retention"]);
+      const deviceCount = (manifest?.deviceCount ?? 0) + part.records.length;
+      if (!Number.isSafeInteger(deviceCount) || part.number >= Number.MAX_SAFE_INTEGER) throw new PrivacyError("operational_export_too_large");
+      const deviceExport: OperationalDeviceManifest = { version: 1, partCount: part.number + 1, deviceCount, complete: part.complete, through: part.through, capturedAt: part.capturedAt };
+      this.store.exec("INSERT INTO privacy_operational_parts(request_id,part,payload,expires_at) VALUES(?,?,?,?)", id, part.number, JSON.stringify(part), row.expires_at);
+      this.store.exec("UPDATE privacy_rights SET operational_state=?,operational_result=? WHERE id=?", part.complete ? "completed" : "pending", JSON.stringify({ ...base, deviceExport }), id);
+      return operationalAcknowledgement(part);
+    });
+  }
+
+  private cleanupOperationalParts(limit: number): void {
+    const first = { expires_at: 0, request_id: "", part: -1 };
+    type Cursor = typeof first & Record<string, unknown>;
+    let after = this.rows<Cursor>("SELECT expires_at,request_id,part FROM privacy_operational_part_cursor WHERE id=1")[0]!;
+    const candidates = () => this.rows<Cursor>("SELECT expires_at,request_id,part FROM privacy_operational_parts WHERE expires_at<=? AND (expires_at,request_id,part)>(?,?,?) ORDER BY expires_at,request_id,part LIMIT ?", this.now(), after.expires_at, after.request_id, after.part, Math.min(limit, 128));
+    let rows = candidates();
+    if (rows.length === 0 && (after.expires_at !== 0 || after.request_id !== "" || after.part !== -1)) { after = first; rows = candidates(); }
+    const last = rows.at(-1);
+    if (last) {
+      // The indexed interval contains only the selected candidates, including protected ones.
+      this.store.exec("DELETE FROM privacy_operational_parts WHERE (expires_at,request_id,part)>(?,?,?) AND (expires_at,request_id,part)<=(?,?,?) AND NOT EXISTS(SELECT 1 FROM privacy_rights WHERE id=privacy_operational_parts.request_id AND state!='completed')", after.expires_at, after.request_id, after.part, last.expires_at, last.request_id, last.part);
+    }
+    const next = last ?? first;
+    this.store.exec("UPDATE privacy_operational_part_cursor SET expires_at=?,request_id=?,part=? WHERE id=1", next.expires_at, next.request_id, next.part);
   }
 
   cleanup(limit = 128): unknown {
     if (!Number.isInteger(limit) || limit < 1 || limit > 256) throw new PrivacyError("invalid_cleanup_limit");
     const categories = ["privacy_usage", "privacy_rejoins", "privacy_manifests", "privacy_browsers", "privacy_evidence", "privacy_consents", "privacy_ledger", "privacy_pseudonyms", "privacy_rights", "privacy_cohorts"];
     return this.store.transaction(() => {
+      // Inspect a fixed page before checking pending rights, then resume after protected parts.
+      this.cleanupOperationalParts(limit);
       // Table names come from this fixed list. Expiry indexes bound each scan.
       for (const table of categories) this.store.exec(`DELETE FROM ${table} WHERE rowid IN (SELECT rowid FROM ${table} WHERE expires_at<=? ${table === "privacy_rights" ? "AND state='completed'" : ""} ORDER BY expires_at LIMIT ?)`, this.now(), limit);
       // A disabled program or changed buyer scope cannot retain an active sale profile forever.
@@ -418,9 +491,45 @@ export class PrivacyService {
       }
       this.store.exec("UPDATE privacy_subjects SET profile=NULL,profile_purge_at=NULL,generation=generation+1 WHERE account_id IN (SELECT account_id FROM privacy_subjects WHERE profile_purge_at<=? ORDER BY profile_purge_at LIMIT ?)", this.now(), limit);
       this.store.exec("DELETE FROM privacy_subjects WHERE account_id IN (SELECT account_id FROM privacy_subjects WHERE closed=1 AND expires_at<=? ORDER BY expires_at LIMIT ?) AND NOT EXISTS(SELECT 1 FROM privacy_rights WHERE privacy_rights.account_id=privacy_subjects.account_id AND state!='completed')", this.now(), limit);
-      return { categories, batchLimitPerCategory: limit, profileBatchLimit: limit, overdueRights: this.rows("SELECT id,account_id,response_due FROM privacy_rights WHERE state!='completed' AND response_due<? ORDER BY response_due LIMIT 128", this.now()) };
+      return { categories: [...categories, "privacy_operational_parts"], batchLimitPerCategory: limit, profileBatchLimit: limit, overdueRights: this.rows("SELECT id,account_id,response_due FROM privacy_rights WHERE state!='completed' AND response_due<? ORDER BY response_due LIMIT 128", this.now()) };
     });
   }
 }
 
+function operationalInteger(value: unknown, code = "invalid_export_cursor"): number {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) throw new PrivacyError(code);
+  return value;
+}
+export function operationalDeviceCursor(input: unknown): OperationalDeviceCursor | null {
+  if (input === null) return null;
+  const value = object(input); exactKeys(value, ["createdAt", "id"]);
+  return { createdAt: operationalInteger(value.createdAt), id: text(value.id) };
+}
+function sameOperationalCursor(left: OperationalDeviceCursor | null, right: OperationalDeviceCursor | null): boolean {
+  return left === null || right === null ? left === right : left.createdAt === right.createdAt && left.id === right.id;
+}
+function orderedOperationalCursor(left: OperationalDeviceCursor, right: OperationalDeviceCursor): boolean {
+  return left.createdAt < right.createdAt || (left.createdAt === right.createdAt && left.id < right.id);
+}
+function operationalDevicePart(value: Record<string, unknown>): OperationalDevicePart {
+  exactKeys(value, ["number", "after", "through", "capturedAt", "records", "next", "complete"]);
+  if (!Array.isArray(value.records) || value.records.length > 64 || typeof value.complete !== "boolean") throw new PrivacyError("invalid_operational_part");
+  const part: OperationalDevicePart = { number: operationalInteger(value.number, "invalid_part"), after: operationalDeviceCursor(value.after), through: operationalDeviceCursor(value.through), capturedAt: operationalInteger(value.capturedAt), records: [], next: operationalDeviceCursor(value.next), complete: value.complete };
+  let previous = part.after;
+  for (const input of value.records) {
+    const row = object(input); exactKeys(row, ["id", "label", "created_at", "revoked_at", "os_family", "cli_major"]);
+    const device: OperationalDevice = { id: text(row.id), label: text(row.label, 64), created_at: operationalInteger(row.created_at), revoked_at: row.revoked_at === null ? null : operationalInteger(row.revoked_at), os_family: row.os_family === null ? null : text(row.os_family, 32), cli_major: row.cli_major === null ? null : operationalInteger(row.cli_major) };
+    const cursor = { createdAt: device.created_at, id: device.id };
+    if (part.through === null || (previous !== null && !orderedOperationalCursor(previous, cursor)) || orderedOperationalCursor(part.through, cursor)) throw new PrivacyError("invalid_export_cursor");
+    part.records.push(device); previous = cursor;
+  }
+  if (part.complete ? part.next !== null : part.records.length === 0 || !sameOperationalCursor(part.next, previous)) throw new PrivacyError("invalid_export_cursor");
+  if (part.through === null && (part.after !== null || !part.complete)) throw new PrivacyError("invalid_export_cursor");
+  if (part.after !== null && part.through !== null && orderedOperationalCursor(part.through, part.after)) throw new PrivacyError("invalid_export_cursor");
+  if (new TextEncoder().encode(JSON.stringify(part)).byteLength >= MAX_OPERATIONAL_PART_BYTES) throw new PrivacyError("operational_part_too_large");
+  return part;
+}
+function operationalAcknowledgement(part: OperationalDevicePart): OperationalDeviceAcknowledgement {
+  return { saved: true, part: part.number, next: part.next, through: part.through, capturedAt: part.capturedAt, state: part.complete ? "completed" : "pending" };
+}
 async function sha256(value: string): Promise<string> { return [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)))].map((byte) => byte.toString(16).padStart(2, "0")).join(""); }

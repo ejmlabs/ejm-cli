@@ -54,6 +54,10 @@ Admission SHALL reserve bounded account-wide frame and byte allowances before fo
 - **WHEN** the quota authority is unavailable or a reservation cannot be committed
 - **THEN** no unreserved traffic is forwarded
 
+#### Scenario: Final byte reservation is smaller than a frame
+- **WHEN** quota renewal grants a positive remaining byte allowance smaller than the pending ciphertext frame
+- **THEN** the relay refuses that frame without subtracting below zero or forwarding beyond the reserved allowance
+
 ### Requirement: Bounded free launch
 The default deployment SHALL use the provider's free plan, bounded beta admission and published per-account limits. It SHALL reserve capacity for account, billing and cleanup work and fail visibly when capacity is unavailable. Paid service entitlement SHALL NOT override a hosting capacity limit.
 

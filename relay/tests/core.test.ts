@@ -165,6 +165,39 @@ describe("account and device boundary", () => {
     expect(credentialHeaders(new Headers({ authorization: "Bearer safe", cookie: "fallback=true" }))?.has("cookie")).toBe(false);
     expect(mutationAllowed(new Request(origin, { method: "POST", headers: { cookie: "session=true" } }), origin)).toBe(false);
   });
+  it("keeps all active devices revocable after newer revoked history", async () => {
+    const owner = await identity(); const other = await identity();
+    const context = await createAuth(bindings).$context;
+    const activeIds = [owner.deviceId];
+    for (let index = 1; index < 16; index += 1) {
+      const session = await context.internalAdapter.createSession(owner.accountId);
+      const response = await call("/v1/devices", "POST", { label: `Active fixture ${index}` }, session.token);
+      expect(response.status).toBe(201); activeIds.push((await response.json<{ id: string }>()).id);
+    }
+    const browser = await context.internalAdapter.createSession(owner.accountId);
+    const overLimit = await call("/v1/devices", "POST", { label: "Over limit" }, browser.token);
+    expect(overLimit.status).toBe(409); expect(await overLimit.json()).toMatchObject({ error: { code: "device_limit" } });
+    const now = Date.now();
+    await bindings.DB.prepare("UPDATE relay_devices SET created_at=? WHERE account_id=?").bind(now - 100_000, owner.accountId).run();
+    await bindings.DB.prepare("WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM n WHERE x<65) INSERT INTO relay_devices(id,account_id,session_id,label,created_at,last_used_at,revoked_at) SELECT printf('fixture_revoked_%016d',x),?,printf('fixture_revoked_session_%016d',x),'Revoked fixture',?,?,? FROM n").bind(owner.accountId, now - 1000, now - 1000, now).run();
+    const browserCookie = await cookie({ ...owner, token: browser.token, sessionId: browser.id, deviceId: "" });
+    const response = await call("/v1/devices", "GET", undefined, undefined, { cookie: browserCookie });
+    expect(response.status).toBe(200);
+    const listed = (await response.json<{ devices: { id: string; created_at: number; revoked_at: number | null; session_id?: string }[] }>()).devices;
+    expect(listed).toHaveLength(64);
+    expect(listed.filter(device => device.revoked_at === null).map(device => device.id).sort()).toEqual([...activeIds].sort());
+    expect(listed.slice(0, 16).every(device => device.revoked_at === null)).toBe(true);
+    expect(listed.slice(16).every(device => device.revoked_at !== null)).toBe(true);
+    expect(listed.every(device => device.id !== other.deviceId && device.session_id === undefined)).toBe(true);
+    expect(new Set(listed.map(device => device.id)).size).toBe(64);
+    for (const group of [listed.slice(0, 16), listed.slice(16)]) expect(group.map(device => device.created_at)).toEqual(group.map(device => device.created_at).sort((left, right) => right - left));
+    expect((await call(`/v1/devices/${owner.deviceId}/revoke`, "POST", {}, undefined, { cookie: browserCookie, origin: "https://attacker.invalid" })).status).toBe(403);
+    expect((await call("/v1/account", "GET", undefined, owner.token)).status).toBe(200);
+    expect((await call(`/v1/devices/${owner.deviceId}/revoke`, "POST", {}, undefined, { cookie: browserCookie, origin })).status).toBe(200);
+    expect((await call("/v1/account", "GET", undefined, owner.token)).status).toBe(401);
+    const remaining = await call("/v1/account", "GET", undefined, undefined, { cookie: browserCookie });
+    expect(remaining.status).toBe(200); expect(await remaining.json()).toMatchObject({ deviceId: null });
+  });
   it("requires a fresh local pairing after account recovery and prevents revoked sessions", async () => {
     const owner = await identity();
     expect((await call(`/v1/devices/${owner.deviceId}/revoke`, "POST", {}, owner.token)).status).toBe(200);
@@ -787,6 +820,46 @@ describe("durable admission and hibernating forwarding", () => {
         expect(final.expiresAt).toBe(renewed!.expiresAt); expect(final.frames).toBe(LIMITS.blockFrames - 1); expect(final.measuredFrames).toBe(1);
       }
     } finally { clock.mockRestore(); hostSocket.close(); controllerSocket.close(); }
+  });
+  it.each([
+    { remaining: 1, forwards: false },
+    { remaining: 2, forwards: true },
+  ])("bounds forwarding by a real final $remaining-byte quota reservation", async ({ remaining, forwards }) => {
+    const owner = await identity(); const room = "opaque_partial_bytes_0001";
+    const host = await connect(room, "host", await ticket(owner, room));
+    const controller = await connect(room, "controller", await ticket(owner, room, "controller"));
+    expect(host.status).toBe(101); expect(controller.status).toBe(101);
+    const hostSocket = host.webSocket!; const controllerSocket = controller.webSocket!;
+    hostSocket.accept(); controllerSocket.accept(); controllerSocket.binaryType = "arraybuffer";
+    const spentFrames = 63 * LIMITS.blockFrames; const spentBytes = 63 * LIMITS.blockBytes;
+    await bindings.DB.prepare("INSERT INTO relay_billing(account_id,customer_id,plan,status,paid_until,cancel_at_period_end,updated_at) VALUES(?,?,'paid','active',?,0,?)").bind(owner.accountId, `customer_${owner.accountId}`, Date.now() + LIMITS.shareMs, Date.now()).run();
+    const quota = bindings.ACCOUNT_QUOTA.get(bindings.ACCOUNT_QUOTA.idFromName(owner.accountId));
+    await runInDurableObject(quota, async (instance, state) => {
+      const limited = new AccountQuota(state, { ...bindings, PAID_DAILY_BYTES: String(spentBytes + remaining) });
+      vi.spyOn(instance as AccountQuota, "fetch").mockImplementation(request => limited.fetch(request));
+      state.storage.sql.exec("UPDATE windows SET frames=?,bytes=?", spentFrames, spentBytes);
+    });
+    const sentinel = new Uint8Array([89, 97]);
+    const outcome = frameOrClose(controllerSocket);
+    const senderClosed = new Promise<CloseEvent>(resolve => hostSocket.addEventListener("close", resolve, { once: true }));
+    let renewed: Lease | undefined;
+    try {
+      const stub = bindings.ROOM.get(bindings.ROOM.idFromName(room));
+      const final = await runInDurableObject(stub, async (_instance, state) => {
+        const sender = state.getWebSockets("host")[0]!; const peer = state.getWebSockets("controller")[0]!;
+        sender.serializeAttachment({ ...sender.deserializeAttachment(), frames: 0, bytes: 0, measuredFrames: 0, measuredBytes: 0 });
+        const bounded = new Room(state, { ...bindings, ACCOUNT_QUOTA: afterQuotaFetch(bindings.ACCOUNT_QUOTA, lease => { renewed = lease; }) });
+        await bounded.webSocketMessage(sender, sentinel.buffer);
+        const final = sender.deserializeAttachment() as Lease & { measuredFrames: number };
+        peer.close(1000, "fixture_cleanup"); return final;
+      });
+      expect(renewed).toMatchObject({ frames: LIMITS.blockFrames, bytes: remaining });
+      const reserved = await runInDurableObject(quota, async (_instance, state) => state.storage.sql.exec<{ frames: number; bytes: number }>("SELECT frames,bytes FROM windows").one());
+      expect(reserved).toEqual({ frames: spentFrames + LIMITS.blockFrames, bytes: spentBytes + remaining });
+      expect({ outcome: await outcome, bytes: final.bytes, measuredFrames: final.measuredFrames }).toEqual({ outcome: forwards ? Array.from(sentinel) : null, bytes: 0, measuredFrames: forwards ? 1 : 0 });
+      if (!forwards) expect(await senderClosed).toMatchObject({ code: 1008, reason: "daily_quota_exhausted" });
+      else expect(final.frames).toBe(LIMITS.blockFrames - 1);
+    } finally { vi.restoreAllMocks(); hostSocket.close(); controllerSocket.close(); }
   });
   it("rejects role substitution, cross-account room admission and live peer replacement", async () => {
     const owner = await identity(); const other = await identity(); const room = "opaque_fixture_room_0002";

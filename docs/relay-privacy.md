@@ -62,7 +62,7 @@ Cohort output requires a canonical full eligible cohort, one profile field, at l
 | `POST /api/privacy/rights/request` | Request access, export, correction, deletion or account closure |
 | `POST /v1/account/close` | Dashboard closure through the same tracked rights workflow |
 | `GET /privacy/rights` | Public form to track a request with its saved private key after account closure |
-| `POST /api/privacy/rights/status` | Read one request using its ID and private status key in the body |
+| `POST /api/privacy/rights/status` | Read one request and an optional numbered operational export part using its ID and private status key in the body |
 
 Authenticated mutations require a same-origin `Origin` header. Every query derives account ownership from the authenticated session. No buyer route can request a broad account export.
 
@@ -76,9 +76,59 @@ A request cannot be marked complete while operational work or recipient follow-u
 
 A live operational hold also applies to direct rights deletion. Held identity remains available for the recorded purpose, with its retained categories and hold expiry reported as explicit exceptions. The hold does not preserve relay access: account, session, device and room authority is still revoked.
 
+### Operational export parts
+
+Tracked access and export requests include all retained device history within
+their capture window, including revoked devices. The dashboard's 64-row list is
+not a full history export. Hourly work saves at most 64 devices per part and one
+part per attempt. Requests with more history need more invocations; monitor the
+request deadline and use bounded catch-up if needed.
+
+The first claim records a fixed upper `(created_at,id)` watermark. Later parts
+continue after their stored cursor in that order, including tied timestamps.
+Devices added beyond the watermark belong to a later request. This is a
+paginated capture over a window, not a transactionally frozen snapshot of all
+operational stores. Other metadata reflects its recorded capture time.
+
+Parts are stored in the existing privacy authority before queue progress can
+advance. Retrying a saved part returns its original acknowledgement. A lost
+reply, failed queue update or authority eviction cannot justify skipping it or
+marking incomplete history complete. Operational state stays pending until the
+terminal part is acknowledged; recipient work still has its separate gate.
+
+Use `/privacy/rights` with the saved request ID and status key. Leave the part
+field blank for status and the first available part, or enter a zero-based part
+number returned by the status response. For JSON clients, POST a body containing
+`requestId`, `statusKey` and optional nonnegative integer `part` to
+`/api/privacy/rights/status`, with the exact same-origin `Origin` header. Never
+put the key in a URL, command argument, log or shared screenshot.
+
+The response retains the request status fields. `operational_result.devices`
+contains the selected bounded part. Its `deviceExport` manifest reports saved
+part and device counts, capture bounds and whether capture has completed;
+`part` and `nextPart` identify paging. Save each part, then retrieve the next
+available part until the manifest reports completion. An unfinished manifest
+means more scheduled work is needed. `nextPart` may still be in preparation;
+only numbers below `partCount` are saved. No missing part is evidence of completion.
+Older unpaged results have no `deviceExport` manifest and do not prove full
+device history. Request a fresh export for a paged capture.
+
+Each serialized part stays below 48 KiB UTF-8. Total storage and the number of
+attempts grow with history. Parts inherit the request's original rights expiry,
+which retries do not extend. Pending requests remain protected. Completed
+expired parts are inaccessible even before bounded cleanup removes them.
+After parts have been stored, recovery must use code that can deliver and clean
+them; older single-result versions are not compatible. The additive D1 paging
+index requires no account-data rewrite.
+
 ## Retention and bounded cleanup
 
 The hourly job uses expiry indexes and deletes at most 128 rows from each privacy category per invocation, plus at most 128 due profile purges and closed-account tombstones. Backlogs are operational work, not a claim of instant deletion. Monitor the oldest due row and run bounded catch-up before a published deadline is missed. Operational quotas and webhook records have separate cleanup in the relay service.
+
+Export-part cleanup inspects at most 128 indexed candidates before checking
+request protection. A durable cursor advances past pending parts without
+deleting them, so they cannot cause an unbounded scan or starve later completed
+parts. The cursor and deletions commit together.
 
 | Category | Technical rule |
 | --- | --- |
@@ -91,6 +141,7 @@ The hourly job uses expiry indexes and deletes at most 128 rows from each privac
 | Consent evidence | Category-specific configured period of at least 366 days |
 | Disclosure ledger and buyer mappings | Configured justified period; mappings renewed for each retained disclosure |
 | Rights evidence | Configured justified period; open requests remain available until resolved |
+| Operational export parts | Original request rights expiry; pending requests protected; completed expired parts denied before bounded removal |
 | Active-account preference | While the account is active; closing starts the configured restricted evidence retention period |
 | Closed-account tombstone | Maximum configured consent/disclosure/rights period, then bounded removal once open rights work ends |
 | Completed operational task result | Configured category period; pending work is retained until resolved |

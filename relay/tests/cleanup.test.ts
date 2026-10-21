@@ -3,7 +3,7 @@ import { applyD1Migrations, evictDurableObject, reset, runInDurableObject } from
 import { beforeEach, expect, it, vi } from "vitest";
 import worker from "../src/index.js";
 import { operationalCleanup } from "../src/cleanup.js";
-import { privacyCleanup } from "../src/privacy/index.js";
+import { privacyCleanup, privacyRoute } from "../src/privacy/index.js";
 import type { Env } from "../src/types.js";
 
 const bindings = env as unknown as Env & { TEST_MIGRATIONS: { name: string; queries: string[] }[] };
@@ -12,7 +12,8 @@ const HOUR = 3_600_000;
 const privacy = () => bindings.PRIVACY_AUTHORITY.get(bindings.PRIVACY_AUTHORITY.idFromName("privacy-v1"));
 beforeEach(async () => { vi.restoreAllMocks(); await reset(); await applyD1Migrations(bindings.DB, bindings.TEST_MIGRATIONS); });
 
-function observedEnv(options: { failedInsert?: string; failedAck?: string } = {}) {
+interface CleanupFaults { failedInsert?: string; failedAck?: string; lostAck?: string; failedProgress?: string; delayedAck?: { requestId: string; started: () => void; released: Promise<void> } }
+function observedEnv(options: CleanupFaults = {}) {
   const counts = { queries: 0, calls: 0 };
   const originals = new WeakMap<D1PreparedStatement, D1PreparedStatement>();
   function statement(raw: D1PreparedStatement, sql: string, values: unknown[] = []): D1PreparedStatement {
@@ -22,6 +23,9 @@ function observedEnv(options: { failedInsert?: string; failedAck?: string } = {}
         counts.queries += 1;
         if (sql.startsWith("INSERT OR IGNORE INTO privacy_operational_tasks") && values[0] === options.failedInsert) {
           delete options.failedInsert; throw new Error("fixture_enqueue_unavailable");
+        }
+        if (key === "run" && sql.startsWith("UPDATE privacy_operational_tasks") && options.failedProgress && values.includes(options.failedProgress)) {
+          delete options.failedProgress; throw new Error("fixture_progress_unavailable");
         }
         return Reflect.apply(Reflect.get(target, key) as (...args: unknown[]) => unknown, target, args);
       };
@@ -48,7 +52,12 @@ function observedEnv(options: { failedInsert?: string; failedAck?: string } = {}
               const body = await request.clone().json<{ requestId: string }>();
               if (body.requestId === options.failedAck) { delete options.failedAck; return Response.json({ error: "fixture_ack_unavailable" }, { status: 503 }); }
             }
-            return object.fetch(request);
+            const requestId = path === "/internal/operational" && (options.lostAck || options.delayedAck) ? (await request.clone().json<{ requestId: string }>()).requestId : null;
+            const delayed = options.delayedAck;
+            const response = await object.fetch(request);
+            if (requestId === options.lostAck) { delete options.lostAck; await response.arrayBuffer(); return Response.json({ error: "fixture_reply_lost" }, { status: 503 }); }
+            if (delayed && requestId === delayed.requestId) { delete options.delayedAck; delayed.started(); await delayed.released; }
+            return response;
           };
           const value: unknown = Reflect.get(object, field); return typeof value === "function" ? value.bind(object) : value;
         } });
@@ -76,7 +85,75 @@ async function queue(count: number, accountIds: string[], now: number, closeFirs
   await bindings.DB.batch(Array.from({ length: count }, (_, i) => bindings.DB.prepare("INSERT INTO privacy_operational_tasks(request_id,account_id,action,requested_at,due_at,expires_at) VALUES(?,?,?,?,?,?)").bind(`right-${String(i).padStart(3, "0")}`, accountIds[i % accountIds.length]!, closeFirst && i === 0 ? "close" : "export", now - HOUR + i, now + 30 * DAY, now + 30 * DAY)));
 }
 
-it("bounds the complete populated scheduled path and leaves excess work durable", async () => {
+it("delivers all device-history parts across lost replies, failed progress writes and eviction", async () => {
+  let now = Date.now(); const id = "history-export-fixture"; const created = now - DAY;
+  await account(id, created);
+  const history = Array.from({ length: 128 }, (_, i) => `history-${String(i).padStart(3, "0")}`);
+  await bindings.DB.batch(history.map((device, i) => bindings.DB.prepare("INSERT INTO relay_devices(id,account_id,session_id,label,created_at,last_used_at,revoked_at,os_family,cli_major) VALUES(?,?,?,?,?,?,?,'linux',1)").bind(device, id, `session-${device}`, `Device ${i} ${"界".repeat(40)}`, created, created, i < 7 ? null : created + HOUR)));
+  await account("other-export-fixture", created);
+  const headers = { origin: bindings.RELAY_ORIGIN, "content-type": "application/json" };
+  const request = (path: string, body: unknown) => new Request(bindings.RELAY_ORIGIN + path, { method: "POST", headers, body: JSON.stringify(body) });
+  const started = await privacyRoute(request("/api/privacy/rights/request", { kind: "export", jurisdiction: "fixture" }), bindings, { accountId: id, sessionId: "fixture-session", deviceId: null, email: `${id}@example.invalid`, termsVersion: bindings.TERMS_VERSION });
+  expect(started?.status).toBe(200);
+  const { requestId, statusKey } = await started!.json<{ requestId: string; statusKey: string }>(); const receipt = { requestId, statusKey };
+  type ExportStatus = { operational_state: string; part: number; nextPart: number | null; operational_result: { devices: { id: string; label: string }[]; deviceExport: { partCount: number; deviceCount: number; complete: boolean } } };
+  async function tracked(part?: number): Promise<ExportStatus> {
+    const response = await privacyRoute(request("/api/privacy/rights/status", { ...receipt, ...(part === undefined ? {} : { part }) }), bindings, null);
+    expect(response?.status).toBe(200); expect(response?.headers.get("cache-control")).toBe("no-store");
+    return response!.json<ExportStatus>();
+  }
+  const taskState = () => bindings.DB.prepare("SELECT state FROM privacy_operational_tasks WHERE request_id=?").bind(receipt.requestId).first();
+  const faults: CleanupFaults = {}; const observed = observedEnv(faults);
+  const clock = vi.spyOn(Date, "now").mockImplementation(() => now);
+  async function nextAttempt(): Promise<void> { now += HOUR + 1; await operationalCleanup(observed.bindings); }
+
+  await operationalCleanup(observed.bindings);
+  // This public state assertion fails on the truncated old implementation before any part API or new table is used.
+  expect(await taskState()).toEqual({ state: "pending" });
+  expect((await tracked()).operational_state).toBe("pending");
+  const first = await tracked(0); expect(first.operational_result.devices).toHaveLength(64); expect(first.nextPart).toBe(1);
+  await bindings.DB.prepare("INSERT INTO relay_devices(id,account_id,session_id,label,created_at,last_used_at) VALUES('after-watermark',?,'after-watermark-session','Later device',?,?)").bind(id, now, now).run();
+  faults.lostAck = receipt.requestId;
+  await nextAttempt();
+  expect(faults.lostAck).toBeUndefined(); expect(await taskState()).toEqual({ state: "pending" });
+  await evictDurableObject(privacy());
+  const persisted = await tracked(1); expect(persisted.operational_result.devices).toHaveLength(64); expect(persisted.operational_state).toBe("pending");
+  await bindings.DB.prepare("UPDATE relay_devices SET label='Changed after durable part' WHERE account_id=? AND id=?").bind(id, persisted.operational_result.devices[0]!.id).run();
+  let release!: () => void; let markHeld!: () => void;
+  const held = new Promise<void>(resolve => { markHeld = resolve; }); const released = new Promise<void>(resolve => { release = resolve; });
+  faults.delayedAck = { requestId: receipt.requestId, started: markHeld, released };
+  const lateAttempt = nextAttempt(); await held;
+  try { await nextAttempt(); } finally { release(); await lateAttempt; }
+  expect((await tracked(1)).operational_result.devices).toEqual(persisted.operational_result.devices);
+  expect(await taskState()).toEqual({ state: "pending" });
+
+  faults.failedProgress = receipt.requestId;
+  await nextAttempt();
+  expect(faults.failedProgress).toBeUndefined(); expect(await taskState()).toEqual({ state: "pending" });
+  expect((await tracked(2)).operational_state).toBe("completed");
+  await evictDurableObject(privacy());
+  await nextAttempt();
+  expect(await taskState()).toEqual({ state: "completed" });
+  const parts = await Promise.all([0, 1, 2].map(tracked));
+  expect(parts.map(part => part.part)).toEqual([0, 1, 2]); expect(parts.map(part => part.nextPart)).toEqual([1, 2, null]);
+  const records = parts.flatMap(part => part.operational_result.devices);
+  expect(records.map(device => device.id)).toEqual([`device-${id}`, ...history].sort());
+  expect(new Set(records.map(device => device.id)).size).toBe(129);
+  expect(parts[2]!.operational_result.deviceExport).toMatchObject({ partCount: 3, deviceCount: 129, complete: true });
+  expect(parts.every(part => part.operational_state === "completed")).toBe(true);
+  const sizes = parts.map(part => new TextEncoder().encode(JSON.stringify(part.operational_result)).byteLength);
+  expect(Math.max(...sizes)).toBeLessThan(48 * 1024);
+  const storedSizes = await runInDurableObject(privacy(), async (_instance, state) => state.storage.sql.exec<{ bytes: number }>("SELECT length(CAST(payload AS BLOB)) AS bytes FROM privacy_operational_parts WHERE request_id=? ORDER BY part", receipt.requestId).toArray());
+  expect(storedSizes).toHaveLength(3); expect(Math.max(...storedSizes.map(part => part.bytes))).toBeLessThan(48 * 1024);
+  console.info({ exportDeviceRows: records.length, exportParts: parts.length, largestPublicPartBytes: Math.max(...sizes), largestStoredPartBytes: Math.max(...storedSizes.map(part => part.bytes)) });
+  const denied = await privacyRoute(request("/api/privacy/rights/status", { ...receipt, statusKey: "0".repeat(64), part: 1 }), bindings, null);
+  expect(denied?.status).toBe(404); expect(await denied?.json()).toEqual({ error: "request_not_found" });
+  const unavailable = await privacyRoute(request("/api/privacy/rights/status", { ...receipt, part: 3 }), bindings, null);
+  expect(unavailable?.status).toBe(404); await unavailable?.arrayBuffer();
+  clock.mockRestore();
+});
+
+it.each([true, false])("bounds the populated scheduled path and leaves excess work durable (closure=%s)", async closeFirst => {
   const now = Date.now();
   const ids = Array.from({ length: 30 }, (_, i) => `account-${String(i).padStart(3, "0")}-fixture`);
   for (const [i, id] of ids.entries()) await account(id, now - DAY + i);
@@ -85,7 +162,7 @@ it("bounds the complete populated scheduled path and leaves excess work durable"
   await bindings.DB.prepare("DELETE FROM relay_devices WHERE account_id='unadmitted-fixture'").run();
   await bindings.DB.prepare("DELETE FROM relay_billing WHERE account_id='unadmitted-fixture'").run();
   await bindings.DB.prepare("DELETE FROM relay_accounts WHERE id='unadmitted-fixture'").run();
-  await rights(128, ids, now, true); await queue(20, ids, now, true);
+  await rights(128, ids, now, closeFirst); await queue(20, ids, now, closeFirst);
   await bindings.DB.batch(ids.slice(0, 20).map((id, i) => bindings.DB.prepare("INSERT INTO relay_billing_cancellations(account_id,state,created_at,updated_at) VALUES(?,'pending',?,?)").bind(id, now - DAY + i, now - DAY + i)));
   const room = "room-for-cleanup-fixture";
   await runInDurableObject(bindings.ACCOUNT_QUOTA.get(bindings.ACCOUNT_QUOTA.idFromName(ids[0]!)), async (_instance, state) => { state.storage.sql.exec("INSERT INTO room(singleton,room,expires_at) VALUES(1,?,?)", room, now + HOUR); });
@@ -107,7 +184,7 @@ it("bounds the complete populated scheduled path and leaves excess work durable"
   expect(observed.counts.calls).toBeLessThanOrEqual(11);
   expect(observed.counts.queries + observed.counts.calls).toBeLessThan(50);
   console.info({ scheduledD1Queries: observed.counts.queries, scheduledInternalCalls: observed.counts.calls });
-  expect(await bindings.DB.prepare("SELECT state FROM privacy_operational_tasks WHERE request_id='right-000'").first()).toEqual({ state: "exception" });
+  expect(await bindings.DB.prepare("SELECT state FROM privacy_operational_tasks WHERE request_id='right-000'").first()).toEqual({ state: closeFirst ? "exception" : "completed" });
   expect(await bindings.DB.prepare("SELECT COUNT(*) AS n FROM privacy_operational_tasks WHERE state='pending'").first()).toEqual({ n: 19 });
   expect(await bindings.DB.prepare("SELECT COUNT(*) AS n FROM relay_billing_cancellations WHERE state='pending'").first()).toEqual({ n: 20 });
   expect(await bindings.DB.prepare("SELECT COUNT(*) AS n FROM relay_accounts WHERE quota_cleanup_at IS NOT NULL").first()).toEqual({ n: 2 });

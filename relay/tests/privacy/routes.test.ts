@@ -94,6 +94,15 @@ describe("public privacy routes and account ownership", () => {
     expect(created?.status).toBe(200); const record = await created?.json() as { requestId: string; statusKey: string };
     const tracked = await privacyRoute(request("/api/privacy/rights/status", { method: "POST", headers, body: JSON.stringify({ requestId: record.requestId, statusKey: record.statusKey }) }), config, null);
     expect(tracked?.status).toBe(200); expect(await tracked?.json()).toMatchObject({ id: record.requestId, kind: "access", state: "acknowledged" });
+    const form = (part: string) => privacyRoute(request("/api/privacy/rights/status", { method: "POST", headers: { origin: headers.origin, "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ requestId: record.requestId, statusKey: record.statusKey, part }).toString() }), config, null);
+    const pending = await form(""); expect(pending?.status).toBe(200); expect(await pending?.text()).toContain(record.requestId);
+    const authority = config.PRIVACY_AUTHORITY.get(config.PRIVACY_AUTHORITY.idFromName("privacy-v1"));
+    const saved = await authority.fetch("https://internal/internal/operational", { method: "POST", body: JSON.stringify({ requestId: record.requestId, accountId: account().accountId, state: "completed", result: {}, part: { number: 0, after: null, through: { createdAt: 1, id: "route-device" }, capturedAt: Date.now(), records: [{ id: "route-device", label: "Route device", created_at: 1, revoked_at: null, os_family: "linux", cli_major: 1 }], next: null, complete: true } }) });
+    expect(saved.status).toBe(200); await saved.arrayBuffer();
+    const selected = await form("0"); expect(selected?.status).toBe(200); expect(selected?.headers.get("content-type")).toContain("text/html");
+    const html = await selected?.text(); expect(html).toContain("route-device"); expect(html).not.toContain(record.statusKey);
+    const invalid = await form("0.5"); expect(invalid?.status).toBe(400); expect(invalid?.headers.get("content-type")).toContain("text/html");
+    const error = await invalid?.text(); expect(error).toContain("invalid_part"); expect(error).not.toContain("route-device");
     const access = await privacyRoute(request("/api/privacy/access", { headers: { "x-rights-status-key": record.statusKey } }), config, null);
     expect(access?.status).toBe(401); await access?.arrayBuffer();
   });

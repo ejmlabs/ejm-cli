@@ -7,6 +7,9 @@ import { errorPage, resultPage } from "./privacy/html.js";
 import { object, text } from "./privacy/schema.js";
 import { withCurrentNav } from "./ui.js";
 
+const ACTIVE_DEVICE_LIMIT = 16;
+const DEVICE_LIST_LIMIT = 64;
+
 export async function accountRoute(request: Request, env: Env, auth: AccountSession): Promise<Response | null> {
   const path = new URL(request.url).pathname;
   if (path === "/v1/account" && request.method === "GET") {
@@ -28,7 +31,11 @@ export async function accountRoute(request: Request, env: Env, auth: AccountSess
     return Response.json({ accepted: true, version: env.TERMS_VERSION, commercialChoices: { profile: false, usage: false } });
   }
   if (path === "/v1/devices" && request.method === "GET") {
-    const result = await env.DB.prepare("SELECT id,label,created_at,last_used_at,revoked_at,os_family,cli_major FROM relay_devices WHERE account_id=? ORDER BY created_at DESC LIMIT 64").bind(auth.accountId).all();
+    const result = await env.DB.prepare(`SELECT * FROM (
+      SELECT * FROM (SELECT id,label,created_at,last_used_at,revoked_at,os_family,cli_major FROM relay_devices INDEXED BY relay_devices_revoked WHERE account_id=? AND revoked_at IS NULL ORDER BY created_at DESC LIMIT ?)
+      UNION ALL
+      SELECT * FROM (SELECT id,label,created_at,last_used_at,revoked_at,os_family,cli_major FROM relay_devices INDEXED BY relay_devices_account WHERE account_id=? AND revoked_at IS NOT NULL ORDER BY created_at DESC LIMIT ?)
+    ) ORDER BY revoked_at IS NOT NULL,created_at DESC,id DESC LIMIT ?`).bind(auth.accountId, ACTIVE_DEVICE_LIMIT, auth.accountId, DEVICE_LIST_LIMIT, DEVICE_LIST_LIMIT).all();
     return Response.json({ devices: result.results });
   }
   if (path === "/v1/devices" && request.method === "POST") {
@@ -41,7 +48,7 @@ export async function accountRoute(request: Request, env: Env, auth: AccountSess
     if (existing) return existing.revoked_at === null ? Response.json({ id: existing.id }) : failure(403, "device_revoked");
     const id = crypto.randomUUID();
     const now = Date.now();
-    await env.DB.prepare("INSERT INTO relay_devices(id,account_id,session_id,label,created_at,last_used_at,os_family,cli_major) SELECT ?,?,?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM relay_devices WHERE account_id=? AND revoked_at IS NULL)<16 ON CONFLICT(session_id) DO NOTHING").bind(id, auth.accountId, auth.sessionId, body.label, now, now, body.osFamily ?? null, body.cliMajor ?? null, auth.accountId).run();
+    await env.DB.prepare("INSERT INTO relay_devices(id,account_id,session_id,label,created_at,last_used_at,os_family,cli_major) SELECT ?,?,?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM relay_devices WHERE account_id=? AND revoked_at IS NULL)<? ON CONFLICT(session_id) DO NOTHING").bind(id, auth.accountId, auth.sessionId, body.label, now, now, body.osFamily ?? null, body.cliMajor ?? null, auth.accountId, ACTIVE_DEVICE_LIMIT).run();
     const registered = await env.DB.prepare("SELECT id,revoked_at FROM relay_devices WHERE account_id=? AND session_id=?").bind(auth.accountId, auth.sessionId).first<{ id: string; revoked_at: number | null }>();
     if (!registered) return failure(409, "device_limit");
     if (registered.revoked_at !== null) return failure(403, "device_revoked");

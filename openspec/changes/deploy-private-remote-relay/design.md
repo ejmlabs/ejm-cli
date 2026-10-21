@@ -298,6 +298,66 @@ package, migration, service, timer, entitlement path or payment activation is
 included. Update affected public guides while keeping publication and live
 authenticated acceptance open.
 
+### Device history and partial quota corrections
+
+The complete reviews of `8a2e7feb8a9626173052160f6a34ab091b1c77f4`
+found two medium device-history defects and one low quota defect. Linux and
+macOS quality passed, but this source is not accepted for release.
+
+Keep the dashboard response at 64 safe device rows. Return every active device
+first, with newest-first ordering inside the active and revoked groups. Reuse
+the registration limit of 16 and existing indexes: union at most 16 active and
+64 revoked candidates, then cap the result at 64. Preserve account isolation,
+origin checks and revocation through a fresh account session. Measure the query
+plan and representative history; do not infer global scale from the two-account
+beta.
+
+Access and export tasks must deliver every retained device in their capture
+window. Read at most 65 rows per attempt and store at most 64 in one part, ordered
+by `(created_at,id)` under a fixed upper watermark captured on the first attempt.
+Add one D1 index on `(account_id,created_at,id)` for tied timestamps. Retain
+progress in the existing task result JSON when claiming work. Process one task
+and one part per scheduled invocation, within existing query and subrequest
+budgets. This is a paginated capture, not a transactionally frozen snapshot.
+
+Store bounded parts and canonical acknowledgements in the existing privacy
+authority's SQLite storage, keyed by request and part. Keep its operational
+result as a small manifest. A part must be durable before D1 advances, and a
+repeated part returns its original acknowledgement without replacing data.
+Conditional progress updates cannot regress a later cursor. Failed replies,
+failed progress writes and authority eviction remain retryable. Both stores
+stay pending until the terminal part is acknowledged. Each serialized UTF-8
+part stays below 48 KiB, under the existing 64 KiB internal request cap.
+
+Extend the existing private-key POST status API with an optional part number.
+Check the original request ID and key before reading any part, return bounded
+continuation metadata, and use only the existing public ejm-ui Input and Button
+for the status form. Keep keys out of URLs and logs. Parts inherit the original
+rights expiry without retry extensions; protect pending work and deny expired
+completed parts before bounded cleanup removes them. Total retained export
+storage grows with history and must be measured. No new dependency, binding,
+service or authority is needed. Older code cannot deliver or clean these parts,
+so recovery after storing them requires a compatible forward fix rather than
+an unqualified rollback.
+
+Bound cleanup reads before filtering protected requests. Use a composite part
+expiry index and a single-row SQLite cursor over `(expires_at,request_id,part)`
+in the same authority. Inspect at most 128 candidates per pass, advance past
+protected parts and wrap at most once. Delete only eligible candidates within
+that inspected range. Keep cursor progress and deletion in one transaction so
+a large expired pending prefix cannot cause an unbounded scan or starve later
+completed parts. Verify this concrete regression in the existing retention case.
+
+After renewing a quota reservation, check that both frame and byte allowances
+cover the pending frame before subtraction or forwarding. A positive partial
+reservation is not permission to exceed its remaining bytes. Retain fresh
+sender, peer and retirement checks and close with the existing quota status.
+
+Require meaningful failures on the old paths, corrected focused regressions,
+the unchanged full gate, measured source and artifact bounds, and fresh human
+admission and complete hosted reviews. Preserve all prior corrections and leave
+release task 2.4 open until protected acceptance and deployment evidence exist.
+
 ### Dependency and artifact bounds
 
 Activate the exact 51-line candidate manifest already reviewed with its inherited

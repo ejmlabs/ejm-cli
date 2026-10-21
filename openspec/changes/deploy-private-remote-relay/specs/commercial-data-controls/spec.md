@@ -77,6 +77,18 @@ Users SHALL be able to inspect, correct, export and request deletion of account,
 - **WHEN** a rights request concerns a prior buyer export
 - **THEN** the service uses the disclosure ledger and recipient contract process to track required follow-up without falsely promising technical erasure of every buyer copy
 
+#### Scenario: Device history exceeds one rights export part
+- **WHEN** retained device history within an access or export capture window exceeds one bounded part
+- **THEN** the existing workflow stores every part durably, remains pending until terminal acknowledgement, survives retries and authority eviction without duplicate or missing parts, and permits private-key retrieval of each part without putting the key in a URL
+
+#### Scenario: Export parts reach their retention deadline
+- **WHEN** a completed request's original rights retention expires
+- **THEN** its parts become inaccessible and bounded cleanup removes them without extending expiry on retry or deleting pending work
+
+#### Scenario: Expired pending parts precede completed parts
+- **WHEN** protected expired parts fill a cleanup batch ahead of completed expired parts
+- **THEN** a durable cursor bounds inspected candidates and advances past protected parts so later eligible parts are removed without deleting pending work
+
 #### Scenario: Account closes from the dashboard
 - **WHEN** an authenticated user confirms dashboard account closure after a prior disclosure
 - **THEN** durable close-rights, recipient and operational work exist before session revocation, and the response exposes a private tracking key the user can retain

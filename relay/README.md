@@ -86,6 +86,10 @@ fixtures inert and outside package installs.
 
 Reservations debit the account before forwarding. A lost or disconnected allocation stays spent. Reconnecting, hibernation, a second device or another routing ID cannot reset that ledger. Counter updates in socket attachments avoid per-frame application SQL. Quota and ticket state use persistent SQLite in the per-account authority.
 
+A final reservation can contain fewer bytes than the usual block. Forwarding
+must check that the renewed allowance covers the whole frame. A larger frame
+closes with `daily_quota_exhausted`; no partial frame is sent.
+
 A lease is checked on every frame. A revoked account or device cannot renew authority. Existing device/logout authority lasts at most its current lease. Account closure and room stop close both peers before acknowledgement.
 
 A disconnected pair retires together. A lone peer that already used the old
@@ -229,7 +233,7 @@ do not infer account ownership from an ID.
 | `GET /health` | No authentication | `{"service":"ejm-cli-relay","protocol":1}`. It needs no session. |
 | `GET /v1/account` | Session credential | Top-level `id`, `email`, `termsVersion`, `requiredTermsVersion`, `deviceId`, `account` and `plan`. `account` may be `null` for a linked but unadmitted identity. |
 | `POST /v1/account/terms` | `{"version":"CURRENT_TERMS_VERSION"}` | `accepted:true`, `version` and default-off commercial choices. Needs approved retention, open admission and available capacity, including for an unadmitted or stale-terms user. Verify `account.status:"active"` and `account.terms_version === requiredTermsVersion` with a fresh account GET. |
-| `GET /v1/devices` | Session credential | `devices`, newest first, at most 64 records; includes revoked devices. |
+| `GET /v1/devices` | Session credential | `devices`, at most 64 safe metadata records. All active devices appear first, then revoked history; each group is newest first. Full retained history is available through a tracked rights export. |
 | `POST /v1/devices` | `label`; optional `osFamily` and `cliMajor` | `id`; status 201 for a new device or 200 for this session's existing device. Current terms are required; at most 16 devices may be active. Labels allow 1 to 64 Unicode letters/digits, spaces, `.`, `_` or `-`; OS is `macos`, `linux`, `windows` or `other`; CLI major is an integer from 0 through 1000. |
 | `POST /v1/devices/DEVICE_ID/revoke` | No parsed body; `{}` is sufficient | `revoked:true`, `existingLeaseMaximumSeconds:900`. Deletes that device's session; unknown/already-revoked IDs return `404/device_not_found`. |
 | `POST /v1/logout` | No parsed body; `{}` is sufficient | Same revocation fields for this session's relay device; deletes the session. A lost response leaves server revocation unconfirmed. |
@@ -415,6 +419,11 @@ Hourly capacities are attempt limits, not guaranteed completion rates. Each acco
 
 Rights exports include operational identity, device and payment references and clearly labelled reserved allowances. They exclude secrets. The operator must still complete and record required recipient follow-up; completing the operational task does not complete the whole rights request.
 
+Device history uses durable export parts of at most 64 rows, one part per
+scheduled attempt. The request remains pending until its last part is saved
+and acknowledged. Retrieve each part with the original private request key;
+see [export paging and recovery](../docs/relay-privacy.md#operational-export-parts).
+
 Publish how Cloudflare, GitHub, Stripe, backups and legally retained records are handled. Provider backups and recipient copies are not erased by deleting a D1 row. The operator must monitor unresolved rights tasks, overdue requests and cancellation failures.
 
 ## Payments
@@ -517,6 +526,9 @@ share-retirement fences, durable Room ownership or pending closure handling are
 unsupported while affected state remains live. Prefer a compatible closed forward
 fix. Owners must stop affected shares locally or wait through their original
 expiry before considering older code; preserve any outstanding rights work.
+After storing paginated export parts, use code that can deliver and clean them.
+Older single-result versions cannot safely handle that state. The additive
+device paging index needs no data rewrite and stays in place on code recovery.
 Stop rooms on transport incompatibility and pair again when keys/epochs change.
 
 ## Dependencies

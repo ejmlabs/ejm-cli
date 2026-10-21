@@ -47,6 +47,10 @@ Users SHALL be able to list safe relay device metadata, revoke devices, log out 
 - **WHEN** an account is recovered on a new device
 - **THEN** the device can authenticate to account services but cannot decrypt or control an existing shared session until locally paired
 
+#### Scenario: Revoked device history exceeds the dashboard bound
+- **WHEN** an account has older active devices and more than 64 newer revoked devices
+- **THEN** its bounded safe metadata list includes every active device first, newest first within each group, and a fresh account session can revoke any listed active device without transport enrollment
+
 #### Scenario: Fresh browser account stops sharing
 - **WHEN** a verified account session without a registered transport device stops a share owned by that account
 - **THEN** the account service retires that share under its mutation-origin checks without enrolling a controller or granting decryption or execution authority

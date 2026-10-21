@@ -13,8 +13,10 @@ normal local gate at 9336, but both complete hosted reviews found further defect
 The [second corrections](relay-publication.md#second-worker-review-corrections)
 passed their normal local gate at 2de6. Its first hosted review found two more
 defects and its second review timed out without a report. The
-[third corrections](relay-publication.md#third-worker-review-corrections) remain
-prepared, with fresh hosted review, protected adoption and deployment pending. See
+[third corrections](relay-publication.md#third-worker-review-corrections)
+passed Linux and macOS checks at 8a2, but the complete reviews found device-history
+and quota defects. Their [corrections](relay-publication.md#device-history-and-quota-review-corrections)
+are in preparation; fresh hosted acceptance, protected adoption and deployment remain pending. See
 [publication status](relay-publication.md) and [deployment status](remote-deployment.md).
 
 Controller HTML and every `/control/assets/` file require the verified account
@@ -69,6 +71,14 @@ the old share rejects. Start a new host share and pair its new invitation after
 a reload.
 
 ## Access and actions
+
+The account dashboard lists at most 64 devices, with every active device before
+revoked history and newest first within each group. A fresh signed-in browser
+can revoke an active device without becoming a transport device or pairing with
+a host. Use a [tracked export](relay-privacy.md#operational-export-parts) for full
+retained device history. The public request-status form uses the same shared
+components and accepts an optional export part number; it keeps the private key
+in the POST body.
 
 View invitations disable mutation controls. Control invitations permit submit,
 steer, queue and cancel. Each action identifies the displayed session, active

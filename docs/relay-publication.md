@@ -8,7 +8,9 @@ new UI installation or browser runtime. Worker PR #23's
 [second corrections](#second-worker-review-corrections) passed the normal local
 gate at `2de6de3958a288da4ed90c5379c26238a739e06d`. The first hosted review
 reported two medium blockers; the second timed out without a final report.
-The [third corrections](#third-worker-review-corrections) are being prepared.
+The [third corrections](#third-worker-review-corrections) passed local and hosted
+platform checks at 8a2, but both complete reviews identified the further
+[device-history and quota corrections](#device-history-and-quota-review-corrections).
 Each candidate must pass its local checks. Fresh hosted acceptance, protected
 adoption, deployment and authenticated live acceptance remain pending.
 The historical closed deployment is recorded in [deployment status](remote-deployment.md).
@@ -196,6 +198,37 @@ access controls and protected asset denials. Real account/device sign-in, native
 and browser pairing, view/control, reconnect and revocation at HTTPS/WSS remain
 separate acceptance checks. Do not infer them from an OAuth start or a sample
 preview. Preserve existing secrets and durable state on retries.
+
+## Device history and quota review corrections
+
+Head `8a2e7feb8a9626173052160f6a34ab091b1c77f4` passed its unchanged
+local gate, including 152 Worker tests, eleven Chrome cases and the native
+checks. [Hosted run 39554666375](https://github.com/ejmlabs/ejm-cli/actions/runs/39554666375)
+passed Linux/macOS quality, registry and standards. Both reviews completed:
+the first found two medium device-history defects; the second passed with one
+low quota advisory. These results block release of 8a2.
+
+The next correction keeps every active device visible within the dashboard's
+64-row response, then fills remaining space with recent revoked history.
+Access/export requests deliver retained device history through durable bounded
+parts rather than silently stopping at 64 records. They use the existing queue
+and privacy authority plus one additive D1 paging index. Stored acknowledgements
+make retries safe after a lost reply or authority eviction. The private-key
+status endpoint and shared form expose individual parts. Pending work retains
+its original rights protection; completed parts expire under the request's
+original deadline. See [paging and recovery](relay-privacy.md#operational-export-parts).
+
+Forwarding also rejects a frame larger than a renewed partial quota allowance.
+No frame is split and no allowance can become negative. Existing lease, peer
+and room-retirement checks remain required.
+
+These changes are being prepared, not released. They need old-path failure
+controls, corrected focused checks, the full gate, fresh exact-source hosted
+review and protected acceptance. Preserve closed signup, the two-account cap,
+disabled billing/commercial programs, existing secrets and all earlier fixes.
+The new index must pass the release schema preflight before application. Once
+export parts exist, recovery requires code that can deliver and clean them;
+do not roll back to a single-result implementation.
 
 ## Current local checks
 

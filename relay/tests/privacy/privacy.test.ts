@@ -25,6 +25,7 @@ function it(name: string, callback: () => void | Promise<void>): void {
 class SQLiteStore implements SqlStore {
   private depth = 0;
   private readonly storage: DurableObjectStorage;
+  maxRowsRead = 0;
   constructor() {
     if (activeStorage === null) throw new Error("SQLite fixture requires the Durable Object context");
     this.storage = activeStorage;
@@ -33,7 +34,7 @@ class SQLiteStore implements SqlStore {
       this.storage.sql.exec(`DROP TABLE ${row.name}`);
     }
   }
-  exec<T extends Record<string, unknown>>(query: string, ...bindings: Binding[]): T[] { return this.storage.sql.exec(query, ...bindings).toArray() as T[]; }
+  exec<T extends Record<string, unknown>>(query: string, ...bindings: Binding[]): T[] { const cursor = this.storage.sql.exec(query, ...bindings); const rows = cursor.toArray() as T[]; this.maxRowsRead = Math.max(this.maxRowsRead, cursor.rowsRead); return rows; }
   transaction<T>(callback: () => T): T {
     if (this.depth > 0) return callback();
     return this.storage.transactionSync(() => { this.depth += 1; try { return callback(); } finally { this.depth -= 1; } });
@@ -289,7 +290,7 @@ describe("coarse measurements, estimates and retention", () => {
 
 describe("rights isolation, deadlines and clear notices", () => {
   it("returns only the current account, tracks deadlines and prevents premature completion", async () => {
-    const { service, advance } = fixture(); enroll(service, actor());
+    const { service, advance, clock } = fixture(); enroll(service, actor());
     const request = await service.rightsRequest(actor(), { kind: "export", jurisdiction: "fixture" }) as { requestId: string; responseDue: number };
     expect(service.rightsList(actor("another"))).toEqual([]);
     expect(() => service.rightsUpdate(actor("another"), { requestId: request.requestId, action: "extend", notice: "Need more time" })).toThrow("operator_required");
@@ -297,7 +298,7 @@ describe("rights isolation, deadlines and clear notices", () => {
     expect(() => service.rightsUpdate(operator, { requestId: request.requestId, action: "extend", notice: "Again" })).toThrow("extension_not_allowed");
     advance(61 * DAY); expect(service.rightsList(actor())[0]).toMatchObject({ responseOverdue: true });
     expect(service.cleanup()).toMatchObject({ overdueRights: [{ id: request.requestId }] });
-    service.operationalUpdate({ requestId: request.requestId, state: "completed", result: { identity: "account owner only" } });
+    service.operationalUpdate({ requestId: request.requestId, accountId: "account-a", state: "completed", result: { identity: "account owner only" }, part: { number: 0, after: null, through: null, capturedAt: clock(), records: [], next: null, complete: true } });
     expect(service.rightsUpdate(operator, { requestId: request.requestId, action: "complete" })).toMatchObject({ state: "completed" });
   });
   it("closes transfers before acknowledging and preserves cross-store work after retry", async () => {
@@ -319,6 +320,42 @@ describe("rights isolation, deadlines and clear notices", () => {
     await expect(service.rightsStatus({ requestId: request.requestId, statusKey: "0".repeat(64) })).rejects.toThrow("request_not_found");
     await expect(service.rightsStatus({ requestId: "another-request", statusKey: request.statusKey })).rejects.toThrow("request_not_found");
     expect(JSON.stringify(await service.rightsStatus({ requestId: request.requestId, statusKey: request.statusKey }))).not.toContain("account-a");
+  });
+  it("retains pending export parts at their original expiry and removes completed parts in bounded passes", async () => {
+    const { service, store, advance, clock } = fixture();
+    const pending = await service.rightsRequest(actor("pending-account"), { kind: "access", jurisdiction: "fixture" }) as { requestId: string };
+    for (let part = 0; part < 17; part += 1) {
+      const id = `pending-${String(part).padStart(3, "0")}`;
+      service.operationalUpdate({ requestId: pending.requestId, accountId: "pending-account", state: "pending", ...(part === 0 ? { result: {} } : {}), part: { number: part, after: part === 0 ? null : { createdAt: START, id: `pending-${String(part - 1).padStart(3, "0")}` }, through: { createdAt: START, id: "pending-999" }, capturedAt: START, records: [{ id, label: "Pending device", created_at: START, revoked_at: null, os_family: "linux", cli_major: 1 }], next: { createdAt: START, id }, complete: false } });
+    }
+    advance(1);
+    const { requestId, statusKey } = await service.rightsRequest(actor(), { kind: "access", jurisdiction: "fixture" }) as { requestId: string; statusKey: string };
+    const expiry = store.exec<{ expires_at: number }>("SELECT expires_at FROM privacy_rights WHERE id=?", requestId)[0]!.expires_at;
+    const device = { id: "first-device", label: "Original label", created_at: START, revoked_at: null, os_family: "linux", cli_major: 1 };
+    const first = { number: 0, after: null, through: { createdAt: START, id: "last-device" }, capturedAt: clock(), records: [device], next: { createdAt: START, id: "first-device" }, complete: false };
+    const update = { requestId, accountId: "account-a", state: "pending", part: first, result: {} };
+    const acknowledgement = service.operationalUpdate(update);
+    advance(731 * DAY); service.cleanup(1);
+    expect(await service.rightsStatus({ requestId, statusKey, part: 0 })).toMatchObject({ operational_state: "pending", operational_result: { devices: first.records } });
+    expect(service.operationalUpdate({ ...update, part: { ...first, records: [{ ...device, label: "Changed on retry" }] } })).toEqual(acknowledgement);
+    const terminal = { ...first, number: 1, after: first.next, records: [{ ...device, id: "last-device", label: "Final device" }], next: null, complete: true };
+    service.operationalUpdate({ ...update, state: "completed", part: terminal });
+    expect(await service.rightsStatus({ requestId, statusKey, part: 0 })).toMatchObject({ operational_result: { devices: first.records } });
+    expect(store.exec<{ expires_at: number }>("SELECT expires_at FROM privacy_operational_parts WHERE request_id=? ORDER BY part", requestId)).toEqual([{ expires_at: expiry }, { expires_at: expiry }]);
+    service.rightsUpdate(operator, { requestId, action: "complete" });
+    await expect(service.rightsStatus({ requestId, statusKey, part: 1 })).rejects.toThrow("request_not_found");
+    let remaining = 2; let passes = 0; let largestRead = 0;
+    while (remaining > 0 && passes < 11) {
+      store.maxRowsRead = 0; service.cleanup(2); passes += 1;
+      largestRead = Math.max(largestRead, store.maxRowsRead); expect(store.maxRowsRead).toBeLessThanOrEqual(16);
+      const retained = store.exec("SELECT part FROM privacy_operational_parts WHERE request_id=?", requestId).length;
+      expect(remaining - retained).toBeLessThanOrEqual(2); remaining = retained;
+    }
+    expect(remaining).toBe(0);
+    expect(store.exec("SELECT part FROM privacy_operational_parts WHERE request_id=?", pending.requestId)).toHaveLength(17);
+    console.info({ partCleanupBatch: 2, partCleanupPasses: passes, largestStatementRowsRead: largestRead, pendingPartsRetained: 17 });
+    service.cleanup(2);
+    expect(store.exec("SELECT id FROM privacy_rights WHERE id=?", requestId)).toHaveLength(0);
   });
   it("offers accessible unchecked choices and a public optout without identity fields", () => {
     const { service } = fixture(); const who = actor(); const html = accountPage(service.status(who));
