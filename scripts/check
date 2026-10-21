@@ -1,24 +1,3 @@
-#!/usr/bin/env bash
-set -euo pipefail
-project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "$project_root"
-
-for required in cargo rustc python3; do
-    if ! command -v "$required" >/dev/null 2>&1; then
-        printf 'Missing %s. See docs/contributing.md.\n' "$required" >&2
-        exit 1
-    fi
-done
-
-python3 scripts/check_architecture.py
-cargo fmt --package ejm-cli -- --check
-cargo clippy --workspace --all-targets --locked -- -D warnings
-test_messages="$(mktemp "${TMPDIR:-/tmp}/ejm-cli-test-messages.XXXXXX")"
-trap 'rm -f "$test_messages"' EXIT
-cargo test --workspace --all-targets --locked --message-format=json-render-diagnostics | tee "$test_messages"
-cargo build --workspace --release --locked
-RUSTDOCFLAGS='-D warnings' cargo doc --workspace --no-deps --locked
-cargo machete --with-metadata
-cargo deny --locked --all-features check
-target_directory="${CARGO_TARGET_DIR:-target}"
-python3 scripts/check_terminal.py "$target_directory/release/ejm-cli" "$test_messages"
+#!/bin/sh
+set -eu
+exec python3 "$(dirname "$0")/check.py" "$@"

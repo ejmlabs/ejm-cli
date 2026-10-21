@@ -16,7 +16,17 @@ cargo install --locked --version 0.9.2 cargo-machete
 
 The repository's `rust-toolchain.toml` selects Rust 1.99.1 when using rustup, without changing your global default. A Homebrew installation of Rust 1.99.1 also works. The gate checks the compiler's reported version. Tool installation and advisory database updates need network access. `Cargo.lock` is committed and every build in the gate uses `--locked`.
 
-The complete gate validates architecture and skill routing, checks format, runs strict Clippy, runs deterministic tests, builds release binaries, checks Rust documentation, finds unused dependencies, checks licenses and advisories, and runs real PTY interaction/restoration tests. It is the entry point for local work, the pre-commit hook and CI. Build jobs are capped at two in `.cargo/config.toml`. `CARGO_TARGET_DIR` may share a local compilation cache.
+The complete gate validates architecture and skill routing, checks format,
+runs strict Clippy and deterministic tests, builds release binaries, checks Rust
+documentation, dependencies, licenses and advisories, and runs real PTY tests.
+It is the entry point for local work, the pre-commit hook and CI. Build jobs are
+capped at two in `.cargo/config.toml`. `CARGO_TARGET_DIR` may share a local cache.
+
+The Worker layer also requires the pinned Node/npm, WebAssembly target,
+wasm-bindgen CLI and installed Google Chrome. It builds debug/production WASM,
+checks Worker/frontend types and schema, and runs local Worker, native and
+real-browser fixtures. See [Relay local checks](../relay/README.md#local-checks)
+for tools and the artifact-bound standalone phase.
 
 The hook installer changes only this repository's `core.hooksPath`. It does not install a global hook. The quality gate runs on Linux and macOS. The trusted `.github/workflows/pr.yml` and `.github/workflows/release.yml` entry points read the reviewed full 40-character sibling harness commit from `.github/harness-revision`.
 
@@ -77,7 +87,11 @@ Retain the unchanged full gate for each following source before hosted review
 and protected adoption. The d8 local pass remains earlier evidence, separate
 from PR #21's exact-source acceptance. The following
 [inert UI/Relay prerequisite](ci-bootstrap.md#current-inert-shared-ui-and-relay-inputs)
-advances static review inputs; Worker/UI and deployment acceptance remain separate.
+is accepted through protected PR #22 merge 78810826. The complete Worker source
+starts there and consumes the selected public UI packages from protected 79a1.
+Verify the full UI source and lifecycle-disabled installation, preserve native
+package identities while adding required browser lock edges, and run the combined
+gate. Worker/UI adoption and deployment acceptance remain separate.
 
 The native queue correction consumes the harness owner's exact current-run
 completion subscription. It keeps one completion receiver for the revocable
@@ -103,7 +117,10 @@ shared directory do not select a binary. `check_terminal.py --native-fixture
 CARGO_TEST_MESSAGES_JSONL` exposes the same validated path to other supervisors.
 The supervisor never builds or calls a model provider. Worker/browser source
 and Workerd/native round-trip fixtures belong to the following publication layer.
-This native slice adds no unconditional Node, browser or Worker gate.
+The accepted native slice added no Node, browser or Worker gate. The following
+Worker layer integrates those checks without replacing the accepted terminal
+supervisor or its seventeen PTY sessions. Its test-only transport fixtures reuse
+the real accepted native host and offline harness; no provider calls are needed.
 
 ## Project skills
 

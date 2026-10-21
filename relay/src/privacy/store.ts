@@ -1,0 +1,35 @@
+export type Binding = string | number | null;
+export interface SqlStore { exec<T extends Record<string, unknown>>(sql: string, ...bindings: Binding[]): T[]; transaction<T>(callback: () => T): T }
+
+export const SCHEMA = [
+  `CREATE TABLE IF NOT EXISTS privacy_policy (id INTEGER PRIMARY KEY CHECK(id=1), retention TEXT NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS privacy_subjects (account_id TEXT PRIMARY KEY, generation INTEGER NOT NULL DEFAULT 0, adult INTEGER NOT NULL DEFAULT 0, opted_out INTEGER NOT NULL DEFAULT 0, opted_out_at INTEGER, closed INTEGER NOT NULL DEFAULT 0, profile TEXT, profile_purge_at INTEGER, usage_since INTEGER NOT NULL DEFAULT 0, expires_at INTEGER, updated_at INTEGER NOT NULL)`,
+  `CREATE INDEX IF NOT EXISTS privacy_subject_purge ON privacy_subjects(profile_purge_at)`,
+  `CREATE INDEX IF NOT EXISTS privacy_subject_expiry ON privacy_subjects(expires_at)`,
+  `CREATE TABLE IF NOT EXISTS privacy_browsers (browser_id TEXT PRIMARY KEY, opted_out INTEGER NOT NULL, opted_out_at INTEGER NOT NULL, expires_at INTEGER NOT NULL)`,
+  `CREATE INDEX IF NOT EXISTS privacy_browser_expiry ON privacy_browsers(expires_at)`,
+  `CREATE TABLE IF NOT EXISTS privacy_consents (account_id TEXT NOT NULL, buyer_id TEXT NOT NULL, category TEXT NOT NULL, scope TEXT NOT NULL, accepted_at INTEGER NOT NULL, withdrawn_at INTEGER, expires_at INTEGER NOT NULL, PRIMARY KEY(account_id,buyer_id,category))`,
+  `CREATE INDEX IF NOT EXISTS privacy_consent_expiry ON privacy_consents(expires_at)`,
+  `CREATE TABLE IF NOT EXISTS privacy_evidence (id TEXT PRIMARY KEY, account_id TEXT NOT NULL, category TEXT NOT NULL, action TEXT NOT NULL, scope TEXT NOT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL)`,
+  `CREATE INDEX IF NOT EXISTS privacy_evidence_expiry ON privacy_evidence(expires_at)`,
+  `CREATE INDEX IF NOT EXISTS privacy_evidence_owner ON privacy_evidence(account_id,created_at,id)`,
+  `CREATE TABLE IF NOT EXISTS privacy_usage (account_id TEXT NOT NULL, month TEXT NOT NULL, bytes INTEGER NOT NULL, frames INTEGER NOT NULL, connected_ms INTEGER NOT NULL, active_days TEXT NOT NULL, os_family TEXT, cli_major INTEGER, quality TEXT NOT NULL, expires_at INTEGER NOT NULL, PRIMARY KEY(account_id,month,quality))`,
+  `CREATE INDEX IF NOT EXISTS privacy_usage_expiry ON privacy_usage(expires_at)`,
+  `CREATE TABLE IF NOT EXISTS privacy_rejoins (token TEXT PRIMARY KEY, account_id TEXT NOT NULL, browser_id TEXT, expires_at INTEGER NOT NULL)`,
+  `CREATE INDEX IF NOT EXISTS privacy_rejoin_expiry ON privacy_rejoins(expires_at)`,
+  `CREATE TABLE IF NOT EXISTS privacy_manifests (id TEXT PRIMARY KEY, operator_id TEXT NOT NULL, buyer_id TEXT NOT NULL, category TEXT NOT NULL, fields TEXT NOT NULL, scope TEXT NOT NULL, candidates TEXT NOT NULL, state TEXT NOT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL)`,
+  `CREATE INDEX IF NOT EXISTS privacy_manifest_expiry ON privacy_manifests(expires_at)`,
+  `CREATE TABLE IF NOT EXISTS privacy_ledger (id TEXT PRIMARY KEY, manifest_id TEXT NOT NULL UNIQUE, buyer_id TEXT NOT NULL, purpose TEXT NOT NULL, category TEXT NOT NULL, fields TEXT NOT NULL, notice_version TEXT NOT NULL, subjects TEXT NOT NULL, digest TEXT NOT NULL, released_at INTEGER NOT NULL, expires_at INTEGER NOT NULL)`,
+  `CREATE INDEX IF NOT EXISTS privacy_ledger_expiry ON privacy_ledger(expires_at)`,
+  `CREATE TABLE IF NOT EXISTS privacy_pseudonyms (account_id TEXT NOT NULL, buyer_id TEXT NOT NULL, pseudonym TEXT NOT NULL, expires_at INTEGER NOT NULL, PRIMARY KEY(account_id,buyer_id))`,
+  `CREATE INDEX IF NOT EXISTS privacy_pseudonym_expiry ON privacy_pseudonyms(expires_at)`,
+  `CREATE TABLE IF NOT EXISTS privacy_rights (id TEXT PRIMARY KEY, account_id TEXT NOT NULL, status_token_hash TEXT NOT NULL, kind TEXT NOT NULL, jurisdiction TEXT NOT NULL, state TEXT NOT NULL, requested_at INTEGER NOT NULL, acknowledged_at INTEGER, acknowledgement_due INTEGER NOT NULL, response_due INTEGER NOT NULL, extended INTEGER NOT NULL DEFAULT 0, extension_notice TEXT, retained_exceptions TEXT NOT NULL DEFAULT '[]', recipients TEXT NOT NULL DEFAULT '[]', operational_state TEXT NOT NULL DEFAULT 'pending', operational_result TEXT, completed_at INTEGER, expires_at INTEGER NOT NULL)`,
+  `CREATE INDEX IF NOT EXISTS privacy_rights_deadline ON privacy_rights(state,response_due)`,
+  `CREATE INDEX IF NOT EXISTS privacy_rights_expiry ON privacy_rights(expires_at)`,
+  `CREATE TABLE IF NOT EXISTS privacy_cleanup_cursor (id INTEGER PRIMARY KEY CHECK(id=1), category INTEGER NOT NULL)`,
+  `INSERT OR IGNORE INTO privacy_cleanup_cursor(id,category) VALUES(1,0)`,
+  `CREATE TABLE IF NOT EXISTS privacy_cohorts (id TEXT PRIMARY KEY, buyer_id TEXT NOT NULL, field TEXT NOT NULL, members TEXT NOT NULL, released_at INTEGER NOT NULL, expires_at INTEGER NOT NULL)`,
+  `CREATE INDEX IF NOT EXISTS privacy_cohort_expiry ON privacy_cohorts(expires_at)`,
+];
+
+export function initialize(store: SqlStore): void { store.transaction(() => { for (const statement of SCHEMA) store.exec(statement); }); }

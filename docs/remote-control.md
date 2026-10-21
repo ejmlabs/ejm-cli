@@ -12,9 +12,11 @@ Local use needs no relay account. Native preparation began on protected CLI
 harness merge `42e4f9cf33bd3525aec344cfdffabc251271f782` and its exact
 358-file completion API tree `826e0231...`. Earlier lock and gate results remain
 historical beside PR #21's separate native acceptance. A compatible account
-service is required; the native layer includes no relay or browser UI.
-The following [inert UI/Relay inputs](ci-bootstrap.md#current-inert-shared-ui-and-relay-inputs)
-still need their own gates before the later full Worker source and deployment.
+service is required. That accepted native layer included no relay or browser UI.
+The following [inert UI/Relay prerequisite](ci-bootstrap.md#current-inert-shared-ui-and-relay-inputs)
+is now accepted through protected PR #22. The complete Worker source is being
+integrated on it, with its own gate, hosted adoption and deployment pending.
+See [browser control](relay-web.md) and [relay operations](../relay/README.md).
 
 ## Sign in and host
 

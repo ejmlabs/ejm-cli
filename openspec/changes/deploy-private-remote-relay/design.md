@@ -2,9 +2,9 @@
 
 ## Context
 
-The current scope is the [inert prerequisite](#current-inert-prerequisite) after
-protected native adoption. The P/native preparation paragraphs and correction
-records below retain their premerge scope and earlier verification limits.
+The current scope is the [Worker integration](#current-worker-integration) after
+protected native and inert UI adoption. The prerequisite preparation paragraphs
+and correction records below retain their historical scope and evidence limits.
 
 CLI PR #20 merged normally as protected docs/UI prerequisite P
 `9e3f8ef11dc083c31b651b9dae15a98e086e3359`, tree
@@ -44,6 +44,18 @@ See proposal.md for scope. At the start of this change, the local relay gate had
 At the initial Cloudflare inspection, Wrangler could access the account, but no ejm-cli-relay Worker or matching D1 database existed and custom domains did not include relay.ejmlabs.com. That inspection did not expose billing subscription details; it reported the standard usage model. The initial relay config had placeholder deployment values and closed admission. The D1 database has since been created and migrations applied. This prepared native layer contains no relay config and does not establish current deployment acceptance. Do not upgrade or downgrade the account; release and authenticated deployment checks remain open.
 
 ## Current inert prerequisite
+
+This section records the preparation scope accepted by PR #22. Reviewed head
+`f44c57396bc220562a8dae83767e188977e2c2ce` passed
+[run 39520822069](https://github.com/ejmlabs/ejm-cli/actions/runs/39520822069):
+Linux/macOS quality, registry, standards and both complete, zero-finding reviews.
+Human approval comment `6305211216` authorized that exact head. The normal
+protected squash merge at `2026-10-21T00:51:27Z` produced
+`78810826cd376588d3303f13bc237309fb5170a8`, tree
+`dca23befbbe5bf065807f8ed06a98aa5b4c7a159`, with sole parent 71d0 below.
+The reviewed and merged trees match; protection remained enforced. Its following
+preparation instructions are historical. They accept static inputs, not the
+Worker, new UI installation, browser runtime or deployment.
 
 Native PR #21 reviewed head `6cbc5b7d1f8cd70109dd72ae464bef29f8483f11`
 merged normally through protection at **2026-10-20T23:19:40Z** as
@@ -112,6 +124,127 @@ The next complete Worker PR must inherit
 the new UI pin from protected BASE and verify the full UI archive,
 lifecycle-disabled installed proof and full native/WASM/Worker/browser gate
 before closed deployment. All eleven whole release tasks remain unchecked.
+
+## Current Worker integration
+
+Start on actual protected parent 78810826 above. Inherit its UI source selector,
+thirteen install metadata bindings, complete changed-owner source supplement,
+Relay npm lock and review manifest. Keep the harness at protected 42e, the 40d
+callers and canonical workflow context unchanged. The protected-BASE UI archive
+now selects 79a1 rather than M. Verify its complete 941-file tree and bind the
+lifecycle-disabled installed public packages before claiming consumer acceptance.
+
+### Owners and scope
+
+- ejm-ui owns tokens, appearance, components, interactions and Relay artwork.
+  The consumer uses public `@ejm/core`, `@ejm/tokens` and `@ejm/ui` exports only.
+  The accepted screen overlay is product state and composition, not a second
+  component or token system. Its four-line production CSS imports shared styles.
+  React is build-time only; production screens retain their small module bootstrap.
+  Account closure uses an inline form with the public NativeCheckbox and Button
+  inside Disclosure, replacing the remaining browser confirmation popup. Require
+  an explicit checked choice before sending the destructive API request and cover
+  unchecked/confirmed behavior through the real browser and account fixture.
+- ejm-cli owns the Worker account/relay adapters, browser state and actions,
+  the memory-only browser Noise adapter and native transport fixtures.
+  Better Auth owns account/session/device-flow infrastructure. Stripe remains
+  configured off. Cloudflare owns Worker, D1 and hibernating DO infrastructure.
+- ejm-harness owns native execution, persistence and credential storage. Add no
+  shared execution or vault implementation to the browser or Worker, and change
+  none of the accepted native queue, cancellation, pairing or recovery behavior.
+
+Port only finite provisional Relay source, schema/configuration, browser and
+Worker tests, WASM crate, two native transport fixtures and the gate adapter.
+Do not copy generated assets, installed dependencies, ignored local files,
+credentials, old native source, old terminal supervisor or the preview Cargo lock.
+Add only the test-module declarations to accepted native transport. Preserve
+`queue_ready`/`settle`, all fourteen native PTY cases and seventeen PTY sessions,
+atomic vault publication, cancellation and snapshot/expiry authority.
+
+### Expiry across storage waits
+
+The bounded Worker review found that time captured before D1 or quota I/O can
+outlive the authority it checked. Keep the authority lookup's original lease
+deadline, cap it by session and paid entitlement expiry, and use fresh time after
+D1 returns. Recheck ticket expiry before consuming it or reserving traffic.
+After a Room flush or quota renewal, check the effective sender lease, current
+peer attachment and retirement fence immediately before accounting and sending.
+The peer must still name the same account and room with the opposite role and
+an unexpired lease. Retain the renewed sender lease returned by quota.
+
+Use existing Workerd storage/socket fixtures and the platform clock spy to prove
+expiry during those waits fails closed, with old-code failures and corrected
+passes. Add no timer, per-frame D1 lookup, protocol, dependency or service.
+Room handler serialization protects the local retirement fence; account/device
+revocation elsewhere retains its documented bounded lease grace.
+
+The native storage fixture must permit only the Room's bounded retirement
+control record, not reject all application-owned tables. Verify its exact three
+fields, single-row/account/expiry bounds and the absence of content or keys in
+every stored row and captured log. Unexpected Room tables or retirement fields
+must still fail. Keep this fixture correction separate from production behavior.
+
+### Dependency and artifact bounds
+
+Activate the exact 51-line candidate manifest already reviewed with its inherited
+lock. Use pinned Node/npm and `npm ci --ignore-scripts --install-links`.
+The existing browser setup action omits `--install-links`; an isolated dry-run
+with pinned npm rejects the inherited lock as missing all three file packages.
+Align that one setup command with the full gate's install flags. The corrected
+dry-run and full installation must pass without changing the lock, enabling
+lifecycle scripts or changing workflow callers, pins or admission authority.
+Review fixtures remain inert and are never installed as packages or imported.
+Start Cargo resolution from accepted native lock SHA-256 02ba0f0097754444a40e106d683ce530886ec7c31d30009f0c5cc43750d6118b.
+Add the browser workspace member and only its required package/feature edges,
+including Snow's getrandom 0.3 browser backend, through Cargo. Compare the native
+dependency graph before and after. Retain patched rustls-webpki 0.103.16,
+webpki-root-certs 1.0.10, native root selection and the existing tempfile graph.
+Do not broaden upgrades, hand-edit the lock or restore obsolete root packages.
+
+The WASM target uses Snow's public maintained resolver and platform randomness.
+Native execution, harness, persistence and native TLS do not enter its selected
+target graph. Its numeric HTTP loopback fixture is debug-only; the production
+build excludes that feature. Build fixture and production into distinct outputs.
+
+Retain measured overlay budgets: production shared CSS gzip at most 14,336 bytes,
+all three templates at most 49,152 raw bytes and screen bootstrap at most 2,048
+gzip bytes. Production WASM is capped at 1,572,864 bytes. Recheck representative
+native/browser traffic, frame/queue/quota limits and scheduled database work;
+local wall time or bundle size does not prove production CPU or zero cost.
+
+The final PR caps remain 200 paths, 12,000 changed lines and 1,000,000 diff bytes.
+The selective runtime/docs/gate estimate was 83 paths, 8,855 lines and 717,907
+bytes before current plan and lock changes. It establishes feasibility only.
+Measure the actual combined diff before admission; preserve required behavior
+and split publication only if a real cap requires it.
+
+### Verification and launch sequence
+
+Run the normal full gate with at most two Cargo jobs, native tests and PTY checks,
+then exact UI source/install proof, Worker schema/types/tests, fixture and
+production WASM, Workerd/native transport and real browser fixtures. The native
+test executable must come from compiler-artifact JSON of that same locked test
+invocation. Source-only builds and sample previews cannot satisfy this gate.
+No paid provider calls belong in tests. Require Linux/macOS hosted quality and
+both complete exact-head reviews under fresh human readiness, then separate
+approval and a normal protected merge. Windows terminal acceptance stays separate.
+
+Build and deploy closed source-bound production assets only after those checks.
+Preserve the dedicated OAuth configuration and existing database. Inspect current
+migrations before applying reviewed additions. Keep admission false, cap two,
+billing off, commercial programs empty, alternate origins and logging disabled.
+Verify live TLS, auth, protected controller/assets and rollback identity. Then
+complete real account/device/pairing/reconnect/revocation checks before admission.
+
+The approved beta policy body and retention choices are unchanged, with effective
+dates pending publication. Public docs use the existing site build; reconcile
+new guides without rewriting accepted native guidance or unrelated site work.
+The active CLI docs deployment lacks an exact saved source/artifact binding.
+Do not replace its full asset set from an unmatched local build. Coordinate the
+two policy pages with the authorized site owner and record publication separately.
+This gap blocks opening accounts, not preparation of a closed UI deployment.
+All eleven whole release tasks remain open until their stated criteria are met.
+Keep new contracts in change deltas until verified sync and archive are appropriate.
 
 ## Native advisory correction
 

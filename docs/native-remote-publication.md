@@ -16,11 +16,19 @@ PR #20's [historical UI prerequisite](ci-bootstrap.md#ui-source-review-prerequis
 selected UI merge `24935aa85355ea99f49bdbecc4186a5e95049393`, tree
 `2d8bde67c8b5fe851b70ae90a3a2787091397780`, with complete install review data.
 The [following inert prerequisite](ci-bootstrap.md#current-inert-shared-ui-and-relay-inputs)
-advances that UI selection and prepares Relay install review data on native 71d0.
-It retains the thirteen-file install boundary and adds a separate complete
-changed-owner source supplement after PR #22's two incomplete reviews. That
-successor still needs its own gates and protected adoption. This native layer includes
-no Worker or browser UI. The retained sections below describe earlier cutoffs;
+advanced that UI selection and prepared Relay install review data on native 71d0.
+Its corrected head `f44c57396bc220562a8dae83767e188977e2c2ce` passed hosted
+Linux/macOS quality, registry, standards and both complete reviews with no findings
+in [run 39520822069](https://github.com/ejmlabs/ejm-cli/actions/runs/39520822069).
+After exact human approval `6305211216`, it merged normally as protected
+`78810826cd376588d3303f13bc237309fb5170a8`, tree
+`dca23befbbe5bf065807f8ed06a98aa5b4c7a159`, at 2026-10-21 00:51:27 UTC.
+It retains thirteen metadata bindings and a complete changed-owner source
+supplement after the earlier incomplete reviews. The new
+[Worker source](relay-publication.md) starts on that actual protected parent;
+its [local installation and stage checks](relay-publication.md#current-local-checks)
+are recorded separately. Hosted adoption and deployment remain pending.
+The accepted native layer itself includes no Worker or browser UI. The retained sections below describe earlier cutoffs;
 their then-pending native checks are superseded only by the exact receipt above.
 
 Earlier native preparation started from `06154b18137eb376bef986a520904381b8744b9d`
@@ -106,7 +114,7 @@ implemented commands only, and slash status adds metadata only.
 
 ## Dependency integration
 
-The current native lock SHA-256 is
+The accepted native baseline lock SHA-256 is
 `02ba0f0097754444a40e106d683ce530886ec7c31d30009f0c5cc43750d6118b`.
 The historical d8 lock was
 `5143432fc0201bedeef680d18ae1c4681e2215fddd6e2fb45cd4cbf0149f7d1b`.
@@ -178,9 +186,10 @@ Both reviews still rejected f66; local results prove no live latency.
 ## Verification for each following source
 
 The native receipt above completes these checks for PR #21's exact source.
-The inert prerequisite and later Worker source each require a fresh normal gate,
-exact-head admission, two complete paid reviews, separate final approval and
-protected merge. Retain the accepted native baseline and its contracts below.
+PR #22 also passed its own normal/hosted gates and protected adoption, as recorded
+above. The following Worker source needs fresh gates, exact-head admission, two
+complete paid reviews, separate final approval and protected merge. Retain the
+accepted native baseline and its contracts below.
 
 Run unchanged `./scripts/check` with at most two Cargo jobs and offline fixtures:
 architecture, format, strict Clippy, native tests, release/Rustdoc, Machete,
@@ -212,34 +221,21 @@ live acceptance remain pending.
 
 ## Following Worker/browser layer
 
-The original native slice needs a separately configured compatible relay and
-included no Worker, WASM, npm lock, Cloudflare config, commercial policy,
-dashboard or browser assets. The following inert prerequisite adds final-path
-`relay/package-lock.json`, a short README and the complete 51-line manifest as
-a content-addressed original prepared candidate snapshot outside the runnable
-package, with provenance. It adds no runnable `relay/package.json`, so the
-Relay setup/install step remains skipped. Its
-[protected UI target and thirteen-file boundary](ci-bootstrap.md#current-inert-shared-ui-and-relay-inputs)
-remain distinct from the complete changed-owner source supplement and later
-full target archive/install proof. The supplied 932-file M archive plus 28
-complete current entries exposes the 941-file target view. The older archive
-could not supply changed current TSX/CSS; the supplement supplies those complete files.
-Review metadata and supplement
-fixtures are never imported, installed, executed or packaged. Production still
-uses public owner exports. The centralized prerequisite record binds source
-identities, byte counts and the revoked old-head review; no quality pass is
-claimed for its cancelled platform jobs. The successor needs new exact-head
-human readiness and two complete paid reviews after its own normal full gate,
-then separate final approval and protected merge.
-Keep the accepted native lock, 42e harness and 40d callers unchanged; add no
-Worker/config, root gate, Cargo, harness or workflow change in that inert slice.
+The original native layer required a compatible separately operated relay and
+included no Worker or browser assets. Protected PR #22 then accepted the
+[inert UI/Relay inputs](ci-bootstrap.md#current-inert-shared-ui-and-relay-inputs),
+with the current public UI selector, thirteen metadata bindings and complete
+changed-owner supplement. Its review fixtures remain nonexecutable and are never
+imported, installed or packaged. It preserved native lock 02ba, 42e harness and
+40d callers. Its acceptance does not prove a new package install or runtime.
 
-After its protected merge, the full Worker/browser PR must inherit the new UI
-pin from protected BASE, verify the exact full UI archive and lifecycle-disabled
-installation, and pass the full native/WASM/Worker/browser gate before closed
-deployment. Both slices retain the 200-path, 12,000-line and 1,000,000-byte caps.
-Add `transport_fixture.rs`, `native_roundtrip.rs`, `worker_fixture` and their
-Workerd/native/browser supervisors with that layer, never unconditional gates here.
-The main spec's browser contract does not implement or verify it. Its
-`cloudflare-relay` main-spec archive prerequisite also arrives with that layer.
-Preserve concurrent site ownership and verify live publication separately.
+The complete [Worker/browser source](relay-publication.md) now starts on actual
+protected parent 78810826. It activates the reviewed manifest and selectively
+adds the browser WASM crate, transport fixtures and gate adapter. Its Cargo lock
+may add required browser workspace/feature edges while preserving accepted native
+package identities and TLS. Its new gate must bind the full UI source and
+lifecycle-disabled installed packages, retain all fourteen native PTY cases and
+run native/WASM/Worker/browser checks before closed deployment. Fresh exact-head
+review and protected adoption remain required under the unchanged patch caps.
+Preserve concurrent site ownership and verify public docs and live control
+separately. Neither accepted prerequisite publishes the new Worker or opens access.

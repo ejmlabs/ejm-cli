@@ -2,7 +2,7 @@
 
 ## Why
 
-The original proposal followed a local relay/browser pass and requested hosted CI and a closed Cloudflare deployment, with free-tier hosting where possible. Native PR #21 is now protected and accepted. This following slice prepares inert shared UI and Relay install inputs on that actual protected native parent. Its exact parent receipt, source bindings and remaining gates are in the [current inert prerequisite](design.md#current-inert-prerequisite). Consumer restack, authenticated live acceptance, deployment and docs publication remain separate.
+The original proposal followed a local relay/browser pass and requested hosted CI and a closed Cloudflare deployment, with free-tier hosting where possible. Native PR #21 and the inert shared UI prerequisite PR #22 are now protected and accepted. The current slice adds the complete Worker, protected browser controller and their build and verification paths on actual protected parent `78810826cd376588d3303f13bc237309fb5170a8`. Its exact receipt and source boundaries are in the [Worker integration](design.md#current-worker-integration). Authenticated live acceptance, deployment and docs publication require their own evidence.
 
 CLI PR #20 merged as protected docs/UI prerequisite P
 `9e3f8ef11dc083c31b651b9dae15a98e086e3359`, retaining C8 runtime, the working
@@ -19,12 +19,13 @@ the failed-head receipt and exact source boundary are in the design.
 ## What Changes
 
 The native correction bullets retain adopted history and required behavior.
-The current slice changes only static review inputs: select protected UI 79a1,
-bind all thirteen complete readable metadata files with verified fixture reuse,
-add the complete changed-owner source supplement beside the supplied M archive,
-and include the inert Relay lock, notice, complete 51-line candidate manifest
-and provenance. The supplement stays read-only reviewer data; production
-continues to use public owner exports. It adds no runtime requirement or spec delta.
+The current slice inherits protected UI 79a1, complete readable source and install
+bindings, and the reviewed Relay lock from PR #22. It activates the matching
+manifest and adds the provisional Worker/browser source selectively, preserving
+the accepted native source, terminal supervisor and patched TLS graph. Production
+screens use only public ejm-ui exports and shared Relay artwork. Review fixtures
+remain inert. Build and test the exact owner tree and installed public packages,
+then require fresh protected review of the complete release source.
 
 - Keep relay account metadata, credentials and the current-account index in one public vault transaction; retire normal plaintext cache writes and preserve newer logins during logout.
 - Publish reviewable CLI and dependency revisions through existing protected workflows, repair the scoped shared CI prerequisite hook, and record hosted results for exact revisions. Combine the bounded bootstrap, terminal and command foundations in one prelude that retains the current reviewed harness pin and callers; adopt the hook before the new harness API pin and its native consumers.
@@ -43,13 +44,14 @@ continues to use public owner exports. It adds no runtime requirement or spec de
 
 ### New Capabilities
 
-None. This change releases the implemented relay rather than adding another remote-control product.
+- `cloudflare-relay`: Account-gated opaque forwarding, bounded hosting and protected browser admission. These contracts existed in provisional local source but have not been adopted into main specs.
+- `relay-accounts-and-plans`: Verified accounts, explicit device login, independent credentials and server-owned access. Billing remains disabled in this beta.
+- `commercial-data-controls`: Default-off collection, bounded rights handling and fail-closed release gates. Commercial participation and exports remain disabled in this beta.
 
 ### Modified Capabilities
 
-- `cloudflare-relay`: Make the bounded free-launch contract explicit for per-invocation database work and conservative production admission.
 - `private-remote-control`: Bind queued admission to the exact completed run and enforce the selected harness's prompt byte limit before acknowledgement.
 
 ## Impact
 
-The full release affects relay cleanup, deployment configuration, CI setup, dependency pins, release evidence and public docs. Its native successor adopted the protected 42e harness API after PR #20 retained the working 4a source and the central hook supplied Linux prerequisites. The current slice adds only static UI source and Relay install review inputs. Existing maintainer readiness, approval, branch protection and paid-review gates remain in force. No repository visibility change, Cloudflare plan upgrade, payment activation or commercial activation is included. Concurrent site, cross-platform and model-selection work must be preserved.
+The full release affects relay cleanup, deployment configuration, the additive browser WASM crate, gate composition, release evidence and public docs. Its native successor adopted protected 42e harness APIs; the Worker slice preserves those native contracts and installed 40d callers. Shared visuals remain owned by ejm-ui, consumed through its public packages. Existing maintainer readiness, approval, branch protection and paid-review gates remain in force. No repository visibility change, Cloudflare plan upgrade, payment activation or commercial activation is included. Concurrent site, cross-platform and model-selection work must be preserved.
