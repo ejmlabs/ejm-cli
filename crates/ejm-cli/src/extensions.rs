@@ -51,24 +51,33 @@ impl Extensions {
         })
     }
 
-    pub async fn load(args: &Args) -> Result<Self> {
+    pub async fn load(
+        args: &Args,
+        capacity: Option<ejm_harness::CapacityContext>,
+        cancel: CancellationToken,
+    ) -> Result<Self> {
         ensure!(
             args.widget.len() <= 4,
             "at most four package widgets may be visible"
         );
         let packages = packages::manager(args)?.enabled()?;
-        let pool = RuntimePool::new(RuntimeConfig::default())?;
+        let pool = match capacity {
+            Some(capacity) => RuntimePool::with_capacity(RuntimeConfig::default(), capacity)?,
+            None => RuntimePool::new(RuntimeConfig::default())?,
+        };
         let result = async {
+            ensure!(!cancel.is_cancelled(), "package loading cancelled");
             for (package, grants) in &packages {
-                pool.load(package.clone(), grants.clone(), CancellationToken::new())
+                pool.load(package.clone(), grants.clone(), cancel.child_token())
                     .await?;
             }
+            ensure!(!cancel.is_cancelled(), "package loading cancelled");
             let mut extensions = Self {
                 pool: pool.clone(),
                 packages: Arc::new(packages),
                 palette: None,
                 widgets: Vec::new(),
-                cancel: CancellationToken::new(),
+                cancel,
             };
             if let Some(theme) = &args.theme {
                 extensions.palette = Some(extensions.theme(theme)?);
@@ -82,7 +91,7 @@ impl Extensions {
         }
         .await;
         if result.is_err() {
-            pool.shutdown().await?;
+            return crate::complete_cleanup(result, pool.shutdown().await, "package shutdown");
         }
         result
     }

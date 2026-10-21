@@ -150,6 +150,51 @@ pub(in crate::remote::controller) mod contracts {
     }
 
     #[test]
+    fn replay_batches_keep_current_authority_and_allow_input_between_frames() {
+        let (mut app, mut controls, _, _) = fixture(ShareRole::Control);
+        let events = (1..=40)
+            .map(|sequence| HarnessEvent {
+                sequence,
+                session_id: app.session.id.clone(),
+                run_id: Some("old-run".into()),
+                timestamp_ms: 0,
+                kind: if sequence == 1 {
+                    EventKind::RunStarted {
+                        prompt: "past turn".into(),
+                    }
+                } else {
+                    EventKind::TextDelta {
+                        text: "saved".into(),
+                    }
+                },
+            })
+            .collect();
+        let session = app.session.clone();
+        let mut batch = DisplayBatch::begin(
+            ServerMessage::Snapshot {
+                session,
+                events,
+                through_sequence: 40,
+                gap: None,
+                active_run: Some("current-run".into()),
+                role: ShareRole::Control,
+                mutation_high_water: 0,
+            },
+            &mut app,
+            &mut controls,
+        )
+        .unwrap();
+        assert!(!batch.apply(&mut app, &mut controls));
+        assert!(app.last_sequence > 0 && app.last_sequence < 40);
+        assert_eq!(controls.active.as_deref(), Some("current-run"));
+        app.composer.insert("input during recovery");
+        while !batch.apply(&mut app, &mut controls) {}
+        assert_eq!(app.last_sequence, 40);
+        assert_eq!(app.composer.text, "input during recovery");
+        assert_eq!(controls.active.as_deref(), Some("current-run"));
+    }
+
+    #[test]
     fn historical_replay_and_late_results_cannot_replace_the_current_run() {
         let (mut app, mut controls, _, _) = fixture(ShareRole::Control);
         let old = HarnessEvent {

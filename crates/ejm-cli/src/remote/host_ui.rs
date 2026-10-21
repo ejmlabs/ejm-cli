@@ -279,7 +279,6 @@ impl HostUi {
     pub fn is_command(input: &Event, app: &App) -> bool {
         matches!(input, Event::Key(key) if key.kind == KeyEventKind::Press && key.code == KeyCode::Enter &&
             !key.modifiers.intersects(KeyModifiers::ALT | KeyModifiers::SHIFT))
-            && app.overlay.is_none()
             && app
                 .composer
                 .text
@@ -338,6 +337,13 @@ impl HostUi {
         self.session
             .as_ref()
             .is_some_and(|current| current != session)
+    }
+
+    pub async fn settle(&self, backend: &LocalBackend, now: u64) -> Result<()> {
+        if self.session.is_some() {
+            backend.settle(now).await?;
+        }
+        Ok(())
     }
 
     pub async fn stop(&mut self, backend: &LocalBackend) {

@@ -2,13 +2,13 @@
 use super::{
     invitation::ShareRole,
     protocol::{
-        ClientRequest, ExpectedState, MAX_PENDING_PROMPTS, MAX_REPLAY_EVENTS, Mutation,
-        MutationAction, MutationAdmission, MutationLedger, MutationOutcome, RemoteError,
+        ClientRequest, ExpectedState, GapReason, MAX_PENDING_PROMPTS, MAX_REPLAY_EVENTS, Mutation,
+        MutationAction, MutationAdmission, MutationLedger, MutationOutcome, RemoteError, ReplayGap,
         ServerMessage,
     },
 };
 use anyhow::{Context, Result, ensure};
-use ejm_harness::{Event, EventKind, Harness, RunHandle, RunStatus, Session};
+use ejm_harness::{Event, Harness, RunHandle, RunStatus, Session, SessionTailOptions};
 use futures_util::FutureExt;
 use std::{
     collections::{BTreeMap, VecDeque},
@@ -32,6 +32,7 @@ pub trait SessionBackend {
 pub struct LocalBackend {
     harness: Harness,
     authority: Arc<Mutex<Authority>>,
+    view_limit: usize,
     #[cfg(test)]
     admission_clock: Option<Arc<std::sync::atomic::AtomicU64>>,
     #[cfg(test)]
@@ -49,6 +50,8 @@ struct RequestBoundary {
 struct Authority {
     sessions: BTreeMap<String, Observed>,
     share: Option<Shared>,
+    selected: Option<String>,
+    clock: u64,
 }
 
 #[derive(Default)]
@@ -57,6 +60,7 @@ struct Observed {
     authority_sequence: u64,
     active: Option<String>,
     finished: Option<(String, RunStatus)>,
+    touched: u64,
 }
 
 struct Shared {
@@ -121,6 +125,7 @@ impl LocalBackend {
         Self {
             harness,
             authority: Arc::new(Mutex::new(Authority::default())),
+            view_limit: 1000,
             #[cfg(test)]
             admission_clock: None,
             #[cfg(test)]
@@ -156,11 +161,15 @@ impl LocalBackend {
         self.harness.steer_run(session, &run, text).await
     }
 
-    pub async fn cancel(&self, session: &str) -> Result<()> {
+    pub async fn cancel(&self, session: &str) -> Result<Option<String>> {
         let mut state = self.authority.lock().await;
-        self.refresh(&mut state, session).await?;
         Self::discard_pending(&mut state, session);
-        self.harness.cancel(session).await
+        // Avoid the journal queue; the exact-run mutation revalidates live ownership.
+        let run = self.harness.active_run_id(session).await;
+        if let Some(run) = &run {
+            self.harness.cancel_run(session, run).await?;
+        }
+        Ok(run)
     }
 
     pub async fn begin_share(
@@ -251,34 +260,8 @@ impl LocalBackend {
                 after_sequence,
                 limit,
             } => {
-                let session_info = self.harness.get_session(&session).await?;
-                let events = self
-                    .harness
-                    .events(
-                        &session,
-                        after_sequence,
-                        usize::from(limit).clamp(1, MAX_REPLAY_EVENTS),
-                    )
-                    .await?;
-                let through_sequence = events.last().map_or(after_sequence, |event| event.sequence);
-                // Authority must cover every event whose cursor leaves this snapshot.
-                self.refresh(&mut state, &session).await?;
-                let active_run = state
-                    .sessions
-                    .get(&session)
-                    .and_then(|view| view.active.clone());
-                let share = state.share.as_ref().context("sharing has ended")?;
-                let role = share.role;
-                let mutation_high_water = share.ledger.high_water();
-                Ok(ServerMessage::Snapshot {
-                    session: session_info,
-                    events,
-                    through_sequence,
-                    gap: None,
-                    active_run,
-                    role,
-                    mutation_high_water,
-                })
+                self.snapshot(&mut state, &session, after_sequence, limit)
+                    .await
             }
             ClientRequest::Outcome { sequence } => {
                 let outcome = state
@@ -342,6 +325,90 @@ impl LocalBackend {
             return clock.load(std::sync::atomic::Ordering::Relaxed);
         }
         super::transport::now_ms()
+    }
+
+    async fn snapshot(
+        &self,
+        state: &mut Authority,
+        session: &str,
+        after_sequence: u64,
+        limit: u16,
+    ) -> Result<ServerMessage> {
+        let limit = usize::from(limit).clamp(1, MAX_REPLAY_EVENTS);
+        let page = self
+            .harness
+            .events_page(
+                session,
+                after_sequence,
+                u64::MAX,
+                SessionTailOptions {
+                    max_events: limit,
+                    max_bytes: 64 * 1024,
+                },
+            )
+            .await?;
+        let use_tail =
+            after_sequence == 0 || page.omitted || (!page.complete && page.events.len() < limit);
+        let (session_info, events, through_sequence, gap) = if use_tail {
+            let view = self
+                .harness
+                .session_view(
+                    session,
+                    SessionTailOptions {
+                        max_events: limit.min(128),
+                        max_bytes: 64 * 1024,
+                    },
+                )
+                .await?;
+            let gap = view.omitted.then_some(ReplayGap {
+                requested_after_sequence: after_sequence,
+                available_after_sequence: view
+                    .events
+                    .first()
+                    .map_or(view.selected_cursor, |event| {
+                        event.sequence.saturating_sub(1)
+                    }),
+                reason: GapReason::OutputTruncated,
+            });
+            (view.session, view.events, view.selected_cursor, gap)
+        } else {
+            let through = page.selected_cursor.unwrap_or(after_sequence);
+            (
+                self.harness.get_session(session).await?,
+                page.events,
+                through,
+                None,
+            )
+        };
+        self.refresh(state, session).await?;
+        let active_run = state
+            .sessions
+            .get(session)
+            .and_then(|view| view.active.clone());
+        let share = state.share.as_ref().context("sharing has ended")?;
+        let role = share.role;
+        let mutation_high_water = share.ledger.high_water();
+        Ok(ServerMessage::Snapshot {
+            session: session_info,
+            events,
+            through_sequence,
+            gap,
+            active_run,
+            role,
+            mutation_high_water,
+        })
+    }
+
+    pub async fn select_session(&self, session: &str) -> Result<()> {
+        let mut state = self.authority.lock().await;
+        self.refresh(&mut state, session).await?;
+        state.selected = Some(session.into());
+        Ok(())
+    }
+
+    pub async fn stop_share(&self) {
+        let mut state = self.authority.lock().await;
+        state.share = None;
     }
 
     async fn dispatch(
@@ -589,36 +656,55 @@ impl LocalBackend {
     }
 
     async fn refresh(&self, state: &mut Authority, session: &str) -> Result<()> {
-        if !state.sessions.contains_key(session) {
-            ensure!(state.sessions.len() < 1000, "session view limit reached");
-        }
-        let observed = state.sessions.entry(session.into()).or_default();
-        loop {
-            let page = self
-                .harness
-                .events(session, observed.sequence, MAX_REPLAY_EVENTS)
-                .await?;
-            if page.is_empty() {
-                break;
-            }
-            for event in page {
-                observed.sequence = event.sequence;
-                match event.kind {
-                    EventKind::RunStarted { .. } => {
-                        observed.active = event.run_id;
-                        observed.authority_sequence = event.sequence;
-                    }
-                    EventKind::RunFinished { summary } => {
-                        observed.authority_sequence = event.sequence;
-                        if observed.active.as_deref() == Some(&summary.run_id) {
-                            observed.active = None;
-                        }
-                        observed.finished = Some((summary.run_id, summary.status));
-                    }
-                    _ => {}
+        if !state.sessions.contains_key(session) && state.sessions.len() >= self.view_limit {
+            // Refresh only stale live pins using the harness's cached run map. No
+            // transcript or journal scan sits on this admission path.
+            let selected = state.selected.as_ref();
+            let shared = state.share.as_ref().map(|share| &share.session);
+            for (id, view) in &mut state.sessions {
+                if view.active.is_some() && selected != Some(id) && shared != Some(id) {
+                    view.active = self.harness.active_run_id(id).await;
                 }
             }
-            tokio::task::yield_now().await;
+            let evict = state
+                .sessions
+                .iter()
+                .filter(|(id, view)| {
+                    view.active.is_none()
+                        && state.selected.as_ref() != Some(id)
+                        && state
+                            .share
+                            .as_ref()
+                            .is_none_or(|share| share.session != **id)
+                })
+                .min_by_key(|(_, view)| view.touched)
+                .map(|(id, _)| id.clone());
+            let Some(evict) = evict else {
+                anyhow::bail!(
+                    "all cached session views are active or protected; finish work or close sharing and retry"
+                );
+            };
+            state.sessions.remove(&evict);
+        }
+        // Authority comes from a consistent compact read, never from partial display replay.
+        let snapshot = self
+            .harness
+            .session_view(
+                session,
+                SessionTailOptions {
+                    max_events: 0,
+                    max_bytes: 0,
+                },
+            )
+            .await?;
+        state.clock = state.clock.saturating_add(1);
+        let observed = state.sessions.entry(session.into()).or_default();
+        observed.sequence = snapshot.selected_cursor;
+        observed.active = snapshot.run_id;
+        observed.touched = state.clock;
+        if let Some(transition) = snapshot.last_transition {
+            observed.authority_sequence = transition.sequence;
+            observed.finished = transition.run_id.zip(transition.outcome);
         }
         Ok(())
     }

@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use clap::{Arg, Command as ClapCommand, builder::StringValueParser};
+use clap::{Arg, ArgMatches, Command as ClapCommand, builder::StringValueParser};
 
 #[derive(Clone)]
 pub struct CommandEntry {
@@ -48,6 +48,48 @@ const BUILTINS: &[Builtin] = &[
         description: "Show commands and keyboard shortcuts",
         minimum: 0,
         maximum: 0,
+    },
+    Builtin {
+        name: "model",
+        arguments: "[PROVIDER] [MODEL]",
+        description: "Choose a model or show available models",
+        minimum: 0,
+        maximum: 2,
+    },
+    Builtin {
+        name: "models",
+        arguments: "",
+        description: "List models for the current native provider",
+        minimum: 0,
+        maximum: 0,
+    },
+    Builtin {
+        name: "login",
+        arguments: "",
+        description: "Choose subscription sign-in or API setup",
+        minimum: 0,
+        maximum: 0,
+    },
+    Builtin {
+        name: "accounts",
+        arguments: "",
+        description: "List saved ChatGPT accounts and safe Claude status",
+        minimum: 0,
+        maximum: 0,
+    },
+    Builtin {
+        name: "account",
+        arguments: "REGISTRATION|claude",
+        description: "Use a saved ChatGPT account or Claude's current account",
+        minimum: 1,
+        maximum: 1,
+    },
+    Builtin {
+        name: "logout",
+        arguments: "REGISTRATION|claude",
+        description: "Remove a ChatGPT account or sign out of Claude",
+        minimum: 1,
+        maximum: 1,
     },
     Builtin {
         name: "status",
@@ -209,6 +251,14 @@ fn builtin_parser(command: &Builtin) -> ClapCommand {
             .allow_hyphen_values(true);
         if command.name == "widgets" {
             argument = argument.value_parser(["pause", "resume"]);
+        } else if command.name == "model" {
+            argument = argument.value_parser(|value: &str| {
+                if value.starts_with('-') || value.chars().any(char::is_control) {
+                    Err("model selections must be plain provider or model IDs")
+                } else {
+                    Ok(value.to_owned())
+                }
+            });
         }
         parser = parser.arg(argument);
     }
@@ -256,6 +306,26 @@ pub fn parse(input: &str) -> Result<ParsedCommand<'_>> {
     })
 }
 
+pub fn model_arguments(input: &str) -> Result<Vec<String>> {
+    let command = BUILTINS
+        .iter()
+        .find(|command| command.name == "model")
+        .context("model command is unavailable")?;
+    let matches: ArgMatches = builtin_parser(command)
+        .no_binary_name(true)
+        .mut_arg("arguments", |argument| {
+            argument.required(true).num_args(1..=2)
+        })
+        .try_get_matches_from(input.split_whitespace())
+        .map_err(|_| anyhow::anyhow!("usage: /model [PROVIDER] MODEL"))?;
+    Ok(matches
+        .get_many::<String>("arguments")
+        .into_iter()
+        .flatten()
+        .cloned()
+        .collect())
+}
+
 #[derive(Default)]
 pub struct CommandPicker {
     pub selected: usize,
@@ -272,10 +342,18 @@ mod tests {
 
     #[test]
     fn reports_builtin_usage_instead_of_package_resolution_errors() {
-        for (name, value) in [("resume", ""), ("stop", "now"), ("widgets", "other")] {
+        for (name, value) in [
+            ("resume", ""),
+            ("stop", "now"),
+            ("widgets", "other"),
+            ("login", "chatgpt"),
+            ("login", "claude"),
+        ] {
             assert!(parse(&format!("{name} {value}")).is_err());
         }
         assert!(parse("queue a follow-up with words").is_ok());
+        assert!(parse("model chatgpt gpt-fixture").is_ok());
+        assert!(parse("login").is_ok());
     }
 
     #[test]
@@ -286,6 +364,9 @@ mod tests {
             assert_eq!(parsed.name, name);
             assert_eq!(parsed.value, "don't change  --help\nnext line\n ");
         }
+        assert_eq!(model_arguments("chatgpt fixture-model").unwrap().len(), 2);
+        assert!(model_arguments("").is_err());
+        assert!(model_arguments("too many arguments").is_err());
     }
 
     #[test]

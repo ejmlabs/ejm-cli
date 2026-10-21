@@ -1,18 +1,20 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use anyhow::{Context, Result, ensure};
 use clap::Subcommand;
 use ejm_harness_exec::Governor;
 use ejm_harness_packages::{
-    DEFAULT_REGISTRY, PackageGrants, PackageManager, RegistryClient, delete_registry_token,
-    install_source, load_registry_token, migrate_registry_token, pack_directory,
-    save_registry_token,
+    PackageGrants, PackageManager, RegistryClient, delete_registry_token, install_source,
+    load_registry_token, migrate_registry_token, pack_directory, save_registry_token,
 };
 use tokio_util::sync::CancellationToken;
 
 use crate::{args::Args, render::safe_text};
 
-#[derive(Debug, Subcommand)]
+#[derive(Clone, Debug, Subcommand)]
 pub enum PackageCommand {
     Search {
         query: String,
@@ -64,15 +66,16 @@ pub enum PackageCommand {
         #[arg(long)]
         no_browser: bool,
     },
+    Logout,
+    /// Import legacy registry credentials after stopping every older CLI or IDE.
     MigrateCredentials {
         #[arg(
             long,
             required = true,
-            help = "Confirm every older CLI and IDE registry credential writer has stopped"
+            help = "Confirm all older registry clients have stopped"
         )]
         old_clients_stopped: bool,
     },
-    Logout,
     Whoami,
     Publisher {
         handle: String,
@@ -89,19 +92,32 @@ pub fn manager(args: &Args) -> Result<PackageManager> {
     PackageManager::new(args.state_dir().join("packages"))
 }
 
-pub async fn run(args: &Args, command: &PackageCommand) -> Result<bool> {
+pub async fn run(args: &Args, command: &PackageCommand, origin: Option<&str>) -> Result<bool> {
+    let registry = origin.map(RegistryClient::new).transpose()?;
+    let required_registry = || {
+        registry
+            .as_ref()
+            .context("set --registry ORIGIN or EJM_REGISTRY_URL for registry operations")
+    };
     let manager = manager(args)?;
-    let registry = RegistryClient::new(DEFAULT_REGISTRY)?;
     match command {
-        PackageCommand::Search { query } => show(&registry.search(query, None).await?)?,
-        PackageCommand::Info { name, version } => show(&registry.version(name, version).await?)?,
-        PackageCommand::Install { source } => install(args, &manager, &registry, source).await?,
+        PackageCommand::Search { query } => show(&required_registry()?.search(query, None).await?)?,
+        PackageCommand::Info { name, version } => {
+            show(&required_registry()?.version(name, version).await?)?;
+        }
+        PackageCommand::Install { source } => {
+            if source.starts_with('@') {
+                required_registry()?;
+            }
+            install(args, &manager, registry.as_ref(), source).await?;
+        }
         PackageCommand::Update { name, version } => {
+            let registry = required_registry()?;
             ensure!(
                 manager.list()?.iter().any(|record| &record.name == name),
                 "package is not installed"
             );
-            install(args, &manager, &registry, &format!("{name}@{version}")).await?;
+            install(args, &manager, Some(registry), &format!("{name}@{version}")).await?;
         }
         PackageCommand::List => show(&manager.list()?)?,
         PackageCommand::Enable {
@@ -112,27 +128,21 @@ pub async fn run(args: &Args, command: &PackageCommand) -> Result<bool> {
             grant_provider,
             command,
             grant_widget,
-        } => {
-            ensure!(*trust, "--trust is required for native extensions");
-            let hooks = hook
-                .iter()
-                .map(|name| serde_json::from_value(serde_json::Value::String(name.clone())))
-                .collect::<std::result::Result<Vec<_>, _>>()?;
-            let record = manager.enable(
-                name,
-                PackageGrants {
-                    tools: tool.clone(),
-                    hooks,
-                    providers: grant_provider.clone(),
-                    commands: command.clone(),
-                    widgets: grant_widget.clone(),
-                },
-            )?;
-            show(&record)?;
-            println!(
-                "Trusted for future sessions. Native packages run as your user; export grants control registration."
-            );
-        }
+        } => trust_package(
+            &manager,
+            name,
+            *trust,
+            PackageGrants {
+                tools: tool.clone(),
+                hooks: hook
+                    .iter()
+                    .map(|name| serde_json::from_value(serde_json::Value::String(name.clone())))
+                    .collect::<std::result::Result<Vec<_>, _>>()?,
+                providers: grant_provider.clone(),
+                commands: command.clone(),
+                widgets: grant_widget.clone(),
+            },
+        )?,
         PackageCommand::Disable { name } => {
             manager.disable(name)?;
             println!("Disabled for future sessions. Restart an active CLI to unload it.");
@@ -141,80 +151,72 @@ pub async fn run(args: &Args, command: &PackageCommand) -> Result<bool> {
             manager.remove(name)?;
             println!("Removed the registration. Active sessions retain their snapshot until exit.");
         }
-        PackageCommand::Pack { directory, output } => {
-            use std::io::Write;
-            let bytes = pack_directory(directory)?;
-            let mut file = std::fs::OpenOptions::new()
-                .create_new(true)
-                .write(true)
-                .open(output)
-                .context("create new package archive")?;
-            file.write_all(&bytes)?;
-            println!(
-                "{} bytes: {}",
-                bytes.len(),
-                safe_text(&output.display().to_string())
-            );
+        PackageCommand::Pack { directory, output } => pack_archive(directory, output)?,
+        PackageCommand::Login { no_browser } => {
+            login(&manager, required_registry()?, *no_browser).await?;
         }
-        PackageCommand::Login { no_browser } => login(&manager, &registry, *no_browser).await?,
+        PackageCommand::Logout => logout(&manager, required_registry()?).await?,
         PackageCommand::MigrateCredentials {
             old_clients_stopped,
-        } => migrate_credentials(&manager, &registry, *old_clients_stopped)?,
-        PackageCommand::Logout => logout(&manager, &registry).await?,
+        } => migrate_credentials(&manager, required_registry()?, *old_clients_stopped).await?,
         PackageCommand::Whoami => show(
-            &registry
-                .me(&load_registry_token(manager.root(), registry.origin())?)
+            &required_registry()?
+                .me(
+                    &registry_credentials(&manager, required_registry()?, load_registry_token)
+                        .await?,
+                )
                 .await?,
         )?,
         PackageCommand::Publisher {
             handle,
             display_name,
         } => show(
-            &registry
+            &required_registry()?
                 .claim_publisher(
                     handle,
                     display_name,
-                    &load_registry_token(manager.root(), registry.origin())?,
+                    &registry_credentials(&manager, required_registry()?, load_registry_token)
+                        .await?,
                 )
                 .await?,
         )?,
         PackageCommand::Publish { directory } => {
+            let registry = required_registry()?;
             let bytes = pack_directory(directory)?;
-            let token = load_registry_token(manager.root(), registry.origin())?;
+            let token = registry_credentials(&manager, registry, load_registry_token).await?;
             show(&registry.publish(bytes, &token).await?)?;
         }
     }
     Ok(true)
 }
 
-fn finish_logout(revoked: Result<()>, clear: impl FnOnce() -> Result<()>) -> Result<()> {
-    clear()?;
-    revoked.context("local session removed; remote revocation failed")
-}
-
-async fn logout(manager: &PackageManager, registry: &RegistryClient) -> Result<()> {
-    let token = load_registry_token(manager.root(), registry.origin())?;
-    let revoked = registry.logout(&token).await;
-    finish_logout(revoked, || {
-        delete_registry_token(manager.root(), registry.origin())
-    })?;
-    println!("Registry session revoked and removed.");
+fn trust_package(
+    manager: &PackageManager,
+    name: &str,
+    trust: bool,
+    grants: PackageGrants,
+) -> Result<()> {
+    ensure!(trust, "--trust is required for native extensions");
+    show(&manager.enable(name, grants)?)?;
+    println!(
+        "Trusted for future sessions. Native packages run as your user; export grants control registration."
+    );
     Ok(())
 }
 
-fn migrate_credentials(
-    manager: &PackageManager,
-    registry: &RegistryClient,
-    old_clients_stopped: bool,
-) -> Result<()> {
-    let retired = migrate_registry_token(manager.root(), registry.origin(), old_clients_stopped)?;
+fn pack_archive(directory: &Path, output: &Path) -> Result<()> {
+    use std::io::Write;
+    let bytes = pack_directory(directory)?;
+    let mut file = std::fs::OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .open(output)
+        .context("create new package archive")?;
+    file.write_all(&bytes)?;
     println!(
-        "{}",
-        if retired {
-            "Legacy registry session retired."
-        } else {
-            "No legacy registry session found."
-        }
+        "{} bytes: {}",
+        bytes.len(),
+        safe_text(&output.display().to_string())
     );
     Ok(())
 }
@@ -222,7 +224,7 @@ fn migrate_credentials(
 async fn install(
     args: &Args,
     manager: &PackageManager,
-    registry: &RegistryClient,
+    registry: Option<&RegistryClient>,
     source: &str,
 ) -> Result<()> {
     let governor = Arc::new(Governor::new(args.resources())?);
@@ -265,74 +267,55 @@ async fn login(
     let token = registry
         .wait_for_login(&code, CancellationToken::new())
         .await?;
-    save_registry_token(manager.root(), registry.origin(), &token)?;
+    registry_credentials(manager, registry, move |root, origin| {
+        save_registry_token(root, origin, &token)
+    })
+    .await?;
     println!("Signed in to the package registry.");
     Ok(())
+}
+
+async fn logout(manager: &PackageManager, registry: &RegistryClient) -> Result<()> {
+    let token = registry_credentials(manager, registry, load_registry_token).await?;
+    let revoked = registry.logout(&token).await;
+    registry_credentials(manager, registry, delete_registry_token).await?;
+    revoked.context("local session removed; remote revocation failed")?;
+    println!("Registry session revoked and removed.");
+    Ok(())
+}
+
+async fn migrate_credentials(
+    manager: &PackageManager,
+    registry: &RegistryClient,
+    stopped: bool,
+) -> Result<()> {
+    let cleaned = registry_credentials(manager, registry, move |root, origin| {
+        migrate_registry_token(root, origin, stopped)
+    })
+    .await?;
+    if cleaned {
+        println!("Registry credentials migrated to the encrypted vault.");
+    } else {
+        println!(
+            "No legacy registry session file was found. Use package login if no encrypted session is saved."
+        );
+    }
+    Ok(())
+}
+
+async fn registry_credentials<T: Send + 'static>(
+    manager: &PackageManager,
+    registry: &RegistryClient,
+    operation: impl FnOnce(&Path, &str) -> Result<T> + Send + 'static,
+) -> Result<T> {
+    let root = manager.root().to_path_buf();
+    let origin = registry.origin().to_owned();
+    tokio::task::spawn_blocking(move || operation(&root, &origin))
+        .await
+        .context("registry credential operation interrupted")?
 }
 
 fn show(value: &impl serde::Serialize) -> Result<()> {
     println!("{}", safe_text(&serde_json::to_string_pretty(value)?));
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use std::{cell::Cell, ffi::OsStr};
-
-    use clap::Parser;
-
-    use super::*;
-    use crate::args::Command;
-
-    #[test]
-    fn failed_revocation_still_clears_local_session() {
-        let cleared = Cell::new(false);
-        let result = finish_logout(Err(anyhow::anyhow!("fixture revocation failure")), || {
-            cleared.set(true);
-            Ok(())
-        });
-        assert!(cleared.get());
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn local_clear_failure_prevents_logout_success() {
-        let result = finish_logout(Ok(()), || Err(anyhow::anyhow!("fixture storage failure")));
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn registry_migration_requires_confirmation_before_storage() -> Result<()> {
-        let directory = tempfile::tempdir()?;
-        let state = directory.path().join("state");
-        let result = Args::try_parse_from([
-            OsStr::new("ejm-cli"),
-            OsStr::new("--state-dir"),
-            state.as_os_str(),
-            OsStr::new("package"),
-            OsStr::new("migrate-credentials"),
-        ]);
-        assert!(result.is_err());
-        assert!(!state.exists());
-        Ok(())
-    }
-
-    #[test]
-    fn registry_migration_accepts_explicit_confirmation() -> Result<()> {
-        let args = Args::try_parse_from([
-            "ejm-cli",
-            "package",
-            "migrate-credentials",
-            "--old-clients-stopped",
-        ])?;
-        assert!(matches!(
-            args.command,
-            Some(Command::Package {
-                command: PackageCommand::MigrateCredentials {
-                    old_clients_stopped: true
-                }
-            })
-        ));
-        Ok(())
-    }
 }

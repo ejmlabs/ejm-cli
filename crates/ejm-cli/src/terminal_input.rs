@@ -77,6 +77,15 @@ impl Input {
         Ok(())
     }
 
+    /// The official client may consume a Windows key release while it owns input.
+    pub(crate) fn resume(&mut self) -> Result<()> {
+        #[cfg(windows)]
+        {
+            self.keys = crate::terminal::KeyInput::windows();
+        }
+        self.reset()
+    }
+
     #[cfg(any(windows, test))]
     fn take_native_keys(&mut self) -> Result<()> {
         self.keys = NATIVE_KEYS
