@@ -74,8 +74,8 @@ The service SHALL provide a public sale/share opt-out route without requiring lo
 Users SHALL be able to inspect, correct, export and request deletion of account, profile and retained usage data. Rights workflows SHALL cover staging and recipients, track completion and retained exceptions, and enforce applicable acknowledgement and response deadlines with overdue detection and extension notices. Identity checks for access or deletion SHALL NOT block sale opt-out.
 
 #### Scenario: Account deletion is requested
-- **WHEN** an authenticated user closes their account
-- **THEN** new relay authority and commercial transfers stop, pending exports are invalidated, and the user receives a tracked deletion status including separately retained records
+- **WHEN** an authenticated user requests account deletion or closure
+- **THEN** relay authority and commercial transfers stop before successful acknowledgement, pending exports are invalidated, and the user receives tracked deletion status including separately retained records
 
 #### Scenario: Data was already delivered
 - **WHEN** a rights request concerns a prior buyer export
@@ -162,7 +162,7 @@ A previously opted-out user SHALL rejoin only through a user-initiated request f
 
 #### Scenario: User requests to rejoin
 - **WHEN** an opted-out user starts rejoining the commercial program
-- **THEN** sales remain blocked until a distinct confirmation succeeds and no active opt-out signal suppresses eligibility
+- **THEN** sales remain blocked until a distinct confirmation succeeds and no active opt-out signal suppresses eligibility; fresh unchecked consent choices then become available without restoring prior consent or clearing solicitation suppression
 
 #### Scenario: New buyer belongs to an existing category
 - **WHEN** a buyer in a previously described category was not named in the accepted consent

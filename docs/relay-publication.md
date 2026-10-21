@@ -6,17 +6,18 @@ This Worker/browser layer is prepared on actual protected CLI parent
 and inert install/review inputs. It does not accept this complete Worker,
 new UI installation or browser runtime.
 
-For published Worker head `86d8a73c648714c2cdb94dbdc3cbd860471f3154`,
-[run 39659009589](https://github.com/ejmlabs/ejm-cli/actions/runs/39659009589)
+For published Worker head `c14793c426b1b50cd8738de54cfa46b2596f81c8`,
+[run 39667399563](https://github.com/ejmlabs/ejm-cli/actions/runs/39667399563)
 produced one complete review with two medium findings. The second review failed
 execution without a final report. Neither result accepts the source. The
-prepared correction queues scoped recipient-only withdrawal follow-up and rejects
-expired profiles at cohort reads and final disclosure commit through shared
-eligibility. See [privacy contracts](relay-privacy.md#user-controls).
+prepared correction revokes account authority before acknowledging deletion and
+shows fresh unchecked consent choices after confirmed rejoin while retaining
+solicitation suppression. It preserves scoped withdrawal follow-up and profile
+expiry checks. See [privacy contracts](relay-privacy.md#user-controls).
 
-The correction still needs its fresh local gate, exact-source hosted checks and
-two complete final reviews, separate final approval, protected adoption,
-deployment and authenticated live acceptance. Earlier correction sections below
+The correction requires its own local gate, exact-source hosted checks, two
+complete final reviews, separate final approval, protected adoption, deployment
+and authenticated live acceptance. Earlier correction sections below
 retain their specific source evidence. The historical closed deployment is
 recorded in [deployment status](remote-deployment.md).
 

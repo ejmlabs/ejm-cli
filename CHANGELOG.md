@@ -11,6 +11,7 @@ Changes follow [Semantic Versioning](https://semver.org/). Each repository is ve
 
 ### Fixed
 
+- Prepare immediate relay revocation on deletion requests and fresh unchecked choices after confirmed rejoin. Protected acceptance and deployment remain pending.
 - Prepare automatic recipient follow-up on withdrawal and shared profile-expiry checks for individual and cohort disclosures. Protected acceptance and deployment remain pending.
 - Prepare durable profile-retention scan progress, preserve deletion deadlines across withdrawal, opt-out and GPC, and honor live holds on unadmitted identities. The [retention reviews and corrections](docs/relay-publication.md#profile-retention-correction) remain subject to protected acceptance and deployment.
 - Prepare bounded native relay retirement on ordinary stop and graceful exit, and authoritative browser recovery after Events gaps. Preserve reconnect reservations and uncertain actions. The [complete e0bf retry reviews](docs/relay-publication.md#native-retirement-and-browser-gap-correction) found both defects; corrected-source acceptance and deployment remain pending.

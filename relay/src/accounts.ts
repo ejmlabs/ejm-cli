@@ -99,8 +99,8 @@ export async function followUpRightsRequest(env: Env, result: Record<string, unk
   // The authority owns the pending task before relay credentials are revoked.
   try { await queueOperationalTask(env, object(result.operationalTask)); }
   catch { result.operationalQueuePending = true; }
-  if (result.kind === "close") {
-    try { await revokeRelayAccount(env, accountId, true); result.closed = true; result.relayClosureAcknowledged = true; }
+  if (result.kind === "close" || result.kind === "delete") {
+    try { await revokeRelayAccount(env, accountId, result.kind === "close"); result.closed = true; result.relayClosureAcknowledged = true; }
     catch { result.error = "relay_revocation_pending"; result.relayClosureAcknowledged = false; return 503; }
   }
   return 200;

@@ -445,6 +445,15 @@ report. Refine task 2.4 for only these two confirmed blockers:
   Fresh admission, complete reviews, approval, protected adoption, deployment
   and authenticated acceptance remain required. All release tasks stay open.
 
+The complete first c147 review also identified deletion authority and rejoin
+presentation gaps. The CLI account adapter must await its existing revocation
+helper for both deletion and closure, passing whether privacy is already closed.
+The privacy renderer must offer unchecked category choices after confirmed rejoin
+without clearing the retained opt-out timestamp or restoring consent. Reuse public
+UI forms and existing suppression checks. Extend only the existing deletion/hold
+and rejoin cases; prove old failures, then one corrected invocation and one normal
+gate. Fresh admission and separate final approval remain required.
+
 ### Dependency and artifact bounds
 
 Activate the exact 51-line candidate manifest already reviewed with its inherited

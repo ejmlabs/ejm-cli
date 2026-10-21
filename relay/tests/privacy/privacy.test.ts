@@ -124,6 +124,11 @@ describe("persistent opt-outs and deliberate rejoining", () => {
     expect(() => service.rejoin(actor("account-a", { gpc: true }), { step: "confirm", token: request.token, confirmed: true })).toThrow("active_gpc");
     expect(() => service.rejoin(actor("other"), { step: "confirm", token: request.token, confirmed: true })).toThrow("participation_ineligible");
     expect(service.rejoin(actor(), { step: "confirm", token: request.token, confirmed: true })).toMatchObject({ rejoined: true, salesEnabled: false, requiresFreshConsent: true });
+    const status = service.status(actor()); expect(status).toMatchObject({ optedOut: false, maySolicit: false });
+    const html = accountPage(status); const choices = html.match(/<form\b[^>]*action="\/api\/privacy\/consent"[^>]*>[\s\S]*?<\/form>/gu) ?? [];
+    expect(choices).toHaveLength(2);
+    for (const choice of choices) { expect(choice).toContain('type="checkbox"'); expect(choice).not.toContain(" checked"); }
+    expect(html).not.toContain('action="/api/privacy/profile"');
     expect(() => prepare(service)).toThrow("export_eligibility_changed");
     expect(() => service.rejoin(actor(), { step: "confirm", token: request.token, confirmed: true })).toThrow("rejoin_expired");
   });

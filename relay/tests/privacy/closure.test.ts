@@ -122,10 +122,10 @@ it.each([true, false])("respects live operational holds during rights deletion a
   const account = await owner(); const now = Date.now();
   const response = await call("/api/privacy/rights/request", account.token, { kind: "delete", jurisdiction: "fixture" });
   expect(response.status).toBe(200); const receipt = await response.json<{ requestId: string; statusKey: string }>();
+  expect((await call("/v1/account", account.token)).status).toBe(401);
   const expiresAt = now + (held ? 86_400_000 : -1);
   await bindings.DB.prepare("INSERT INTO operational_legal_holds(id,account_id,category,reason,evidence,expires_at) VALUES('retained-identity',?,'payment','Fixture legal claim','Fixture reviewed evidence',?)").bind(account.id, expiresAt).run();
   await operationalCleanup(bindings);
-  expect((await call("/v1/account", account.token)).status).toBe(401);
   expect(await bindings.DB.prepare("SELECT status FROM relay_accounts WHERE id=?").bind(account.id).first()).toEqual({ status: "closed" });
   const device = await bindings.DB.prepare("SELECT label,os_family,cli_major,revoked_at FROM relay_devices WHERE id=?").bind(account.deviceId).first();
   expect(device).toMatchObject(held ? { label: "Fixture device", os_family: "linux", cli_major: 1, revoked_at: expect.any(Number) } : { label: "Deleted device", os_family: null, cli_major: null, revoked_at: expect.any(Number) });
