@@ -81,7 +81,7 @@ retained journal from the public harness benchmark, then pass its
 # Run in ejm-harness. Use new, absolute paths without symlink components.
 target/release/ejm-harness-bench --agents 1000 --rounds 0 --deltas 128 --park-ms 0 --capacity fixed --capacity-root /private/tmp/ejm-capacity-fixture --state-dir /private/tmp/ejm-saved-fixture
 
-# Run in ejm-cli after building its release binary and installing site dependencies.
+# Run in ejm-cli after building its release binary and installing the observer with `npm ci --prefix scripts`.
 python3 scripts/check_terminal.py --measure-saved target/release/ejm-cli --state-dir /private/tmp/ejm-saved-fixture --session SESSION_ID_FROM_REPORT --samples 20 --idle-seconds 60 --output docs/evidence/capacity-terminal-1000.json
 ```
 

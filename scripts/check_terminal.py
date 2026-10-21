@@ -690,7 +690,7 @@ def measure_sessions(arguments: list[str], live: bool = False) -> None:
     emulator.stdin.write("\n")
     emulator.stdin.flush()
     if not emulator.stdout.readline():
-        raise RuntimeError("terminal observer could not start; install the documented site dependencies")
+        raise RuntimeError("terminal observer could not start; run npm ci --prefix scripts")
     started = time.perf_counter_ns()
     process = subprocess.Popen(
         command, stdin=slave, stdout=slave, stderr=slave,

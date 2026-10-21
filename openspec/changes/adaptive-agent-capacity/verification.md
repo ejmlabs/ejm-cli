@@ -1635,3 +1635,7 @@ This bridge ran no new build, test, fixture or benchmark and changes no public
 runtime contract. Existing public native limits and gated-default guidance
 remain accurate, so no public guide or site build changed for this closeout.
 No release, publication or other-platform acceptance is claimed.
+
+### Scoped integration correction
+
+The first integration checkpoint passed release builds and all four Stop tests, then failed before workload startup because the scoped branch omitted the terminal observer. Both observer processes were reaped; no client or helper identities were discovered. The relay contract set passed 18 of 19 tests and caught an unintended 64 KiB prompt limit. Restore main's 16 KiB boundary and declare the observer's existing maintained emulator directly. Retest before claiming acceptance.

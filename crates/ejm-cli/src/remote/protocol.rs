@@ -14,7 +14,7 @@ use super::{
 
 pub const MAX_REPLAY_EVENTS: usize = 512;
 pub const MAX_MESSAGE_BYTES: usize = 1024 * 1024;
-pub const MAX_PROMPT_BYTES: usize = 64 * 1024;
+pub const MAX_PROMPT_BYTES: usize = 16 * 1024;
 pub const MAX_PENDING_PROMPTS: usize = 8;
 /// Native and browser peers share exactly represented action numbers.
 pub const MAX_MUTATION_SEQUENCE: u64 = 9_007_199_254_740_991;

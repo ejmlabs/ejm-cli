@@ -212,3 +212,7 @@ Verify cold server rendering includes every panel without a fallback/error templ
 5. Sync and archive only verified completed runtime work through the matching OpenSpec skills. Publishing remains a separate explicit request.
 
 For rollback during development or release recovery, select fixed mode to restore the former process envelope while retaining host coordination. A full code rollback preserves durable session and relay schemas; a newer learned profile must be ignored safely by older harness versions. Do not delete session state, credentials, or shared host reservations to roll back presentation changes.
+
+## Scoped release integration
+
+The static-site release branch installs the optional PTY observer through a private scripts/package.json with exactly pinned @xterm/headless 6.0.0. This reuses the maintained emulator without pulling in the separate site redesign or changing runtime dependencies. The relay retains protected main's 16 KiB prompt limit, matching the harness admission boundary. Verify the retained relay contracts and exact integration build before workload acceptance.
