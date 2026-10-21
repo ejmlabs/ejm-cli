@@ -16,6 +16,7 @@ ejm-cli is the Rust terminal app for ejm-harness, made by ejmlabs. The harness l
 ## Rules
 
 - Never use em dashes. Write plainly, in sentence case.
+- Package manifests use `ejm.package.json`. Registry operations require an explicit origin; local packages need no registry. Keep unrelated proprietary identity and defaults out of this project.
 - Use only the harness's public interface. Keep model and tool execution out of the TUI.
 - Use `ejm-harness-auth` for sign-in, credential storage and refresh. Only the CLI host opens a browser after binding its loopback listener. Never accept or display bearer tokens through arguments, logs or the TUI.
 - Use trusted, maintained packages for general infrastructure. Write custom code for ejm-cli's distinct product behavior, such as TUI interaction. Document the package alternatives and evidence for any unmet need.

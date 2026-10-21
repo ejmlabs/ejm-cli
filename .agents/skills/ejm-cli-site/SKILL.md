@@ -15,4 +15,4 @@ Read `site/dist/index.html`, `site/dist/_headers`, `site/wrangler.jsonc` and `sc
 
 Preview with `python3 -m http.server 4831 --directory site/dist --bind 127.0.0.1`. Check desktop and a 375 px phone in light and dark, that `scrollWidth` equals `clientWidth`, keyboard focus, the skip link and an empty console.
 
-Deploy only when the user asks to publish. Production goes live at once on `cli.ejmlabs.com` through the Worker `ejmlabs-cli`: `wrangler deploy --config site/wrangler.jsonc`. Never touch other Workers on the account, including `gerry-*`, `ejmlabs`, `ejmlabs-ide` and `ejmlabs-harness`. Afterward, fetch the live page, check status and security headers with `curl -sI`, and look at it in a browser.
+Deploy only when the user asks to publish. Production goes live at once on `cli.ejmlabs.com` through the Worker `ejmlabs-cli`: `wrangler deploy --config site/wrangler.jsonc`. Leave every other Worker unchanged. Afterward, fetch the live page, check status and security headers with `curl -sI`, and look at it in a browser.

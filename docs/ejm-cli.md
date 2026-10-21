@@ -172,7 +172,7 @@ or an updated public site.
 
 ### Install and enable
 
-For a local package directory containing a valid `gerry.package.json`:
+For a local package directory containing a valid `ejm.package.json`:
 
 ```sh
 ejm-cli package install ./my-package
@@ -224,7 +224,7 @@ Update installs a new exact registry version and clears trust and grants. Inspec
 
 ### Registry and publishing
 
-Registry commands use `https://harness.meetgerry.ai`. The endpoint and live service have their own availability and release requirements. These commands make network requests:
+Registry operations require `ejm-cli package --registry ORIGIN COMMAND` or `EJM_REGISTRY_URL`. The flag takes precedence. There is no default registry. Use HTTPS, or HTTP on loopback for local development. Credentials stay scoped to the selected origin and are not migrated between origins. Missing or unsafe origins fail before package storage, credential access or network requests. Local packages and third-party sources need no registry. A configured origin does not prove that its service is available. These commands make network requests:
 
 ```sh
 ejm-cli package search QUERY

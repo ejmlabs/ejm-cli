@@ -78,7 +78,9 @@ async fn run(mut args: Args) -> Result<bool> {
         })
         | None => AgentMode::Interactive,
         Some(Command::Remote { command }) => return remote::run(&args, command).await,
-        Some(Command::Package { command }) => return packages::run(&args, command).await,
+        Some(Command::Package { command, registry }) => {
+            return packages::run(&args, command, registry.as_deref()).await;
+        }
         Some(Command::Doctor) => return doctor(&args),
         Some(Command::Login {
             service,

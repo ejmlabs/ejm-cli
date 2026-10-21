@@ -235,6 +235,14 @@ pub enum Command {
     },
     #[command(aliases = ["packages", "pkg"], about = "Discover, install, trust, and publish ejm-harness packages")]
     Package {
+        #[arg(
+            long,
+            global = true,
+            env = "EJM_REGISTRY_URL",
+            value_name = "ORIGIN",
+            help = "Package registry origin; required for registry operations (no default)"
+        )]
+        registry: Option<String>,
         #[command(subcommand)]
         command: crate::packages::PackageCommand,
     },
@@ -431,7 +439,7 @@ mod tests {
             Some(Command::Package {
                 command: crate::packages::PackageCommand::Enable {
                     trust: true, grant_provider, grant_widget, ..
-                }
+                }, ..
             }) if grant_provider == ["offline"] && grant_widget == ["status"]
         ));
         assert!(
