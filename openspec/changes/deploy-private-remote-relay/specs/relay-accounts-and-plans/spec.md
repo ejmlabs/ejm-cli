@@ -51,12 +51,20 @@ Users SHALL be able to list safe relay device metadata, revoke devices, log out 
 - **WHEN** a verified account session without a registered transport device stops a share owned by that account
 - **THEN** the account service retires that share under its mutation-origin checks without enrolling a controller or granting decryption or execution authority
 
+#### Scenario: Identity closes before accepting terms
+- **WHEN** a verified identity closes through either account or privacy closure before accepting terms
+- **THEN** closure persists through later linked sign-in and blocks account admission and terms acceptance until the existing deletion process removes that identity, without extending retention on a retry
+
 ### Requirement: Server-owned plans and checkout
 The server SHALL choose prices, plan identifiers and account mapping for hosted checkout. Customers SHALL use the payment processor for payment details and subscription management. Missing billing configuration SHALL disable checkout clearly without granting a paid plan.
 
 #### Scenario: Client tampers with plan details
 - **WHEN** a client supplies a different price, amount or account identifier
 - **THEN** checkout uses only the authenticated account and a server-allowed plan or rejects the request
+
+#### Scenario: Checkout creation is delayed or retried
+- **WHEN** provider creation is delayed or its response fails
+- **THEN** retries retain the original key, plan and deadline, creation has sufficient provider expiry headroom, and a fresh attempt is allowed only after provider-confirmed terminal state or a definitive rejection that proves no session was created
 
 ### Requirement: Verified idempotent billing
 Entitlements SHALL change only after authenticated payment-provider evidence. Webhooks SHALL verify the original request body, deduplicate event identifiers and reconcile authoritative payment state despite duplicate or unordered delivery. Checkout redirects SHALL NOT grant access.

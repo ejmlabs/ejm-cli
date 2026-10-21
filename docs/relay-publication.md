@@ -4,11 +4,12 @@ This Worker/browser layer is being integrated on actual protected CLI parent
 `78810826cd376588d3303f13bc237309fb5170a8`, tree
 `dca23befbbe5bf065807f8ed06a98aa5b4c7a159`. The parent accepts native source
 and inert install/review inputs. It does not accept this complete Worker,
-new UI installation or browser runtime. Worker PR #23's first correction head
-`9336df2fdd551fdc7a0d5d870788301d116b555c` passed its normal local gate,
-but both complete hosted reviews reported four medium blockers and one low
-advisory. The [second review corrections](#second-worker-review-corrections)
-are being prepared locally. Their checks, fresh hosted acceptance, protected
+new UI installation or browser runtime. Worker PR #23's
+[second corrections](#second-worker-review-corrections) passed the normal local
+gate at `2de6de3958a288da4ed90c5379c26238a739e06d`. The first hosted review
+reported two medium blockers; the second timed out without a final report.
+The [third corrections](#third-worker-review-corrections) are being prepared.
+Each candidate must pass its local checks. Fresh hosted acceptance, protected
 adoption, deployment and authenticated live acceptance remain pending.
 The historical closed deployment is recorded in [deployment status](remote-deployment.md).
 
@@ -151,14 +152,43 @@ no runtime timeout or capacity failure caused their result. The prepared fixes a
   gate; the corrected wrapper reached its prerequisite check and propagated
   exit status 1. This does not verify Windows runtime or a complete gate run.
 
-The lifecycle and disclosure corrections remain local preparation. Their focused
-regressions, the normal full gate and fresh exact-head hosted reviews remain
-required before separate human approval and protected adoption. They add no D1
-migration, dependency or service and change no approved policy body, retention
-duration or release control. Unowned legacy Room state requires a fresh share ID.
+These corrections passed their focused regressions and normal full gate at
+`2de6de3958a288da4ed90c5379c26238a739e06d`, tree
+`9b58b76249cfcf303fe3d3bf356af0a2da1224a6`, on macOS arm64 on October 21,
+2026 UTC, from 04:17:03 through 04:18:17. All 140 Worker tests and eleven
+Chrome cases passed alongside native, WASM and terminal checks, with unchanged
+source during the gate. The following hosted review blocked adoption.
+These changes add no D1 migration, dependency or service and change no approved
+policy body, retention duration or release control. Unowned legacy Room state
+requires a fresh share ID.
 Preserve ownership, pending closure and retirement records; rollback to code that
 ignores them is unsupported while that state remains live. See
 [deployment and rollback](../relay/README.md#deployment-and-rollback).
+
+### Third Worker review corrections
+
+In [run 39544920374](https://github.com/ejmlabs/ejm-cli/actions/runs/39544920374),
+review 1 completed for 2de6 and reported two medium blockers. Review 2 hit its
+nine-minute execution limit without a final report. The timeout does not erase
+the first review's findings or provide a second review acceptance. Hosted
+Linux/macOS quality, registry and standards checks passed for 2de6; the review
+results blocked adoption.
+
+- Persist closure for a verified identity that has not accepted terms, using
+  the existing account batch and retention rules. A fresh linked GitHub login
+  cannot reactivate that identity or accept terms after closure. Retries retain
+  the original cleanup deadline and cannot recreate an already-purged identity.
+- Persist a fixed 60-minute Checkout deadline and retain at least 31 minutes
+  of creation headroom. Keep the same key and parameters after uncertain
+  failures; use bounded reconciliation after the guard. Only a definitive
+  provider expiry-validation rejection of a newly allocated key can release
+  that unresolved attempt. A previously uncertain key remains guarded.
+  Empty or truncated provider history cannot authorize another subscription.
+
+These fixes remain local preparation until focused regressions, the unchanged
+full gate and fresh exact-source hosted checks pass. They retain the existing
+account schema and pinned Stripe client. Billing remains disabled. Policy text,
+retention durations and release controls are unchanged.
 
 Deploy only production artifacts from the accepted source, with admission closed,
 then bind the Worker version, configuration and artifact hashes. Verify anonymous

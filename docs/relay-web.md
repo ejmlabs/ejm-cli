@@ -11,7 +11,10 @@ Worker, WASM and browser stages and cf1's normal full gate. The
 [first corrections](relay-publication.md#worker-review-corrections) passed their
 normal local gate at 9336, but both complete hosted reviews found further defects.
 The [second corrections](relay-publication.md#second-worker-review-corrections)
-remain prepared, with checks, protected adoption and deployment pending. See
+passed their normal local gate at 2de6. Its first hosted review found two more
+defects and its second review timed out without a report. The
+[third corrections](relay-publication.md#third-worker-review-corrections) remain
+prepared, with fresh hosted review, protected adoption and deployment pending. See
 [publication status](relay-publication.md) and [deployment status](remote-deployment.md).
 
 Controller HTML and every `/control/assets/` file require the verified account

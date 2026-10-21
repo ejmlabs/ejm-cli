@@ -132,9 +132,10 @@ export async function serializedBilling(env: Env, path: string, data: Record<str
     const now = Date.now();
     let pending: Stripe.Checkout.Session | null = null;
     if (billing.checkout_session_id) pending = await api.checkout.sessions.retrieve(billing.checkout_session_id);
-    else if (billing.checkout_key && (billing.checkout_expires_at ?? 0) <= now) {
+    else if (billing.checkout_key && (billing.checkout_expires_at ?? 0) - now < 31 * 60_000) {
       // Recover a lost response without replacing an uncertain provider request.
       const sessions = await api.checkout.sessions.list({ customer: billing.customer_id, limit: 20 });
+      if (sessions.has_more) return failure(503, "checkout_review_required");
       const requestKey = billing.checkout_key;
       pending = sessions.data.find(session => session.metadata?.relay_checkout_key === requestKey) ?? null;
       if (!pending) return failure(503, "checkout_reconciliation_pending");
@@ -147,12 +148,23 @@ export async function serializedBilling(env: Env, path: string, data: Record<str
       // Replace only after provider-confirmed expiry or a terminal prior subscription.
       billing.checkout_key = null;
     } else if (billing.checkout_key && billing.checkout_plan !== data.plan) return failure(409, "finish_or_expire_pending_checkout");
+    const freshAttempt = !billing.checkout_key;
     if (!billing.checkout_key) {
-      billing.checkout_key = crypto.randomUUID(); billing.checkout_expires_at = (Math.floor(now / 1000) + 1800) * 1000;
+      billing.checkout_key = crypto.randomUUID(); billing.checkout_expires_at = (Math.floor(Date.now() / 1000) + 3600) * 1000;
       await env.DB.prepare("UPDATE relay_billing SET checkout_key=?,checkout_session_id=NULL,checkout_plan=?,checkout_expires_at=? WHERE account_id=?").bind(billing.checkout_key, data.plan, billing.checkout_expires_at, accountId).run();
     }
+    // Keep provider headroom even after awaited work; never slide an existing deadline.
+    if ((billing.checkout_expires_at ?? 0) - Date.now() < 31 * 60_000) return failure(503, "checkout_reconciliation_pending");
     // Persist request identity before provider I/O, so an uncertain retry recovers one session.
-    const checkout = await api.checkout.sessions.create({ mode: "subscription", customer: billing.customer_id, line_items: [{ price, quantity: 1 }], expires_at: Math.floor((billing.checkout_expires_at ?? 0) / 1000), success_url: `${env.RELAY_ORIGIN}/account?checkout=returned`, cancel_url: `${env.RELAY_ORIGIN}/account`, subscription_data: { metadata: { relay_account_id: accountId } }, metadata: { relay_account_id: accountId, relay_checkout_key: billing.checkout_key } }, { idempotencyKey: billing.checkout_key });
+    let checkout: Stripe.Checkout.Session;
+    try {
+      checkout = await api.checkout.sessions.create({ mode: "subscription", customer: billing.customer_id, line_items: [{ price, quantity: 1 }], expires_at: Math.floor((billing.checkout_expires_at ?? 0) / 1000), success_url: `${env.RELAY_ORIGIN}/account?checkout=returned`, cancel_url: `${env.RELAY_ORIGIN}/account`, subscription_data: { metadata: { relay_account_id: accountId } }, metadata: { relay_account_id: accountId, relay_checkout_key: billing.checkout_key } }, { idempotencyKey: billing.checkout_key });
+    } catch (error) {
+      // Only this invocation's fresh validation failure proves no earlier uncertain attempt exists.
+      if (!freshAttempt || !(error instanceof Stripe.errors.StripeInvalidRequestError) || error.rawType !== "invalid_request_error" || error.statusCode !== 400 || error.param !== "expires_at") throw error;
+      await env.DB.prepare("UPDATE relay_billing SET checkout_key=NULL,checkout_session_id=NULL,checkout_plan=NULL,checkout_expires_at=NULL WHERE account_id=? AND checkout_key=? AND checkout_session_id IS NULL").bind(accountId, billing.checkout_key).run();
+      return failure(503, "checkout_unavailable");
+    }
     await env.DB.prepare("UPDATE relay_billing SET checkout_session_id=? WHERE account_id=? AND checkout_key=?").bind(checkout.id, accountId, billing.checkout_key).run();
     return checkoutResponse(checkout, accountId, billing.customer_id, true) ?? failure(503, "checkout_unavailable");
   }

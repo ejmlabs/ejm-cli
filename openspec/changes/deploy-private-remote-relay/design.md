@@ -263,6 +263,41 @@ then pass focused tests and the unchanged full gate. Reuse existing platform
 storage and crypto, add no service, dependency, recurring timer or D1 migration,
 and keep all release, policy and admission controls unchanged.
 
+### Pre-terms closure and Checkout creation corrections
+
+Review 1 in run `39544920374` completed for
+`2de6de3958a288da4ed90c5379c26238a739e06d` and reported two medium
+blockers. Correct them under task 2.4 before fresh human admission. Review 2
+timed out after nine minutes without a final report; it supplies no acceptance.
+Platform gates remain separate evidence.
+
+Closing a verified identity before terms acceptance must persist a closed
+account marker in the existing D1 batch. Use an UPSERT selected from the
+existing identity so a stale retry cannot recreate a purged identity. Preserve
+original terms and closure/cleanup timestamps on conflict. Reuse existing
+authentication, retention, hold and rights rules without a schema change.
+Cover both closure routes through the real offline OAuth flow: a fresh linked
+login after closure cannot read an admitted account or accept terms.
+
+Keep the pinned Stripe client and its current bounded timeout/retry settings.
+Persist one Checkout key, plan and fixed 60-minute deadline before creation.
+Retry creation only with those exact parameters while at least 31 minutes
+remain; once inside that guard, reconcile through bounded provider reads.
+Do not slide the deadline or infer no session from an empty or truncated list.
+Only a typed provider validation rejection of `expires_at` for a key first
+allocated in the current invocation can conditionally release that unresolved
+key. A later user request can then allocate a fresh attempt. Pre-existing
+attempts remain guarded even after a validation error. Network, timeout, server,
+idempotency and conflict errors retain the original key and require
+reconciliation or review. Never rekey an ambiguous operation automatically.
+
+Use meaningful regressions that enforce Stripe's creation-time expiry window
+and distinguish definitive rejection from uncertain failure. Prove the intended
+old-code failures, then pass the focused and unchanged full gates. No new
+package, migration, service, timer, entitlement path or payment activation is
+included. Update affected public guides while keeping publication and live
+authenticated acceptance open.
+
 ### Dependency and artifact bounds
 
 Activate the exact 51-line candidate manifest already reviewed with its inherited

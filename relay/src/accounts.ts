@@ -106,7 +106,7 @@ export async function revokeRelayAccount(env: Env, accountId: string, privacyAlr
   }
   const now = Date.now();
   await env.DB.batch([
-    env.DB.prepare("UPDATE relay_accounts SET status='closed',closed_at=COALESCE(closed_at,?),cleanup_after=COALESCE(cleanup_after,?) WHERE id=?").bind(now, now, accountId),
+    env.DB.prepare('INSERT INTO relay_accounts(id,status,email_provenance,created_at,closed_at,cleanup_after) SELECT id,\'closed\',\'github_verified_primary\',?,?,? FROM "user" WHERE id=? ON CONFLICT(id) DO UPDATE SET status=\'closed\',closed_at=COALESCE(relay_accounts.closed_at,excluded.closed_at),cleanup_after=COALESCE(relay_accounts.cleanup_after,excluded.cleanup_after)').bind(now, now, now, accountId),
     env.DB.prepare("UPDATE relay_devices SET revoked_at=? WHERE account_id=?").bind(now, accountId),
     env.DB.prepare('DELETE FROM "session" WHERE "userId"=?').bind(accountId),
   ]);

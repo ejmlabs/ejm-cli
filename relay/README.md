@@ -12,7 +12,10 @@ native, WASM, Worker and browser stages and cf1's normal full gate. The
 [first corrections](../docs/relay-publication.md#worker-review-corrections) passed
 their normal local gate at 9336, but both complete hosted reviews found further
 defects. The [second corrections](../docs/relay-publication.md#second-worker-review-corrections)
-remain prepared, with checks and protected adoption pending. Updated UI
+passed their normal local gate at 2de6. Its first hosted review found two more
+defects and its second review timed out without a report. The
+[third corrections](../docs/relay-publication.md#third-worker-review-corrections)
+remain prepared, with fresh hosted review and protected adoption pending. Updated UI
 deployment remains pending. See [publication prerequisites](../docs/relay-publication.md) for exact
 receipts and [deployment status](../docs/remote-deployment.md) for historical
 closed uploads. Admission stays closed with a two-account limit. Payments,
@@ -34,7 +37,8 @@ deadlines inside the final transaction, after asynchronous payload hashing.
 Fresh time, current consent and subject generation must still permit release;
 expired or deleted usage cannot be disclosed. See the
 [second review corrections](../docs/relay-publication.md#second-worker-review-corrections)
-for pending verification. Retention durations and approved policy text are unchanged.
+for its bounded local result and pending hosted acceptance. Retention durations
+and approved policy text are unchanged.
 
 ## Shared screens
 
@@ -242,6 +246,12 @@ level. The dashboard shows the receipt on its result page without automatic
 navigation. Save it before leaving; the service stores only the key's hash.
 Pending work remains durable after session revocation.
 
+Closure also applies to a verified identity that has not accepted terms. It
+creates a closed account marker without recording terms acceptance. A later
+linked GitHub sign-in cannot restore account access or accept terms for that
+identity. Closure retries preserve the original cleanup deadline. Existing
+retention, preservation holds and tracked deletion work still apply.
+
 Quota revocation retains a bounded set of pending Room closure targets until the
 Room acknowledges closure or verified original expiry invalidates every transport
 lease. Each account revocation attempt processes one unexpired target; a failed
@@ -411,7 +421,21 @@ Publish how Cloudflare, GitHub, Stripe, backups and legally retained records are
 
 Payments are disabled in the closed preview. The following describes the optional implementation and its activation requirements.
 
-Create monthly and yearly recurring prices in the operator's Stripe account and configure the customer portal. The client sends only `monthly` or `yearly`. The server chooses the price and customer mapping. Before checkout, the account authority reads current Stripe subscriptions. Every nonterminal subscription, including past due or incomplete payment, goes to the customer portal. The local free/paid entitlement never authorizes a second subscription. The authority checks a recorded Checkout session even after its local timeout; a completed session goes to the portal, and only Stripe's confirmed expired state or the completed session's exact subscription becoming terminal permits a replacement. Repeated open checkout reuses one session. An uncertain response retries its persisted Stripe idempotency key, and an expired uncertain request is recovered by its provider metadata. Missing or incomplete provider history fails closed for operator reconciliation rather than starting another subscription. A different pending plan is rejected until that Checkout expires. All payment forms stay on Stripe.
+Create monthly and yearly recurring prices in the operator's Stripe account and configure the customer portal. The client sends only `monthly` or `yearly`. The server chooses the price and customer mapping. Before checkout, the account authority reads current Stripe subscriptions. Every nonterminal subscription, including past due or incomplete payment, goes to the customer portal. The local free/paid entitlement never authorizes a second subscription. The authority checks a recorded Checkout session even after its local timeout; a completed session goes to the portal, and only Stripe's confirmed expired state or the completed session's exact subscription becoming terminal permits a replacement. Repeated open checkout reuses one session. A different pending plan is rejected until that Checkout expires. All payment forms stay on Stripe.
+
+Each creation attempt saves its key, plan and a fixed 60-minute expiry before
+contacting Stripe. Unknown results retry the same parameters only while at
+least 31 minutes remain. This leaves headroom above Stripe's
+[30-minute minimum](https://docs.stripe.com/api/checkout/sessions/create#checkout_session_create-expires_at).
+Later requests use bounded provider reconciliation. Empty or incomplete history
+does not prove that creation failed and cannot authorize another subscription.
+Only a typed provider validation rejection of `expires_at` for a key first
+allocated in that request clears the unresolved attempt. The request returns
+`503/checkout_unavailable`; a later user request may start fresh. Previously
+uncertain attempts remain guarded even after validation errors. Network,
+timeout, server and idempotency failures retain the saved key and deadline.
+Reconcile unresolved attempts in Stripe instead of deleting or replacing them.
+See Stripe's [idempotency contract](https://docs.stripe.com/api/idempotent_requests).
 
 Configure the webhook at `/v1/billing/webhook` for subscription, checkout completion, invoice payment, refund and dispute events handled by `src/billing.ts`. Verification uses untouched request bytes and the official Stripe SDK. Durable event IDs deduplicate delivery. The per-account authority serializes reconciliation with quota allocation and fetches current provider state, so delivery order and redirects cannot extend access.
 

@@ -16,6 +16,8 @@ let subscriptionsHaveMore = false;
 let checkoutStatus = "open";
 let checkoutSubscriptionId: string | null = "sub_local_fixture";
 let checkoutListVisible = true;
+let checkoutListHasMore = false;
+let checkoutLists = 0;
 let checkoutExpirations = 0;
 let checkoutCompletionRace = false;
 let subscriptionCancellations = 0;
@@ -30,6 +32,10 @@ let observedCheckout = "";
 let observedCancellation = "";
 let checkoutCreates = 0;
 let checkoutKeys: (string | null)[] = [];
+let checkoutParameters: string[] = [];
+let checkoutAccepted = 0;
+let checkoutCreationDelay = 2;
+let checkoutFailure: { status: number; type: string; param: string } | "network" | null = null;
 const customerId = "cus_local_fixture";
 function checkoutSession(status: string): Record<string, unknown> {
   return { id: "cs_test_fixture", object: "checkout.session", customer: customerId, mode: "subscription", status, subscription: checkoutSubscriptionId, metadata: { relay_account_id: ownerId, relay_checkout_key: checkoutKeys.at(-1) }, url: status === "open" ? "https://checkout.stripe.com/c/pay/cs_test_fixture" : null };
@@ -41,8 +47,16 @@ function mockProvider(): void {
     if (url.origin !== "https://api.stripe.com") throw new Error("unexpected_fixture_network");
     if (providerFailure) return Response.json({ error: { type: "api_error", message: "fixture temporarily unavailable" } }, { status: 503 });
     if (url.pathname === "/v1/customers") return Response.json({ id: customerId, object: "customer" });
-    if (url.pathname === "/v1/checkout/sessions" && init?.method === "POST") { checkoutCreates++; checkoutKeys.push(new Headers(init.headers).get("idempotency-key")); observedCheckout = String(init.body); return Response.json(checkoutSession("open")); }
-    if (url.pathname === "/v1/checkout/sessions") return Response.json({ object: "list", has_more: false, data: checkoutListVisible ? [checkoutSession(checkoutStatus)] : [] });
+    if (url.pathname === "/v1/checkout/sessions" && init?.method === "POST") {
+      checkoutCreates++; checkoutKeys.push(new Headers(init.headers).get("idempotency-key")); observedCheckout = String(init.body); checkoutParameters.push(observedCheckout);
+      if (checkoutFailure === "network") throw new TypeError("fixture connection lost");
+      if (checkoutFailure) return Response.json({ error: { type: checkoutFailure.type, param: checkoutFailure.param, message: "Fixture provider rejection" } }, { status: checkoutFailure.status });
+      const expiresAt = Number(new URLSearchParams(observedCheckout).get("expires_at"));
+      const createdAt = Math.floor(Date.now() / 1000) + checkoutCreationDelay;
+      if (expiresAt < createdAt + 1800 || expiresAt > createdAt + 86400) return Response.json({ error: { type: "invalid_request_error", param: "expires_at", message: "Fixture expiry outside the creation window" } }, { status: 400 });
+      checkoutAccepted++; return Response.json(checkoutSession("open"));
+    }
+    if (url.pathname === "/v1/checkout/sessions") { checkoutLists++; expect(url.searchParams.get("limit")).toBe("20"); return Response.json({ object: "list", has_more: checkoutListHasMore, data: checkoutListVisible ? [checkoutSession(checkoutStatus)] : [] }); }
     if (url.pathname === "/v1/checkout/sessions/cs_test_fixture/expire") { if (checkoutCompletionRace) { checkoutStatus = "complete"; providerExists = true; checkoutCompletionRace = false; return Response.json({ error: { type: "invalid_request_error", message: "Fixture completed before expiration" } }, { status: 400 }); } checkoutStatus = "expired"; checkoutExpirations++; return Response.json(checkoutSession("expired")); }
     if (url.pathname === "/v1/checkout/sessions/cs_test_fixture") return Response.json(checkoutSession(checkoutStatus));
     if (url.pathname === "/v1/subscriptions/sub_local_fixture") { if (init?.method === "DELETE") { providerState = "canceled"; subscriptionCancellations++; } if (init?.method === "POST") { observedCancellation = String(init.body); cancelAtPeriodEnd = true; } return Response.json({ id: "sub_local_fixture", customer: customerId, status: providerState, cancel_at_period_end: cancelAtPeriodEnd }); }
@@ -69,7 +83,7 @@ async function webhook(eventId: string, type = "customer.subscription.updated", 
   return worker.fetch(new Request(origin + "/v1/billing/webhook", { method: "POST", headers: { "stripe-signature": signature }, body: payload }), bindings);
 }
 async function plan(): Promise<Record<string, unknown> | null> { return bindings.DB.prepare("SELECT plan,status,paid_until FROM relay_billing WHERE account_id=?").bind(ownerId).first(); }
-beforeEach(async () => { vi.restoreAllMocks(); await reset(); await applyD1Migrations(bindings.DB, bindings.TEST_MIGRATIONS); providerState = "active"; providerExists = false; subscriptionsHaveMore = false; checkoutStatus = "open"; checkoutSubscriptionId = "sub_local_fixture"; checkoutListVisible = true; checkoutExpirations = 0; checkoutCompletionRace = false; subscriptionCancellations = 0; cancelAtPeriodEnd = false; providerUntil = Math.floor(Date.now() / 1000) + 3600; requestCount = 0; providerFailure = false; refunded = true; disputeState = "needs_response"; observedCheckout = ""; observedCancellation = ""; checkoutCreates = 0; checkoutKeys = []; });
+beforeEach(async () => { vi.restoreAllMocks(); await reset(); await applyD1Migrations(bindings.DB, bindings.TEST_MIGRATIONS); providerState = "active"; providerExists = false; subscriptionsHaveMore = false; checkoutStatus = "open"; checkoutSubscriptionId = "sub_local_fixture"; checkoutListVisible = true; checkoutListHasMore = false; checkoutLists = 0; checkoutExpirations = 0; checkoutCompletionRace = false; subscriptionCancellations = 0; cancelAtPeriodEnd = false; providerUntil = Math.floor(Date.now() / 1000) + 3600; requestCount = 0; providerFailure = false; refunded = true; disputeState = "needs_response"; observedCheckout = ""; observedCancellation = ""; checkoutCreates = 0; checkoutKeys = []; checkoutParameters = []; checkoutAccepted = 0; checkoutCreationDelay = 2; checkoutFailure = null; });
 
 it("uses only authenticated admitted account and configured prices with hosted payment URLs", async () => {
   const token = await account(); mockProvider();
@@ -140,12 +154,74 @@ it("reuses pending checkout and recovers an uncertain provider call with one per
   expect((await call("/v1/billing/checkout", token, { plan: "monthly" })).status).toBe(200);
   expect((await call("/v1/billing/checkout", token, { plan: "yearly" })).status).toBe(409);
   expect(checkoutCreates).toBe(1);
-  await bindings.DB.prepare("UPDATE relay_billing SET checkout_session_id=NULL WHERE account_id=?").bind(ownerId).run();
-  expect((await call("/v1/billing/checkout", token, { plan: "monthly" })).status).toBe(200);
-  expect(checkoutCreates).toBe(2); expect(checkoutKeys[0]).toBeTruthy(); expect(checkoutKeys[1]).toBe(checkoutKeys[0]);
   const pending = await bindings.DB.prepare("SELECT checkout_key,checkout_expires_at FROM relay_billing WHERE account_id=?").bind(ownerId).first<{ checkout_key: string; checkout_expires_at: number }>();
-  expect(pending?.checkout_key).toBeTruthy(); expect(pending!.checkout_expires_at - Date.now()).toBeLessThanOrEqual(1800000);
+  expect(pending!.checkout_expires_at - Date.now()).toBeGreaterThan(30 * 60_000);
+  expect(pending!.checkout_expires_at - Date.now()).toBeLessThanOrEqual(60 * 60_000);
+  await bindings.DB.prepare("UPDATE relay_billing SET checkout_session_id=NULL WHERE account_id=?").bind(ownerId).run();
+  const clock = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 10 * 60_000);
+  try { expect((await call("/v1/billing/checkout", token, { plan: "monthly" })).status).toBe(200); }
+  finally { clock.mockRestore(); }
+  expect(checkoutCreates).toBe(2); expect(checkoutKeys[0]).toBeTruthy(); expect(checkoutKeys[1]).toBe(checkoutKeys[0]);
+  expect(checkoutParameters[1]).toBe(checkoutParameters[0]);
+  expect(await bindings.DB.prepare("SELECT checkout_key,checkout_expires_at FROM relay_billing WHERE account_id=?").bind(ownerId).first()).toEqual(pending);
 });
+it("keeps Checkout expiry valid at provider creation after request delay", async () => {
+  const token = await account(); mockProvider(); checkoutCreationDelay = 30;
+  expect((await call("/v1/billing/checkout", token, { plan: "monthly" })).status).toBe(200);
+  expect(checkoutAccepted).toBe(1);
+  expect(Number(new URLSearchParams(observedCheckout).get("expires_at"))).toBeGreaterThanOrEqual(Math.floor(Date.now() / 1000) + checkoutCreationDelay + 1800);
+});
+it("releases only a fresh attempt after typed expiry validation rejects creation", async () => {
+  const token = await account(); mockProvider(); checkoutCreationDelay = 31 * 60;
+  const rejected = await call("/v1/billing/checkout", token, { plan: "monthly" });
+  expect(rejected.status).toBe(503);
+  expect(checkoutAccepted).toBe(0);
+  expect(await bindings.DB.prepare("SELECT checkout_key,checkout_session_id,checkout_plan,checkout_expires_at FROM relay_billing WHERE account_id=?").bind(ownerId).first()).toEqual({ checkout_key: null, checkout_session_id: null, checkout_plan: null, checkout_expires_at: null });
+  expect(await rejected.json()).toEqual({ error: { code: "checkout_unavailable" } });
+  checkoutCreationDelay = 2;
+  expect((await call("/v1/billing/checkout", token, { plan: "monthly" })).status).toBe(200);
+  expect(checkoutCreates).toBe(2); expect(checkoutAccepted).toBe(1); expect(new Set(checkoutKeys).size).toBe(2);
+});
+it.each([
+  { name: "network failure", failure: "network" as const },
+  { name: "server failure", failure: { status: 503, type: "api_error", param: "expires_at" } },
+  { name: "conflict", failure: { status: 409, type: "invalid_request_error", param: "expires_at" } },
+  { name: "idempotency failure", failure: { status: 400, type: "idempotency_error", param: "expires_at" } },
+  { name: "other validation", failure: { status: 400, type: "invalid_request_error", param: "customer" } },
+  { name: "non-validation expiry error", failure: { status: 400, type: "api_error", param: "expires_at" } },
+])("retains the exact Checkout attempt after $name", async ({ failure }) => {
+  const token = await account(); mockProvider(); checkoutFailure = failure;
+  expect((await call("/v1/billing/checkout", token, { plan: "monthly" })).status).toBe(503);
+  const pending = await bindings.DB.prepare("SELECT checkout_key,checkout_session_id,checkout_plan,checkout_expires_at FROM relay_billing WHERE account_id=?").bind(ownerId).first<{ checkout_key: string; checkout_session_id: string | null; checkout_plan: string; checkout_expires_at: number }>();
+  expect(pending).toMatchObject({ checkout_key: expect.any(String), checkout_session_id: null, checkout_plan: "monthly" });
+  expect(checkoutAccepted).toBe(0);
+  checkoutFailure = null;
+  expect((await call("/v1/billing/checkout", token, { plan: "monthly" })).status).toBe(200);
+  expect(checkoutAccepted).toBe(1); expect(new Set(checkoutKeys).size).toBe(1); expect(new Set(checkoutParameters).size).toBe(1);
+  expect(await bindings.DB.prepare("SELECT checkout_key,checkout_expires_at FROM relay_billing WHERE account_id=?").bind(ownerId).first()).toEqual({ checkout_key: pending!.checkout_key, checkout_expires_at: pending!.checkout_expires_at });
+}, 10000);
+it("preserves an earlier uncertain attempt through validation and bounded deadline reconciliation", async () => {
+  const token = await account(); mockProvider(); checkoutFailure = "network";
+  expect((await call("/v1/billing/checkout", token, { plan: "monthly" })).status).toBe(503);
+  const pending = await bindings.DB.prepare("SELECT checkout_key,checkout_expires_at FROM relay_billing WHERE account_id=?").bind(ownerId).first<{ checkout_key: string; checkout_expires_at: number }>();
+  checkoutFailure = { status: 400, type: "invalid_request_error", param: "expires_at" };
+  expect((await call("/v1/billing/checkout", token, { plan: "monthly" })).status).toBe(503);
+  expect(await bindings.DB.prepare("SELECT checkout_key,checkout_expires_at FROM relay_billing WHERE account_id=?").bind(ownerId).first()).toEqual(pending);
+  const posts = checkoutCreates;
+  const clock = vi.spyOn(Date, "now").mockReturnValue(pending!.checkout_expires_at - 31 * 60_000 + 1);
+  checkoutFailure = null; checkoutListVisible = false;
+  try {
+    const unavailable = await call("/v1/billing/checkout", token, { plan: "monthly" });
+    expect(unavailable.status).toBe(503); expect(await unavailable.json()).toEqual({ error: { code: "checkout_reconciliation_pending" } });
+    checkoutListHasMore = true;
+    const incomplete = await call("/v1/billing/checkout", token, { plan: "monthly" });
+    expect(incomplete.status).toBe(503); expect(await incomplete.json()).toEqual({ error: { code: "checkout_review_required" } });
+    checkoutListHasMore = false; clock.mockReturnValue(pending!.checkout_expires_at + 1000);
+    expect((await call("/v1/billing/checkout", token, { plan: "monthly" })).status).toBe(503);
+    expect(checkoutLists).toBe(3); expect(checkoutCreates).toBe(posts); expect(checkoutAccepted).toBe(0);
+    expect(await bindings.DB.prepare("SELECT checkout_key,checkout_expires_at FROM relay_billing WHERE account_id=?").bind(ownerId).first()).toEqual(pending);
+  } finally { clock.mockRestore(); }
+}, 10000);
 it("checks completed Checkout after local expiry even while the completion webhook is delayed", async () => {
   const token = await account(); mockProvider();
   expect((await call("/v1/billing/checkout", token, { plan: "monthly" })).status).toBe(200);

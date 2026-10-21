@@ -5,10 +5,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import worker from "../src/index.js";
 import { createAuth, authOptions } from "../src/auth.js";
 import { revokeRelayAccount } from "../src/accounts.js";
+import { operationalCleanup } from "../src/cleanup.js";
 import { credentialHeaders, hashToken, mutationAllowed } from "../src/http.js";
 import { AccountQuota, leaseExpiry, windowBoundary } from "../src/quota.js";
 import { Room } from "../src/rooms.js";
 import { subscriptionEntitlement } from "../src/billing.js";
+import { retentionCleanup, retentionPolicy } from "../src/retention.js";
 import type { Env, Lease } from "../src/types.js";
 import { LIMITS } from "../src/types.js";
 import { githubFixtureFetch, githubIdentityRedirectTarget } from "./fixtures/github.js";
@@ -276,6 +278,58 @@ describe("OAuth admission boundary", () => {
     const admitted = await call("/v1/account/terms", "POST", { version: bindings.TERMS_VERSION }, undefined, { cookie: browserCookie, origin });
     expect(admitted.status).toBe(200); await admitted.text();
     expect(await counts()).toEqual({ users: 1, accounts: 1, sessions: 1, admitted: 1 });
+  });
+  it.each([
+    { path: "/v1/account/close", body: { confirm: "close" } },
+    { path: "/api/privacy/rights/request", body: { kind: "close", jurisdiction: "fixture" } },
+  ])("keeps pre-terms closure effective after another GitHub login through $path", async ({ path, body }) => {
+    const provider = mockGithub();
+    const first = await complete(bindings, await start(bindings));
+    const firstCookie = first.headers.getSetCookie().map(value => value.split(";")[0]!).join("; ");
+    expect(await counts()).toEqual({ users: 1, accounts: 1, sessions: 1, admitted: 0 });
+    const closed = await call(path, "POST", body, undefined, { cookie: firstCookie, origin });
+    expect(closed.status).toBe(200);
+    const receipt = await closed.json<{ requestId: string; statusKey: string; closed: boolean; relayClosureAcknowledged: boolean }>();
+    expect(receipt).toMatchObject({ closed: true, relayClosureAcknowledged: true });
+    expect(receipt.statusKey).toMatch(/^[a-f0-9]{64}$/u);
+    const fresh = await complete(bindings, await start(bindings));
+    expect(fresh.status).toBe(302); expect(provider).toHaveBeenCalledTimes(6);
+    const freshCookie = fresh.headers.getSetCookie().map(value => value.split(";")[0]!).join("; ");
+    const current = await call("/v1/account", "GET", undefined, undefined, { cookie: freshCookie });
+    const terms = await call("/v1/account/terms", "POST", { version: bindings.TERMS_VERSION }, undefined, { cookie: freshCookie, origin });
+    expect([current.status, terms.status]).toEqual([401, 401]);
+    expect((await call("/v1/account", "GET", undefined, undefined, { cookie: firstCookie })).status).toBe(401);
+    const marker = await bindings.DB.prepare("SELECT id,status,terms_version,terms_at,closed_at,cleanup_after FROM relay_accounts").first<{ id: string }>();
+    expect(marker).toMatchObject({ status: "closed", terms_version: null, terms_at: null, closed_at: expect.any(Number), cleanup_after: expect.any(Number) });
+    expect(await bindings.DB.prepare("SELECT account_id,action,state FROM privacy_operational_tasks WHERE request_id=?").bind(receipt.requestId).first()).toEqual({ account_id: marker!.id, action: "close", state: "pending" });
+    const tracked = await call("/api/privacy/rights/status", "POST", { requestId: receipt.requestId, statusKey: receipt.statusKey }, undefined, { origin });
+    expect(tracked.status).toBe(200); expect(await tracked.json()).toMatchObject({ kind: "close", operational_state: "pending" });
+  });
+  it("preserves admitted closure dates on retry and finishes queued work after identity purge", async () => {
+    const owner = await identity();
+    const record = () => bindings.DB.prepare("SELECT terms_version,terms_at,created_at,closed_at,cleanup_after FROM relay_accounts WHERE id=?").bind(owner.accountId).first<{ terms_version: string; terms_at: number; created_at: number; closed_at: number | null; cleanup_after: number | null }>();
+    const accepted = await record();
+    expect(accepted).toMatchObject({ terms_version: bindings.TERMS_VERSION, terms_at: expect.any(Number), created_at: expect.any(Number) });
+    const closed = await call("/v1/account/close", "POST", { confirm: "close" }, owner.token);
+    expect(closed.status).toBe(200); const receipt = await closed.json<{ requestId: string }>();
+    const original = await record();
+    expect(original).toMatchObject({ ...accepted, closed_at: expect.any(Number), cleanup_after: expect.any(Number) });
+    const closedAt = original!.closed_at!;
+    const clock = vi.spyOn(Date, "now").mockReturnValue(closedAt + 3_600_000);
+    try {
+      await revokeRelayAccount(bindings, owner.accountId, true);
+      expect(await record()).toEqual(original);
+      const policy = retentionPolicy(bindings)!;
+      const purgeAt = closedAt + Math.max(policy.accountClosedDays, policy.providerIdentityDays, policy.paymentDays) * 86_400_000 + 1;
+      clock.mockReturnValue(purgeAt); await retentionCleanup(bindings, purgeAt);
+      expect(await record()).toBeNull();
+      expect(await bindings.DB.prepare('SELECT id FROM "user" WHERE id=?').bind(owner.accountId).first()).toBeNull();
+      await evictDurableObject(bindings.ACCOUNT_QUOTA.get(bindings.ACCOUNT_QUOTA.idFromName(owner.accountId)));
+      await operationalCleanup(bindings);
+      expect(await bindings.DB.prepare("SELECT state FROM privacy_operational_tasks WHERE request_id=?").bind(receipt.requestId).first()).toEqual({ state: "exception" });
+      expect(await record()).toBeNull();
+      expect(await bindings.DB.prepare('SELECT id FROM "user" WHERE id=?').bind(owner.accountId).first()).toBeNull();
+    } finally { clock.mockRestore(); }
   });
   it("keeps linked existing login, logout and privacy available while admission is closed", async () => {
     const provider = mockGithub();
