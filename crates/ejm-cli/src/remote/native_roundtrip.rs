@@ -17,6 +17,7 @@ mod contract {
     use super::super::*;
     use crate::remote::{
         backend::expected,
+        host_ui::HostUi,
         protocol::{
             ClientRequest, Mutation, MutationAction, MutationOutcome, ServerMessage, WireBody,
             WireMessage,
@@ -51,14 +52,11 @@ mod contract {
     }
 
     struct Tasks {
-        cancel: CancellationToken,
-        host: JoinHandle<Result<()>>,
+        host: HostUi,
         notices: JoinHandle<Result<()>>,
     }
     impl Drop for Tasks {
         fn drop(&mut self) {
-            self.cancel.cancel();
-            self.host.abort();
             self.notices.abort();
         }
     }
@@ -335,11 +333,10 @@ mod contract {
         account: &RelayAccount,
         identity: &EndpointIdentity,
         invite: &Invitation,
-        backend: &LocalBackend,
         gate: &Gate,
         notices: &Notices,
         mut socket: EncryptedSocket,
-    ) -> Result<()> {
+    ) -> Result<(EncryptedSocket, String)> {
         socket.close().await;
         barrier(&notices.disconnected).await?;
         barrier(&notices.listening).await?;
@@ -375,7 +372,19 @@ mod contract {
             "duplicate action result changed"
         );
         cancel_turn(&mut socket, &resumed, gate).await?;
-        backend.stop_share_if(invite.routing_id()).await;
+        Ok((socket, session_id))
+    }
+
+    async fn stop_and_revoke(
+        account: &RelayAccount,
+        identity: &EndpointIdentity,
+        invite: &Invitation,
+        backend: &LocalBackend,
+        host: &mut HostUi,
+        mut socket: EncryptedSocket,
+        session_id: &str,
+    ) -> Result<()> {
+        host.stop(backend).await;
         let after_stop = backend
             .request(
                 invite.routing_id(),
@@ -387,8 +396,29 @@ mod contract {
             )
             .await;
         ensure!(after_stop.is_err(), "stopped share retained authority");
+        let rooms = account
+            .json(reqwest::Method::GET, "/v1/rooms", None)
+            .await?;
+        ensure!(
+            rooms
+                .get("rooms")
+                .and_then(serde_json::Value::as_array)
+                .is_some_and(Vec::is_empty),
+            "native stop retained the account room reservation"
+        );
+        ensure!(
+            account.ticket(invite.routing_id(), "host").await.is_err(),
+            "native stop did not retire the original routing ID"
+        );
+        let replacement = Invitation::new(
+            account.origin.clone(),
+            identity.public_key(),
+            ShareRole::Control,
+            now_ms(),
+        )?;
+        account.ticket(replacement.routing_id(), "host").await?;
         socket.close().await;
-        let events = backend.events(&session_id, 0, 512).await?;
+        let events = backend.events(session_id, 0, 512).await?;
         let prompts: Vec<_> = events
             .iter()
             .filter_map(|event| match &event.kind {
@@ -424,6 +454,7 @@ mod contract {
         account: &RelayAccount,
         invite: &Invitation,
         backend: &LocalBackend,
+        host: &mut HostUi,
         gate: &Gate,
         notices: &Notices,
     ) -> Result<NativeStatus> {
@@ -431,7 +462,18 @@ mod contract {
         let controller = EndpointIdentity::memory_only()?;
         let mut socket = connect_controller(account, &controller, invite).await?;
         first_turn(&mut socket, gate).await?;
-        reconnect_and_cancel(account, &controller, invite, backend, gate, notices, socket).await?;
+        let (socket, session_id) =
+            reconnect_and_cancel(account, &controller, invite, gate, notices, socket).await?;
+        stop_and_revoke(
+            account,
+            &controller,
+            invite,
+            backend,
+            host,
+            socket,
+            &session_id,
+        )
+        .await?;
         let confirmations = notices.confirmations.load(Ordering::SeqCst);
         ensure!(
             confirmations == 1,
@@ -512,25 +554,38 @@ mod contract {
         let notices = Arc::new(Notices::default());
         let (sender, receiver) = mpsc::channel(8);
         let cancel = CancellationToken::new();
+        let hosting = serve_host(
+            account.clone(),
+            identity,
+            Enrollment::new(invite),
+            backend.clone(),
+            cancel.clone(),
+            sender,
+        );
         let mut tasks = Tasks {
-            host: tokio::spawn(serve_host(
-                account.clone(),
-                identity,
-                Enrollment::new(invite),
-                backend.clone(),
-                cancel.clone(),
-                sender,
-            )),
+            host: HostUi::worker_fixture(
+                &session.id,
+                &controller_invite,
+                cancel,
+                tokio::spawn(async move {
+                    let _ = hosting.await;
+                }),
+            ),
             notices: tokio::spawn(observe(receiver, notices.clone())),
-            cancel,
         };
-        let result = exercise(&account, &controller_invite, &backend, &gate, &notices).await;
-        tasks.cancel.cancel();
-        let host = timeout(Duration::from_secs(5), &mut tasks.host).await;
+        let result = exercise(
+            &account,
+            &controller_invite,
+            &backend,
+            &mut tasks.host,
+            &gate,
+            &notices,
+        )
+        .await;
+        tasks.host.stop(&backend).await;
         let shutdown = backend.shutdown().await;
         let status = result?;
         shutdown?;
-        host???;
         write_private(&config.status_path, &status)
     }
 }

@@ -13,7 +13,9 @@ platform checks at 8a2, but both complete reviews identified the further
 [device-history and quota corrections](#device-history-and-quota-review-corrections).
 Those corrections passed hosted platform checks at 7f10. Its first review found
 two medium blockers; its second review failed without a final report. The
-[next correction](#device-revocation-and-label-correction) remains prepared.
+[device revocation and label correction](#device-revocation-and-label-correction)
+advanced to e0bf. Its complete retry reviews identified the prepared
+[native retirement and browser gap correction](#native-retirement-and-browser-gap-correction).
 Each candidate must pass its local checks. Fresh hosted acceptance, protected
 adoption, deployment and authenticated live acceptance remain pending.
 The historical closed deployment is recorded in [deployment status](remote-deployment.md).
@@ -255,11 +257,43 @@ Both cases failed on unchanged 7f10 and passed on the corrected source in the
 local macOS Worker fixture on October 21. No new test cases were added. These
 focused results do not supply hosted acceptance.
 
-The unchanged full gate, push, fresh exact-head human admission and hosted
-reviews, final approval,
-protected merge and deployment remain pending for this correction. The prior
-run supplies no acceptance for the new source. No approved policy, retention
-duration, dependency or release control changes.
+The unchanged normal gate passed before this correction was committed and
+pushed at `e0bf63238ee024b759eaf69510c470d262e06caf`, tree
+`ee548ac7ef246371556cd1385b738440bd1e1c3f`. In its first admission,
+[run 39570581051](https://github.com/ejmlabs/ejm-cli/actions/runs/39570581051),
+review 1 completed with no findings; review 2 ended with GitHub's explicit action
+timeout and no final report. The unchanged-source retry is recorded below.
+No approved policy, retention duration, dependency or release control changed.
+
+### Native retirement and browser gap correction
+
+The authorized retry [run 39609395805](https://github.com/ejmlabs/ejm-cli/actions/runs/39609395805)
+completed on October 21 at 13:58:46 UTC for the exact e0bf source above.
+Linux/macOS quality, registry and standards passed. Both bounded final reviews
+were complete and matched the exact source: review 1 reported two medium
+findings and review 2 reported none. These findings block adoption; this was not
+a timeout or incomplete-review result.
+
+The prepared native fix revokes local sharing and cancels its transport first,
+then awaits existing relay retirement during ordinary stop, session change and
+graceful exit, with a bounded owned-task drain and abort fallback. Temporary
+reconnect keeps its reservation. Hard kill or network failure remains best
+effort, with dashboard stop or original-expiry recovery.
+
+The prepared browser fix uses the existing Snapshot recovery barrier after an
+Events gap. It pauses actions and incremental Events until authoritative run,
+role, cursor and mutation high-water state arrives, preserves uncertain actions
+without resubmitting them and does not loop on a Snapshot's own history gap.
+
+The two existing regressions failed on the old runtime and passed with the
+correction on October 21. The native case calls production stop, checks room
+retirement and obtains a new share ticket. Its old-runtime control adds only
+the test constructor and assertions. The browser case covers one refresh,
+queued pages, an idle Snapshot and the original uncertain action. No test cases
+were added. The corrected normal gate, push, fresh exact-head admission and
+hosted reviews, final approval, protected merge and deployment remain pending.
+The fixes change no quota/API, dependency, owner pin, legal policy or release
+control. Admission stays closed; billing and commercial programs stay off.
 
 ## Current local checks
 

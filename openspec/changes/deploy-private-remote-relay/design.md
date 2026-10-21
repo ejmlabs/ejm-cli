@@ -150,8 +150,9 @@ lifecycle-disabled installed public packages before claiming consumer acceptance
   Better Auth owns account/session/device-flow infrastructure. Stripe remains
   configured off. Cloudflare owns Worker, D1 and hibernating DO infrastructure.
 - ejm-harness owns native execution, persistence and credential storage. Add no
-  shared execution or vault implementation to the browser or Worker, and change
-  none of the accepted native queue, cancellation, pairing or recovery behavior.
+  shared execution or vault implementation to the browser or Worker. Preserve
+  accepted native queue, cancellation and pairing contracts while correcting
+  the CLI stop and browser recovery adapters below.
 
 Port only finite provisional Relay source, schema/configuration, browser and
 Worker tests, WASM crate, two native transport fixtures and the gate adapter.
@@ -380,6 +381,36 @@ failure and successful retry. Extend the complete-history export test with
 Run these two focused cases against the old paths, then the corrected paths,
 followed by the unchanged normal gate once. Keep task 2.4 open pending exact-head
 hosted checks, complete reviews and protected acceptance.
+
+### Native retirement and browser gap correction
+
+Both reviews in run `39609395805` completed for
+`e0bf63238ee024b759eaf69510c470d262e06caf`. Linux/macOS quality, registry
+and standards passed. Review 1 reported two medium blockers; review 2 reported
+none. The earlier attempt's second review timed out without a final report.
+Neither run accepts the following correction.
+
+Both fixes belong to ejm-cli. Retain `/remote stop`, ordinary host shutdown,
+`POST /v1/rooms/ROOM_ID/stop` and the version 1 Events/Snapshot interfaces.
+After immediate local transport cancellation and share revocation, await the
+existing `serve_host` relay retirement on ordinary stop, session change and exit.
+Keep the bounded owned-task drain and abort fallback. Handled termination must
+allow that cleanup to run rather than dropping the terminal future. Temporary
+transport reconnect keeps the same reservation. Hard kill or unreachable relay
+cleanup remains best effort, with account dashboard stop or original expiry as
+recovery. Change no quota, API, authority, dependency, sibling or pin.
+
+An Events gap enters one existing Snapshot request. Suspend actions and
+incremental Events until the authoritative Snapshot sets the active run, role,
+event cursor and mutation high-water mark. Preserve an uncertain action's
+sequence and instruction for outcome recovery without resubmitting it. A gap
+inside a Snapshot remains visible but must not start another refresh loop.
+
+Extend only the existing native lifecycle and browser protocol regressions to
+cover stop-then-share and omitted run completion. Prove intended failures on
+e0bf and corrected passes, then run the unchanged normal gate once after both
+fixes. Fresh exact-head admission, complete reviews, approval, protected adoption
+and deployment remain required. All eleven release tasks stay open.
 
 ### Dependency and artifact bounds
 

@@ -2,8 +2,10 @@
 
 This guide describes the native source accepted through protected CLI PR #21.
 The [acceptance record](native-remote-publication.md) binds its merge, tree and
-Linux/macOS results after PR #20's docs/UI prerequisite. Worker/browser adoption,
-binary distribution and live acceptance remain pending. Use this workflow only
+Linux/macOS results after PR #20's docs/UI prerequisite. The following
+[native retirement correction](relay-publication.md#native-retirement-and-browser-gap-correction)
+is prepared in Worker PR #23. Worker/browser adoption, binary distribution and
+live acceptance remain pending. Use this workflow only
 after building the reviewed native source and selecting a compatible relay.
 
 Remote access shares one selected CLI session through an account-gated relay.
@@ -79,6 +81,14 @@ The sharing badge remains visible after the invitation panel closes.
 Switching the selected session or exiting the host stops sharing. Stopping
 discards prompts still in the remote queue. A run that already started
 continues locally unless the host cancels it.
+
+The prepared follow-up revokes local sharing before waiting for relay retirement.
+Ordinary stop, session change, exit and handled termination allow bounded cleanup
+before its abort fallback. Temporary disconnect and reconnect retain the room
+reservation. A hard kill or unreachable relay can leave retirement unconfirmed;
+use the owning account's dashboard **Stop sharing**, or wait for the original
+share expiry before creating another share. These changes still need their
+corrected-source checks and protected adoption.
 
 ## Native controller
 

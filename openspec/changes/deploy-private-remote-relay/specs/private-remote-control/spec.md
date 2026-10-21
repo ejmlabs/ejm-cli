@@ -4,7 +4,7 @@
 
 ### Requirement: Exact queued completion
 
-Queued remote prompts SHALL remain host-owned and revocable until admission. Admission SHALL follow successful completion of the exact target run and the end of its bounded completion observers. The host SHALL recheck the live share, expiry and target before starting queued work.
+Queued remote prompts SHALL remain host-owned and revocable until admission. Admission SHALL follow successful completion of the exact target run and the end of its bounded completion observers. The host SHALL recheck the live share, expiry and target before starting queued work. Ordinary native stop and graceful shutdown SHALL await bounded existing relay retirement after immediate local revocation.
 
 #### Scenario: Completion observers are still running
 
@@ -18,8 +18,9 @@ Queued remote prompts SHALL remain host-owned and revocable until admission. Adm
 
 #### Scenario: Local input and signals during cleanup
 
-- **WHEN** a completion observer is blocked or host startup owns protected input
-- **THEN** local revocation, session changes, exit and termination remain responsive, restore the terminal and prevent queued remote admission; trusted local stop also cancels retained local successors
+- **WHEN** a completion observer is blocked, host startup owns protected input or an ordinary sharing host stops
+- **THEN** local revocation, session changes, exit and termination remain responsive, restore the terminal and prevent queued remote admission; graceful cleanup awaits existing relay retirement within its bounded drain before abort fallback, and trusted local stop also cancels retained local successors
+- **AND** temporary transport reconnect retains the reservation, and failed cleanup does not restore local sharing authority
 
 #### Scenario: A fast local successor overtakes replay
 
@@ -74,12 +75,13 @@ Vault lock waits SHALL observe operation cancellation and the end of the awaitin
 
 ### Requirement: Authoritative recovery after missing events
 
-A delivered event gap SHALL initiate the existing snapshot recovery barrier. Missing events SHALL NOT establish a run's current authority.
+A delivered Events gap SHALL initiate the existing Snapshot recovery barrier with at most one request while recovery is active. The controller SHALL suspend actions and incremental Events until the Snapshot supplies authoritative run, role, cursor and mutation high-water state. Recovery SHALL preserve uncertain actions without resubmitting them. Missing events SHALL NOT establish run authority.
 
 #### Scenario: A gap omits run completion
 
 - **WHEN** the controller misses RunFinished in a server-truncated batch
-- **THEN** it requests and applies authoritative run state before enabling subsequent work
+- **THEN** it requests one authoritative Snapshot, suppresses intervening incremental Events and applies current run, role and sequence authority before enabling subsequent work, while preserving any uncertain action for outcome recovery
+- **AND** a gap inside a Snapshot remains visible without causing a refresh loop
 
 ### Requirement: Snapshot and admission authority
 

@@ -16,8 +16,11 @@ defects and its second review timed out without a report. The
 [third corrections](relay-publication.md#third-worker-review-corrections)
 passed Linux and macOS checks at 8a2, but the complete reviews found device-history
 and quota defects. Their [corrections](relay-publication.md#device-history-and-quota-review-corrections)
-are in preparation; fresh hosted acceptance, protected adoption and deployment remain pending. See
-[publication status](relay-publication.md) and [deployment status](remote-deployment.md).
+advanced through e0bf. Its latest complete reviews identified the
+[native retirement and browser gap correction](relay-publication.md#native-retirement-and-browser-gap-correction).
+That correction is prepared; fresh hosted acceptance, protected adoption and
+deployment remain pending. See [publication status](relay-publication.md) and
+[deployment status](remote-deployment.md).
 
 Controller HTML and every `/control/assets/` file require the verified account
 cookie. A signed-out HTML request to `/control` receives a branded sign-in page
@@ -92,6 +95,13 @@ outcome, without resubmitting the mutation. An unknown outcome blocks further
 actions: inspect the host before making a new share. Rejected actions restore
 their draft when the composer is empty.
 
+The prepared gap correction pauses actions and incremental Events after an
+Events gap and requests one authoritative Snapshot. That Snapshot supplies the
+current run, role, event cursor and mutation high-water mark. Recovery preserves
+an uncertain action and never resubmits it. A Snapshot can itself report omitted
+history; that gap stays visible without starting a refresh loop. Corrected-source
+acceptance remains pending.
+
 A queued acknowledgment is revocable, not execution confirmation. The host
 waits for exact-run completion, discards a dependent chain after a local-successor
 handoff and rechecks expiry before admission. The browser does not track the
@@ -120,7 +130,8 @@ and selects only `ejm-relay-v1`. Tickets never enter URLs, selected protocols,
 UI or logs. Native clients retain their Authorization-header transport.
 
 Encrypted product messages use the native 22-byte `EJMR` header and ordered
-chunks. Malformed messages, gaps, replay and failed authentication close the channel.
+chunks. Malformed chunks, encrypted chunk-sequence gaps, replay and failed
+authentication close the channel.
 
 | Bound | Limit |
 | --- | --- |

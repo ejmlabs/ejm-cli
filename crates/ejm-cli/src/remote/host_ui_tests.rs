@@ -568,9 +568,19 @@ async fn terminal_observer_loop() -> Result<()> {
         .begin_share(&session.id, "observer".into(), ShareRole::Control, u64::MAX)
         .await?;
     let (mut target, observer) = queued_observer(&backend, &session, &gate, &mut ends).await?;
-    let (mut task, _sender, _release) = held_task("observer");
-    task.expires_at_ms = u64::MAX;
+    let shutdown = CancellationToken::new();
+    let cancel = shutdown.child_token();
+    let task_cancel = cancel.clone();
+    let (_sender, notices) = mpsc::channel(4);
+    let task = HostTask {
+        epoch: "observer".into(),
+        expires_at_ms: u64::MAX,
+        notices,
+        join: tokio::spawn(async move { task_cancel.cancelled().await }),
+    };
     let mut sharing = host(&session, task);
+    sharing.shutdown = shutdown.clone();
+    sharing.cancel = cancel;
     sharing.panel = None;
     let mut app = App::new(session.clone());
     app.notice("Observer blocked");
@@ -579,7 +589,7 @@ async fn terminal_observer_loop() -> Result<()> {
     let terminal = crate::ui::TerminalGuard::enter()?;
     crate::ui::with_shutdown(
         &backend,
-        CancellationToken::new(),
+        shutdown,
         crate::ui::run_app(&backend, &args, &extensions, sharing, app, terminal),
     )
     .await?;

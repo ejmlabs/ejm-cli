@@ -308,8 +308,13 @@ These are common relay errors, not an exhaustive framework error catalogue.
 Dashboard stop blocks old tickets and delayed redeemed connections through the
 original expiry. It ends relay access, not an already-started run or the local
 remote queue; use local `/remote stop` to discard queued prompts, then start a
-fresh share. Device revoke/logout may leave an existing lease valid for at most
-900 seconds; account closure and acknowledged room stop close peers sooner.
+fresh share. The prepared native correction revokes local sharing immediately,
+then awaits existing room retirement during ordinary stop and graceful exit;
+temporary reconnect retains the reservation. If a hard kill or network failure
+leaves retirement unconfirmed, use dashboard stop or wait for original share
+expiry. See [the correction status](../docs/relay-publication.md#native-retirement-and-browser-gap-correction).
+Device revoke/logout may leave an existing lease valid for at most 900 seconds;
+account closure and acknowledged room stop close peers sooner.
 See the existing [privacy/rights route table](../docs/relay-privacy.md#account-access-correction-and-deletion)
 for data choices, rights requests, tracking and retained exceptions. Payments
 and commercial collection remain disabled in the closed configuration.

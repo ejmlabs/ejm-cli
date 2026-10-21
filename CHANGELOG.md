@@ -11,6 +11,7 @@ Changes follow [Semantic Versioning](https://semver.org/). Each repository is ve
 
 ### Fixed
 
+- Prepare bounded native relay retirement on ordinary stop and graceful exit, and authoritative browser recovery after Events gaps. Preserve reconnect reservations and uncertain actions. The [complete e0bf retry reviews](docs/relay-publication.md#native-retirement-and-browser-gap-correction) found both defects; corrected-source acceptance and deployment remain pending.
 - Prepare atomic device revocation and credential deletion, and preserve every accepted Unicode device label in rights exports. Protected acceptance and deployment remain pending.
 - Prepare the [device-history and quota corrections](docs/relay-publication.md#device-history-and-quota-review-corrections): keep active devices visible, page complete rights exports durably, bound cleanup scans and reject frames beyond a renewed reservation. Protected acceptance and deployment remain pending.
 - Prepare the five [Worker review corrections](docs/relay-publication.md#worker-review-corrections): isolate replacement socket pairs, limit usage collection to consented fields, preserve original usage expiry, honor held-identity exceptions during deletion and track dashboard closure with a private one-time key. Both complete reviews rejected head cf1; the corrected source still needs its own checks and protected adoption.

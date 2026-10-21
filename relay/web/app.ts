@@ -178,6 +178,7 @@ async function connect(): Promise<void> {
         const pendingText = session.pending?.text;
         const newlyApproved = message.type === "snapshot" && session.sessionId === null;
         const result = session.apply(message);
+        if (result.followup) send(result.followup);
         if (result.gap) transcript.truncated = true;
         for (const event of result.events) { const output = eventText(event); if (output) transcript.append(output.label, output.text); }
         if (result.events.length || result.gap) renderTranscript();

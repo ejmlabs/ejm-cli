@@ -145,6 +145,7 @@ export class SessionState {
   stopped = false;
   pending: PendingAction | null = null;
   private sequence = 0;
+  private awaitingSnapshot = false;
 
   snapshotRequest(): Wire { return client({ type: "snapshot", after_sequence: this.cursor, limit: LIMITS.events }); }
   outcomeRequest(): Wire | null { return this.pending ? client({ type: "outcome", sequence: this.pending.sequence }) : null; }
@@ -161,8 +162,8 @@ export class SessionState {
     this.pending = { sequence, type, text: type === "cancel" ? "" : prompt, state: "pending" };
     return client({ type: "mutation", mutation: { sequence, expected: { session_id: this.sessionId, run_id: this.activeRun, event_sequence: this.cursor }, action } });
   }
-  apply(message: ServerMessage): { events: RemoteEvent[]; resolved: Outcome | null; gap: boolean } {
-    const result = { events: [] as RemoteEvent[], resolved: null as Outcome | null, gap: false };
+  apply(message: ServerMessage): { events: RemoteEvent[]; resolved: Outcome | null; gap: boolean; followup: Wire | null } {
+    const result = { events: [] as RemoteEvent[], resolved: null as Outcome | null, gap: false, followup: null as Wire | null };
     switch (message.type) {
       case "snapshot":
         requireValue(!this.stopped && (this.sessionId === null || this.sessionId === message.session.id), "Host changed the shared session");
@@ -170,8 +171,18 @@ export class SessionState {
         this.sequence = Math.max(this.sequence, message.mutation_high_water);
         // Snapshot state is authoritative even when its retained events describe older runs.
         this.applyEvents(message, result, false);
+        this.awaitingSnapshot = false;
         break;
-      case "events": requireValue(this.ready, "Session snapshot is missing"); this.applyEvents(message, result, true); break;
+      case "events":
+        // Queued pages must not outrun the bounded authoritative snapshot.
+        if (this.awaitingSnapshot) break;
+        requireValue(this.ready, "Session snapshot is missing");
+        this.applyEvents(message, result, message.gap === null);
+        if (result.gap) {
+          this.ready = false; this.awaitingSnapshot = true;
+          result.followup = this.snapshotRequest();
+        }
+        break;
       case "outcome":
         if (this.pending?.sequence === message.sequence) {
           if (message.outcome.type === "pending" || message.outcome.type === "unknown") this.pending.state = message.outcome.type;
