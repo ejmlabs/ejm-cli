@@ -462,6 +462,13 @@ service. Add no lookup, schema or dependency. Extend the existing forwarding and
 eviction case, prove the old failure, and retain one corrected invocation and
 one normal gate after both reviews finish.
 
+The first complete b71 review found a hold race after retention subject selection.
+Guard each destructive D1 statement with the existing indexed live-hold predicate,
+including final deletion after quota purge. This protects current D1 records,
+without a cross-store transaction or restoring relay authority. Extend the existing
+retention case with a hold committed after selection; prove its old failure and
+one corrected pass, then run the normal gate once after both reviews finish.
+
 ### Dependency and artifact bounds
 
 Activate the exact 51-line candidate manifest already reviewed with its inherited

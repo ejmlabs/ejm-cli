@@ -106,8 +106,8 @@ Users SHALL be able to inspect, correct, export and request deletion of account,
 - **THEN** durable close-rights, recipient and operational work exist before session revocation, and the response exposes a private tracking key the user can retain
 
 #### Scenario: An operational identity hold is active
-- **WHEN** deletion work reaches an account with an unexpired operational preservation hold
-- **THEN** relay and session authority are revoked while held identity records remain protected and the tracked result reports the retained exception
+- **WHEN** deletion work reaches an account with an unexpired operational preservation hold, including one committed after retention selection but before a destructive D1 statement
+- **THEN** relay and session authority remain revoked while each destructive statement protects held identity, device, payment and account records and the tracked result reports the retained exception
 
 ### Requirement: Adult commercial participation
 The initial commercial program SHALL accept only users who affirm adult eligibility through a proportionate age gate. Unknown or known minor eligibility SHALL block commercial collection and transfer. Full birth dates SHALL NOT be collected solely for this gate.

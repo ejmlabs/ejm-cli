@@ -25,16 +25,16 @@ export async function retentionCleanup(env: Env, now: number): Promise<void> {
   for (const subject of subjects.results) {
     const pendingCancellation = await env.DB.prepare("SELECT account_id FROM relay_billing_cancellations WHERE account_id=? AND state='pending'").bind(subject.id).first();
     if (subject.closed_at <= now - policy.providerIdentityDays * day) await env.DB.batch([
-      env.DB.prepare('DELETE FROM "account" WHERE "userId"=?').bind(subject.id),
-      env.DB.prepare('DELETE FROM "session" WHERE "userId"=?').bind(subject.id),
-      env.DB.prepare('UPDATE "user" SET name=\'Deleted account\',email=?,image=NULL,"emailVerified"=0 WHERE id=?').bind(`${subject.id}@deleted.invalid`, subject.id),
+      env.DB.prepare('DELETE FROM "account" WHERE "userId"=? AND NOT EXISTS(SELECT 1 FROM operational_legal_holds WHERE account_id=? AND expires_at>?)').bind(subject.id, subject.id, now),
+      env.DB.prepare('DELETE FROM "session" WHERE "userId"=? AND NOT EXISTS(SELECT 1 FROM operational_legal_holds WHERE account_id=? AND expires_at>?)').bind(subject.id, subject.id, now),
+      env.DB.prepare('UPDATE "user" SET name=\'Deleted account\',email=?,image=NULL,"emailVerified"=0 WHERE id=? AND NOT EXISTS(SELECT 1 FROM operational_legal_holds WHERE account_id=? AND expires_at>?)').bind(`${subject.id}@deleted.invalid`, subject.id, subject.id, now),
     ]);
-    if (subject.closed_at <= now - policy.accountClosedDays * day) await env.DB.prepare("DELETE FROM relay_devices WHERE account_id=?").bind(subject.id).run();
+    if (subject.closed_at <= now - policy.accountClosedDays * day) await env.DB.prepare("DELETE FROM relay_devices WHERE account_id=? AND NOT EXISTS(SELECT 1 FROM operational_legal_holds WHERE account_id=? AND expires_at>?)").bind(subject.id, subject.id, now).run();
     if (!pendingCancellation && subject.closed_at <= now - policy.paymentDays * day) await env.DB.batch([
-      env.DB.prepare("DELETE FROM relay_billing_events WHERE account_id=?").bind(subject.id),
-      env.DB.prepare("DELETE FROM relay_payment_holds WHERE account_id=?").bind(subject.id),
-      env.DB.prepare("DELETE FROM relay_billing WHERE account_id=?").bind(subject.id),
-      env.DB.prepare("DELETE FROM relay_billing_cancellations WHERE account_id=?").bind(subject.id),
+      env.DB.prepare("DELETE FROM relay_billing_events WHERE account_id=? AND NOT EXISTS(SELECT 1 FROM operational_legal_holds WHERE account_id=? AND expires_at>?)").bind(subject.id, subject.id, now),
+      env.DB.prepare("DELETE FROM relay_payment_holds WHERE account_id=? AND NOT EXISTS(SELECT 1 FROM operational_legal_holds WHERE account_id=? AND expires_at>?)").bind(subject.id, subject.id, now),
+      env.DB.prepare("DELETE FROM relay_billing WHERE account_id=? AND NOT EXISTS(SELECT 1 FROM operational_legal_holds WHERE account_id=? AND expires_at>?)").bind(subject.id, subject.id, now),
+      env.DB.prepare("DELETE FROM relay_billing_cancellations WHERE account_id=? AND NOT EXISTS(SELECT 1 FROM operational_legal_holds WHERE account_id=? AND expires_at>?)").bind(subject.id, subject.id, now),
     ]);
     const next = [policy.accountClosedDays, policy.providerIdentityDays, policy.paymentDays].map(days => subject.closed_at + days * day).filter(expiry => expiry > now);
     if (pendingCancellation) next.push(now + day);
@@ -50,8 +50,8 @@ export async function retentionCleanup(env: Env, now: number): Promise<void> {
         continue;
       }
       await env.DB.batch([
-        env.DB.prepare("DELETE FROM relay_accounts WHERE id=?").bind(subject.id),
-        env.DB.prepare('DELETE FROM "user" WHERE id=?').bind(subject.id),
+        env.DB.prepare("DELETE FROM relay_accounts WHERE id=? AND NOT EXISTS(SELECT 1 FROM operational_legal_holds WHERE account_id=? AND expires_at>?)").bind(subject.id, subject.id, now),
+        env.DB.prepare('DELETE FROM "user" WHERE id=? AND NOT EXISTS(SELECT 1 FROM operational_legal_holds WHERE account_id=? AND expires_at>?)').bind(subject.id, subject.id, now),
       ]);
     }
   }

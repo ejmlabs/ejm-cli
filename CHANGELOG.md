@@ -11,6 +11,7 @@ Changes follow [Semantic Versioning](https://semver.org/). Each repository is ve
 
 ### Fixed
 
+- Prepare atomic operational-hold checks for each destructive retention statement, including holds committed after subject selection. Protected acceptance and deployment remain pending.
 - Prepare consented OS family and CLI major collection through the authenticated relay lease, including version zero after room eviction. Protected acceptance and deployment remain pending.
 - Prepare immediate relay revocation on deletion requests and fresh unchecked choices after confirmed rejoin. Protected acceptance and deployment remain pending.
 - Prepare automatic recipient follow-up on withdrawal and shared profile-expiry checks for individual and cohort disclosures. Protected acceptance and deployment remain pending.

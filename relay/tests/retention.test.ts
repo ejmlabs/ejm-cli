@@ -21,20 +21,42 @@ it("purges expired closed and unadmitted identities while respecting legal holds
       await context.internalAdapter.createSession(user.id);
       continue;
     }
-    await bindings.DB.prepare("INSERT INTO relay_accounts(id,status,terms_version,terms_at,email_provenance,created_at,closed_at,cleanup_after) VALUES(?,'closed','fixture',?,'github_verified_primary',?,?,?)").bind(user.id, old, old, old, old).run();
+    await bindings.DB.prepare("INSERT INTO relay_accounts(id,status,terms_version,terms_at,email_provenance,created_at,closed_at,cleanup_after) VALUES(?,'closed','fixture',?,'github_verified_primary',?,?,?)").bind(user.id, old, old, old, label === "held" ? old - 1 : old).run();
     await bindings.DB.prepare("INSERT INTO relay_billing(account_id,customer_id,plan,status,paid_until,cancel_at_period_end,updated_at) VALUES(?,?,'free','canceled',0,1,?)").bind(user.id, `cus_${label}`, old).run();
   }
-  await bindings.DB.prepare("INSERT INTO operational_legal_holds(id,account_id,category,reason,evidence,expires_at) VALUES('hold',?,'payment','Fixture retained claim','Fixture reviewed evidence',?)").bind(ids[1], now + 86400000).run();
+  await context.internalAdapter.createAccount({ userId: ids[1]!, providerId: "github", accountId: "fixture-held" });
+  await bindings.DB.prepare("INSERT INTO relay_devices(id,account_id,session_id,label,created_at,last_used_at,revoked_at) VALUES('held-device',?,'held-session','Fixture held device',?,?,?)").bind(ids[1], old, old, old).run();
+  let holdCommitted = false;
+  function selected(raw: D1PreparedStatement): D1PreparedStatement {
+    return new Proxy(raw, { get(target, key) {
+      if (key === "bind") return (...args: unknown[]) => selected(target.bind(...args));
+      if (key === "all") return async () => {
+        const result = await target.all<{ id: string }>(); expect(result.results[0]?.id).toBe(ids[1]);
+        await bindings.DB.prepare("INSERT INTO operational_legal_holds(id,account_id,category,reason,evidence,expires_at) VALUES('hold',?,'payment','Fixture retained claim','Fixture reviewed evidence',?)").bind(ids[1], now + 86400000).run();
+        holdCommitted = true; return result;
+      };
+      const value: unknown = Reflect.get(target, key); return typeof value === "function" ? value.bind(target) : value;
+    } });
+  }
+  const database = new Proxy(bindings.DB, { get(target, key) {
+    if (key === "prepare") return (sql: string) => sql.startsWith("SELECT id,closed_at FROM relay_accounts") ? selected(target.prepare(sql)) : target.prepare(sql);
+    const value: unknown = Reflect.get(target, key); return typeof value === "function" ? value.bind(target) : value;
+  } });
   await bindings.DB.prepare("INSERT INTO operational_legal_holds(id,account_id,category,reason,evidence,expires_at) VALUES('unadmitted-hold',?,'provider_identity','Fixture retained identity','Fixture reviewed evidence',?)").bind(ids[4], now + 86400000).run();
   expect(await bindings.DB.prepare('SELECT count(*) AS count FROM "account" WHERE "userId" IN (?,?)').bind(ids[3], ids[4]).first()).toEqual({ count: 2 });
   expect(await bindings.DB.prepare('SELECT count(*) AS count FROM "session" WHERE "userId" IN (?,?)').bind(ids[3], ids[4]).first()).toEqual({ count: 2 });
   await bindings.DB.prepare("INSERT INTO relay_billing_cancellations(account_id,state,created_at,updated_at) VALUES(?,'pending',?,?)").bind(ids[2], old, old).run();
   // Each scheduled pass handles one closed account. Both eligible subjects
   // must receive a pass regardless of their randomly assigned ID order.
-  for (let i = 0; i < 3; i += 1) await retentionCleanup(bindings, now);
+  for (let i = 0; i < 3; i += 1) await retentionCleanup(i === 0 ? { ...bindings, DB: database } : bindings, now);
   await retentionCleanup(bindings, now);
+  expect(holdCommitted).toBe(true);
   expect(await bindings.DB.prepare('SELECT id FROM "user" WHERE id IN (?,?)').bind(ids[0], ids[3]).all()).toMatchObject({ results: [] });
+  expect(await bindings.DB.prepare('SELECT "accountId" FROM "account" WHERE "userId"=?').bind(ids[1]).first()).toEqual({ accountId: "fixture-held" });
   expect(await bindings.DB.prepare('SELECT email FROM "user" WHERE id=?').bind(ids[1]).first()).toEqual({ email: "held@example.invalid" });
+  expect(await bindings.DB.prepare("SELECT id,label FROM relay_devices WHERE account_id=?").bind(ids[1]).first()).toEqual({ id: "held-device", label: "Fixture held device" });
+  expect(await bindings.DB.prepare("SELECT customer_id FROM relay_billing WHERE account_id=?").bind(ids[1]).first()).toEqual({ customer_id: "cus_held" });
+  expect(await bindings.DB.prepare("SELECT status FROM relay_accounts WHERE id=?").bind(ids[1]).first()).toEqual({ status: "closed" });
   expect(await bindings.DB.prepare('SELECT email FROM "user" WHERE id=?').bind(ids[2]).first()).toEqual({ email: `${ids[2]}@deleted.invalid` });
   expect(await bindings.DB.prepare("SELECT customer_id FROM relay_billing WHERE account_id=?").bind(ids[2]).first()).toEqual({ customer_id: "cus_pending" });
   expect(await bindings.DB.prepare('SELECT "userId" FROM "account" WHERE "userId"=?').bind(ids[3]).first()).toBeNull();

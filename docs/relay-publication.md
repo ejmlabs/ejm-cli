@@ -6,7 +6,14 @@ This Worker/browser layer is prepared on actual protected CLI parent
 and inert install/review inputs. It does not accept this complete Worker,
 new UI installation or browser runtime.
 
-For published Worker head `4f2912b36dbc85a7d1c8614035f2cd60fae8ae44`,
+For head `b71eac89ea786dde1e931d51b974a1f2992622cf`, both reviews completed in
+[run 39766614421](https://github.com/ejmlabs/ejm-cli/actions/runs/39766614421).
+The first found a medium retention race; the second had no findings. The
+correction checks live holds within each destructive D1 statement, including
+final deletion after quota purge. It protects D1 records without a cross-store
+transaction. One existing retention case inserts a hold after subject selection.
+
+For earlier Worker head `4f2912b36dbc85a7d1c8614035f2cd60fae8ae44`,
 [run 39760650121](https://github.com/ejmlabs/ejm-cli/actions/runs/39760650121)
 produced one complete review with a medium finding: production usage collection
 dropped optional device OS family and CLI major. The second review timed out
