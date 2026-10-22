@@ -9,8 +9,8 @@ export async function operationalCleanup(env: Env): Promise<void> {
   const now = Date.now();
   await env.DB.batch([
     env.DB.prepare("DELETE FROM connection_tickets WHERE hash IN (SELECT hash FROM connection_tickets WHERE expires_at<=? ORDER BY expires_at LIMIT 500)").bind(now),
-    env.DB.prepare("DELETE FROM relay_billing_events WHERE id IN (SELECT id FROM relay_billing_events WHERE expires_at<=? AND status='processed' ORDER BY expires_at LIMIT 200)").bind(now),
-    env.DB.prepare('DELETE FROM "session" WHERE id IN (SELECT id FROM "session" WHERE "expiresAt"<? ORDER BY "expiresAt" LIMIT 200)').bind(new Date(now).toISOString()),
+    env.DB.prepare("DELETE FROM relay_billing_events WHERE id IN (SELECT id FROM relay_billing_events e WHERE expires_at<=? AND status='processed' AND NOT EXISTS(SELECT 1 FROM operational_legal_holds h WHERE h.account_id=e.account_id AND h.expires_at>?) ORDER BY expires_at LIMIT 200)").bind(now, now),
+    env.DB.prepare('DELETE FROM "session" WHERE id IN (SELECT id FROM "session" s WHERE "expiresAt"<? AND NOT EXISTS(SELECT 1 FROM operational_legal_holds h WHERE h.account_id=s."userId" AND h.expires_at>?) ORDER BY "expiresAt" LIMIT 200)').bind(new Date(now).toISOString(), now),
     env.DB.prepare('DELETE FROM "verification" WHERE id IN (SELECT id FROM "verification" WHERE "expiresAt"<? ORDER BY "expiresAt" LIMIT 200)').bind(new Date(now).toISOString()),
     env.DB.prepare('DELETE FROM "deviceCode" WHERE id IN (SELECT id FROM "deviceCode" WHERE "expiresAt"<? ORDER BY "expiresAt" LIMIT 200)').bind(new Date(now).toISOString()),
     env.DB.prepare('DELETE FROM "rateLimit" WHERE id IN (SELECT id FROM "rateLimit" WHERE "lastRequest"<? ORDER BY "lastRequest" LIMIT 200)').bind(now - 7 * 86_400_000),

@@ -462,12 +462,14 @@ service. Add no lookup, schema or dependency. Extend the existing forwarding and
 eviction case, prove the old failure, and retain one corrected invocation and
 one normal gate after both reviews finish.
 
-The first complete b71 review found a hold race after retention subject selection.
-Guard each destructive D1 statement with the existing indexed live-hold predicate,
-including final deletion after quota purge. This protects current D1 records,
-without a cross-store transaction or restoring relay authority. Extend the existing
-retention case with a hold committed after selection; prove its old failure and
-one corrected pass, then run the normal gate once after both reviews finish.
+The complete b71 review found a hold race after retention subject selection;
+55c's first complete review found unguarded scheduled billing-event/session expiry.
+Use the indexed live-hold predicate within each deleting statement, including
+final deletion after quota purge. Keep the expiry batch and 200-row caps.
+Preserve expired held sessions without restoring authority or adding a cross-store
+transaction. Extend only the existing retention and populated scheduled cases;
+prove old failures and corrected passes, then run the normal gate once after both
+reviews finish. No schema, dependency, owner pin or release-control change.
 
 ### Dependency and artifact bounds
 

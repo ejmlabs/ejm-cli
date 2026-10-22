@@ -179,6 +179,9 @@ it.each([true, false])("bounds the populated scheduled path and leaves excess wo
     bindings.DB.prepare(`INSERT INTO "deviceCode"(id,"deviceCode","userCode","expiresAt",status) VALUES('expired-device-code','expired-device-code','expired-user-code',?,'pending')`).bind(expired),
     bindings.DB.prepare(`INSERT INTO "rateLimit"(id,key,count,"lastRequest") VALUES('expired-rate','fixture',1,?)`).bind(now - 8 * DAY),
     bindings.DB.prepare("INSERT INTO operational_legal_holds(id,account_id,category,reason,evidence,expires_at) VALUES('expired-hold',?,'payment','Fixture reason','Fixture evidence',?)").bind(ids[0], now - 1),
+    bindings.DB.prepare("INSERT INTO relay_billing_events(id,account_id,status,created_at,expires_at) VALUES('held-expired-event',?,'processed',?,?)").bind(ids[29], now - DAY, now - 1),
+    bindings.DB.prepare(`INSERT INTO "session"(id,"expiresAt",token,"createdAt","updatedAt","userId") VALUES('held-expired-session',?,'held-expired-token',?,?,?)`).bind(expired, expired, expired, ids[29]),
+    bindings.DB.prepare("INSERT INTO operational_legal_holds(id,account_id,category,reason,evidence,expires_at) VALUES('live-hold',?,'payment','Fixture reason','Fixture evidence',?)").bind(ids[29], now + DAY),
     bindings.DB.prepare("INSERT INTO privacy_operational_tasks(request_id,account_id,action,state,requested_at,due_at,expires_at) VALUES('expired-right',?,'export','completed',?,?,?)").bind(ids[0], now - 60 * DAY, now - 30 * DAY, now - 1),
   ]);
   const observed = observedEnv();
@@ -195,6 +198,10 @@ it.each([true, false])("bounds the populated scheduled path and leaves excess wo
   expect(await bindings.DB.prepare('SELECT id FROM "user" WHERE id IN(\'expired-retention-fixture\',\'unadmitted-fixture\')').all()).toMatchObject({ results: [] });
   const pending = await runInDurableObject(privacy(), async (_instance, state) => state.storage.sql.exec("SELECT COUNT(*) AS n FROM privacy_rights WHERE operational_state='pending'").one());
   expect(pending.n).toBe(127);
+  expect((await bindings.DB.batch([
+    bindings.DB.prepare("SELECT id FROM relay_billing_events WHERE id IN ('expired-event','held-expired-event')"),
+    bindings.DB.prepare(`SELECT id FROM "session" WHERE id IN ('expired-session','held-expired-session')`),
+  ])).map(result => result.results)).toEqual([[{ id: "held-expired-event" }], [{ id: "held-expired-session" }]]);
 });
 
 it("drains beyond failed enqueues and acknowledgements across authority eviction, then retries", async () => {

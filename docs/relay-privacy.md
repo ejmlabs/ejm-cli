@@ -159,9 +159,10 @@ retention baseline under the existing rules.
 Operational legal holds also protect identities that have not accepted Relay
 terms, including their provider links and sessions. Once a hold expires, the
 configured identity retention rules apply again through bounded cleanup.
-For closed accounts, each destructive D1 statement rechecks live holds, including
-those committed after subject selection. A hold protects records still present
-when that statement runs; it cannot restore deleted records or relay authority.
+Scheduled billing-event/session expiry and closed-account deletion recheck live
+holds within each destructive statement, including holds committed after subject
+selection. Held expired sessions remain invalid. A hold protects records still
+present when a statement runs; it cannot restore deleted records or relay access.
 
 Export-part cleanup inspects at most 128 indexed candidates before checking
 request protection. A durable cursor advances past pending parts without

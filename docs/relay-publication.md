@@ -6,7 +6,14 @@ This Worker/browser layer is prepared on actual protected CLI parent
 and inert install/review inputs. It does not accept this complete Worker,
 new UI installation or browser runtime.
 
-For head `b71eac89ea786dde1e931d51b974a1f2992622cf`, both reviews completed in
+Head `55c406426fbe88751beef2bebf4704c385c3ff01` received one complete review in
+[run 39804257529](https://github.com/ejmlabs/ejm-cli/actions/runs/39804257529).
+It found scheduled billing-event/session expiry bypassing live holds. Review 2
+failed after nine minutes without a final report. The correction guards both
+statements in the existing batch; both populated scheduled-test variants retain
+held rows and expire unheld rows within their existing query and call budgets.
+
+For earlier head `b71eac89ea786dde1e931d51b974a1f2992622cf`, both reviews completed in
 [run 39766614421](https://github.com/ejmlabs/ejm-cli/actions/runs/39766614421).
 The first found a medium retention race; the second had no findings. The
 correction checks live holds within each destructive D1 statement, including
