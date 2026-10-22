@@ -333,33 +333,17 @@ No approved policy, retention duration, dependency or release control changed.
 
 ### Native retirement and browser gap correction
 
-The authorized retry [run 39609395805](https://github.com/ejmlabs/ejm-cli/actions/runs/39609395805)
-completed on October 21 at 13:58:46 UTC for the exact e0bf source above.
-Linux/macOS quality, registry and standards passed. Both bounded final reviews
-were complete and matched the exact source: review 1 reported two medium
-findings and review 2 reported none. These findings block adoption; this was not
-a timeout or incomplete-review result.
+[Run 39810827460](https://github.com/ejmlabs/ejm-cli/actions/runs/39810827460) reviewed `22afd8b`: Linux/macOS quality, registry and standards passed.
+Both exact-source final reports completed: review 1 found the in-flight shutdown blocker; review 2 found none.
+The earlier [e0bf retry](https://github.com/ejmlabs/ejm-cli/actions/runs/39609395805) found the native/browser defects covered by the October 21 regressions below.
 
-The prepared native fix revokes local sharing and cancels its transport first,
-then awaits existing relay retirement during ordinary stop, session change and
-graceful exit, with a bounded owned-task drain and abort fallback. Temporary
-reconnect keeps its reservation. Hard kill or network failure remains best
-effort, with dashboard stop or original-expiry recovery.
+Prepared [native shutdown](remote-control.md#sign-in-and-host) retains its bounded retirement drain and abort fallback,
+polling in-flight UI work with revocation within five seconds. Browser Events gaps
+use the Snapshot barrier, preserving uncertain actions and avoiding refresh loops.
 
-The prepared browser fix uses the existing Snapshot recovery barrier after an
-Events gap. It pauses actions and incremental Events until authoritative run,
-role, cursor and mutation high-water state arrives, preserves uncertain actions
-without resubmitting them and does not loop on a Snapshot's own history gap.
-
-The two existing regressions failed on the old runtime and passed with the
-correction on October 21. The native case calls production stop, checks room
-retirement and obtains a new share ticket. Its old-runtime control adds only
-the test constructor and assertions. The browser case covers one refresh,
-queued pages, an idle Snapshot and the original uncertain action. No test cases
-were added. The corrected normal gate, push, fresh exact-head admission and
-hosted reviews, final approval, protected merge and deployment remain pending.
-The fixes change no quota/API, dependency, owner pin, legal policy or release
-control. Admission stays closed; billing and commercial programs stay off.
+Two existing cases failed on old runtime and passed October 21; no cases were added.
+Native proof checks production stop, retirement and a new ticket; its old control adds only fixture construction/assertions.
+Browser proof covers one refresh, queued pages, an idle Snapshot and uncertain action. Adoption and deployment remain pending.
 
 ## Current local checks
 

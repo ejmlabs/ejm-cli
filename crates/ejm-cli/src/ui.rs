@@ -53,8 +53,7 @@ pub(crate) async fn with_shutdown(
             () = termination_signal() => {
                 cancel.cancel();
                 let _ = tokio::time::timeout(Duration::from_secs(5), async {
-                    backend.stop_sharing().await;
-                    let _ = operation.await;
+                    let _ = tokio::join!(backend.stop_sharing(), &mut operation);
                 }).await;
                 (Ok(()), true)
             },

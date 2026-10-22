@@ -4,7 +4,7 @@
 
 ### Requirement: Exact queued completion
 
-Queued remote prompts SHALL remain host-owned and revocable until admission. Admission SHALL follow successful completion of the exact target run and the end of its bounded completion observers. The host SHALL recheck the live share, expiry and target before starting queued work. Ordinary native stop and graceful shutdown SHALL await bounded existing relay retirement after immediate local revocation.
+Queued remote prompts SHALL remain host-owned and revocable until admission. Admission SHALL follow successful completion of the exact target run and the end of its bounded completion observers. The host SHALL recheck the live share, expiry and target before starting queued work. Ordinary native stop and graceful shutdown SHALL await bounded existing relay retirement after immediate local revocation, polling in-flight UI work and revocation together inside the existing five-second timeout.
 
 #### Scenario: Completion observers are still running
 
@@ -19,7 +19,7 @@ Queued remote prompts SHALL remain host-owned and revocable until admission. Adm
 #### Scenario: Local input and signals during cleanup
 
 - **WHEN** a completion observer is blocked, host startup owns protected input or an ordinary sharing host stops
-- **THEN** local revocation, session changes, exit and termination remain responsive, restore the terminal and prevent queued remote admission; graceful cleanup awaits existing relay retirement within its bounded drain before abort fallback, and trusted local stop also cancels retained local successors
+- **THEN** local revocation, session changes, exit and termination remain responsive, restore the terminal and prevent queued remote admission; graceful cleanup polls in-flight UI work with revocation and awaits existing relay retirement within its bounded drain before abort fallback, and trusted local stop also cancels retained local successors
 - **AND** temporary transport reconnect retains the reservation, and failed cleanup does not restore local sharing authority
 
 #### Scenario: A fast local successor overtakes replay

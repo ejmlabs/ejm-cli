@@ -394,10 +394,10 @@ Both fixes belong to ejm-cli. Retain `/remote stop`, ordinary host shutdown,
 `POST /v1/rooms/ROOM_ID/stop` and the version 1 Events/Snapshot interfaces.
 After immediate local transport cancellation and share revocation, await the
 existing `serve_host` relay retirement on ordinary stop, session change and exit.
-Keep the bounded owned-task drain and abort fallback. Handled termination must
-allow that cleanup to run rather than dropping the terminal future. Temporary
-transport reconnect keeps the same reservation. Hard kill or unreachable relay
-cleanup remains best effort, with account dashboard stop or original expiry as
+Keep the bounded owned-task drain and abort fallback. Poll in-flight UI work
+with local revocation inside the five-second timeout so its authority guard can
+release. Temporary reconnect retains the reservation. Hard kill or unreachable
+relay cleanup remains best effort, with account dashboard stop or original expiry as
 recovery. Change no quota, API, authority, dependency, sibling or pin.
 
 An Events gap enters one existing Snapshot request. Suspend actions and
