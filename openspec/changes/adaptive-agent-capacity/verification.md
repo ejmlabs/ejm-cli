@@ -1639,3 +1639,25 @@ No release, publication or other-platform acceptance is claimed.
 ### Scoped integration correction
 
 The first integration checkpoint passed release builds and all four Stop tests, then failed before workload startup because the scoped branch omitted the terminal observer. Both observer processes were reaped; no client or helper identities were discovered. The relay contract set passed 18 of 19 tests and caught an unintended 64 KiB prompt limit. Restore main's 16 KiB boundary and declare the observer's existing maintained emulator directly. Retest before claiming acceptance.
+
+## Final macOS representative acceptance and default activation, 2026-10-22
+
+The repaired candidate passed the predeclared representative gate. Exact report:
+`/private/tmp/ejm-capacity-critical-comparison-20261021-integration/20261022T104153Z-a69f5df4/report.json`.
+See `docs/capacity-integration-checkpoint.json` for its hash, host, inputs, paired
+results, latency samples and source bridge. Median automatic throughput loss
+was -1.1594%; median terminal overhead was 1.8826%. All commands and observers
+were reaped. Pressure recovery, learned restart and reservation bounds passed.
+The second terminal-overhead pair was 8.29%; the declared median gate passed.
+Earlier failed trials remain evidence. Host fixed rates changed between runs,
+so these results do not isolate the effect of the controller repair.
+
+The CLI parser and TypeScript/Python SDK tests passed for macOS automatic
+omission and explicit fixed mode against the actual release worker. SDK build,
+ESLint and Python Ruff checks passed. Version 0.2.0 and docs changes do not alter
+the measured explicit-auto path. No second workload matrix was run.
+
+The public filesystem fork and consumer lockfiles satisfy source distribution.
+Registry publication remains separate. Linux activation, other platform native
+acceptance and broader hardware/idle claims remain open. Required protected CI,
+human review, main merge and source-release dispatch are not complete.

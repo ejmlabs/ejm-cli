@@ -284,7 +284,7 @@ Plain mode streams assistant text on stdout and tool status on stderr. JSON mode
 
 ### Capacity and host coordination
 
-Without `--capacity`, the CLI retains its legacy fixed process limits: 100 managed sessions, eight model requests, four tool jobs, and 512 MiB of admitted tool memory. This default does not participate in the shared host registry. Automatic default activation is pending native evidence that surviving participants make safe, bounded progress after idle and busy owner crashes on each claimed platform.
+On macOS, the CLI selects automatic shared host capacity without a flag. On Linux and Windows, omission retains legacy process limits pending native acceptance: 100 managed sessions, eight model requests, four tool jobs, and 512 MiB of admitted tool memory, outside the shared registry. Use `--capacity fixed` for coordinated fixed targets on macOS.
 
 ```sh
 ejm-cli --capacity auto
@@ -293,7 +293,7 @@ ejm-cli --capacity fixed
 ejm-cli capacity reset
 ```
 
-Explicit `--capacity auto` delegates operating targets, host observations, feedback, and local learning to the harness. Explicit `--capacity fixed` uses the former defaults for omitted numeric flags while sharing host admission. In either explicit mode, `--max-sessions`, `--model-concurrency`, `--tool-concurrency`, and `--tool-memory-mib` are hard ceilings. Omitted values in automatic mode do not silently impose the old fixed defaults. Zero values are rejected. `--max-steps` and `--run-timeout-ms` still bound each run.
+Explicit `--capacity auto` delegates operating targets, host observations, feedback, and local learning to the harness. Explicit `--capacity fixed` uses the former defaults for omitted numeric flags while sharing host admission. In either coordinated mode, `--max-sessions`, `--model-concurrency`, `--tool-concurrency`, and `--tool-memory-mib` are hard ceilings. Omitted values in automatic mode do not silently impose the old fixed defaults. Zero values are rejected. `--max-steps` and `--run-timeout-ms` still bound each run.
 
 Coordination covers participating processes in the same current OS-user and visible host/container resource scope, even with different session-state directories. Other users, older clients, and unrelated applications are not coordinated; their effects can only be sampled. Missing scope or native boot identity can reject an explicit coordinated launch. Do not delete the shared ledger to recover capacity. These are admission budgets, not a native security sandbox or proof of a hard memory ceiling on macOS.
 
@@ -320,12 +320,10 @@ must wait, including idle-helper reuse. Package startup admits resident memory
 and import scratch together, then retains only the resident share after import.
 The harness repairs the
 [first-start lock publication gap](https://github.com/ejmlabs/ejm-harness/blob/main/docs/host-capacity.md#stable-lock-creation-repair)
-with a pinned temporary dependency patch. Focused macOS checks pass; package
-publishing waits for equivalent upstream APIs. Other platforms and broader
-acceptance remain open.
-Automatic defaults remain
-gated on calibration for other targets and embedding images, crash and pool
-checks, and native and performance acceptance. The sustained package idle measurement also missed its owner CPU
+with an exact public filesystem fork pin. Source builds require no crates.io
+publication of that fork. Scoped macOS recovery and representative acceptance
+passed; automatic defaults are enabled on macOS. Other platforms and embedding
+images still need calibration and native acceptance. The sustained package idle measurement also missed its owner CPU
 target. See
 [the package evidence](https://github.com/ejmlabs/ejm-harness/blob/main/docs/packages.md#sustained-idle-measurement)
 for the measured scope and limits.

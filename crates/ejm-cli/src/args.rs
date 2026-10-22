@@ -169,8 +169,9 @@ pub struct Args {
         long,
         global = true,
         value_enum,
-        help = "Opt into shared host capacity (auto or fixed); omission retains legacy fixed behavior until native crash recovery is verified"
+        help = "Shared host capacity mode (default: auto on macOS, legacy fixed elsewhere)"
     )]
+    #[cfg_attr(target_os = "macos", arg(default_value = "auto"))]
     pub capacity: Option<CapacityMode>,
 
     #[arg(long, global = true, value_parser = positive_count, help = "Managed-session ceiling (fixed mode default: 100)")]
@@ -433,7 +434,14 @@ mod tests {
     #[test]
     fn capacity_keeps_omitted_ceilings_distinct_from_fixed_defaults() {
         let fixed = Args::try_parse_from(["ejm-cli"]).unwrap();
-        assert_eq!(fixed.capacity, None);
+        assert_eq!(
+            fixed.capacity,
+            if cfg!(target_os = "macos") {
+                Some(CapacityMode::Auto)
+            } else {
+                None
+            }
+        );
         assert_eq!(fixed.max_sessions, None);
         assert_eq!(fixed.model_concurrency, None);
         assert_eq!(fixed.resources().max_jobs, 4);

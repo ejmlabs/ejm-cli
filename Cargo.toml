@@ -3,7 +3,7 @@ members = ["crates/ejm-cli"]
 resolver = "2"
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 license = "MIT"
 rust-version = "1.99.1"
@@ -15,12 +15,12 @@ tokio-util = { version = "0.7", features = ["rt"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tempfile = "3"
-ejm-harness = { version = "0.1.0", path = "../ejm-harness/crates/ejm-harness" }
-ejm-harness-coding = { version = "0.1.0", path = "../ejm-harness/crates/ejm-harness-coding" }
-ejm-harness-exec = { version = "0.1.0", path = "../ejm-harness/crates/ejm-harness-exec" }
-ejm-harness-auth = { version = "0.1.0", path = "../ejm-harness/crates/ejm-harness-auth" }
-ejm-harness-packages = { version = "0.1.0", path = "../ejm-harness/crates/ejm-harness-packages" }
-ejm-harness-package-spec = { version = "0.1.0", path = "../ejm-harness/crates/ejm-harness-package-spec" }
+ejm-harness = { version = "0.2.0", path = "../ejm-harness/crates/ejm-harness" }
+ejm-harness-coding = { version = "0.2.0", path = "../ejm-harness/crates/ejm-harness-coding" }
+ejm-harness-exec = { version = "0.2.0", path = "../ejm-harness/crates/ejm-harness-exec" }
+ejm-harness-auth = { version = "0.2.0", path = "../ejm-harness/crates/ejm-harness-auth" }
+ejm-harness-packages = { version = "0.2.0", path = "../ejm-harness/crates/ejm-harness-packages" }
+ejm-harness-package-spec = { version = "0.2.0", path = "../ejm-harness/crates/ejm-harness-package-spec" }
 
 [profile.release]
 lto = "thin"
