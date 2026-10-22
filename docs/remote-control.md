@@ -2,8 +2,10 @@
 
 This guide describes the native source accepted through protected CLI PR #21.
 The [acceptance record](native-remote-publication.md) binds its merge, tree and
-Linux/macOS results after PR #20's docs/UI prerequisite. Worker/browser adoption,
-binary distribution and live acceptance remain pending. Use this workflow only
+Linux/macOS results after PR #20's docs/UI prerequisite. The following
+[native retirement correction](relay-publication.md#native-retirement-and-browser-gap-correction)
+is prepared in Worker PR #23. Worker/browser adoption, binary distribution and
+live acceptance remain pending. Use this workflow only
 after building the reviewed native source and selecting a compatible relay.
 
 Remote access shares one selected CLI session through an account-gated relay.
@@ -12,9 +14,11 @@ Local use needs no relay account. Native preparation began on protected CLI
 harness merge `42e4f9cf33bd3525aec344cfdffabc251271f782` and its exact
 358-file completion API tree `826e0231...`. Earlier lock and gate results remain
 historical beside PR #21's separate native acceptance. A compatible account
-service is required; the native layer includes no relay or browser UI.
-The following [inert UI/Relay inputs](ci-bootstrap.md#current-inert-shared-ui-and-relay-inputs)
-still need their own gates before the later full Worker source and deployment.
+service is required. That accepted native layer included no relay or browser UI.
+The following [inert UI/Relay prerequisite](ci-bootstrap.md#current-inert-shared-ui-and-relay-inputs)
+is now accepted through protected PR #22. The complete Worker source is being
+integrated on it, with its own gate, hosted adoption and deployment pending.
+See [browser control](relay-web.md) and [relay operations](../relay/README.md).
 
 ## Sign in and host
 
@@ -77,6 +81,14 @@ The sharing badge remains visible after the invitation panel closes.
 Switching the selected session or exiting the host stops sharing. Stopping
 discards prompts still in the remote queue. A run that already started
 continues locally unless the host cancels it.
+
+The prepared follow-up revokes local sharing before waiting for relay retirement.
+Ordinary stop, session change, exit and handled termination poll in-flight work
+and revocation together within bounded cleanup. Temporary reconnect retains
+the room reservation; the existing abort fallback still applies. A hard kill or unreachable relay can leave retirement unconfirmed;
+use the owning account's dashboard **Stop sharing**, or wait for the original
+share expiry before creating another share. These changes still need their
+corrected-source checks and protected adoption.
 
 ## Native controller
 

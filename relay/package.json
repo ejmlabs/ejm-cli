@@ -1,0 +1,51 @@
+{
+  "name": "@ejmlabs/cli-relay",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "26.12.0"
+  },
+  "packageManager": "npm@11.20.0",
+  "scripts": {
+    "check:types": "tsc --noEmit",
+    "test": "vitest run",
+    "build": "npm run build:web && wrangler deploy --dry-run --outdir dist",
+    "schema:auth": "node --import tsx scripts/schema.ts",
+    "check:schema": "node --import tsx scripts/schema.ts --check",
+    "check": "npm run build:ui && npm run check:types && npm run check:schema && npm test && npm run build && npm run test:fixture && npm run test:native && npm run test:web",
+    "dev": "wrangler dev",
+    "build:web": "node web/build.mjs",
+    "test:web": "playwright test --config tests/web/playwright.config.ts",
+    "test:fixture": "node --import tsx scripts/smoke-fixture.ts",
+    "test:load": "node --import tsx scripts/load-fixture.ts",
+    "test:native": "node --import tsx scripts/native-fixture.ts",
+    "build:ui-proof": "tsc --project web/ui/tsconfig.json && node web/ui/build-proof.mjs",
+    "build:ui": "tsc --project web/ui/tsconfig.json && node web/ui/build-screens.mjs"
+  },
+  "dependencies": {
+    "better-auth": "1.7.11",
+    "better-call": "1.4.2",
+    "stripe": "23.0.0"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "1.4.4",
+    "@cloudflare/workers-types": "5.20261018.1",
+    "@ejm/core": "file:../../ejm-ui/packages/core",
+    "@ejm/tokens": "file:../../ejm-ui/packages/tokens",
+    "@ejm/ui": "file:../../ejm-ui/packages/ui",
+    "@playwright/test": "1.64.1",
+    "@tailwindcss/vite": "4.3.3",
+    "@types/node": "26.6.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "tailwindcss": "4.3.3",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2",
+    "vite": "8.3.4",
+    "vitest": "5.0.5",
+    "wrangler": "4.151.1"
+  }
+}

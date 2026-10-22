@@ -2,9 +2,9 @@
 
 ## Context
 
-The current scope is the [inert prerequisite](#current-inert-prerequisite) after
-protected native adoption. The P/native preparation paragraphs and correction
-records below retain their premerge scope and earlier verification limits.
+The current scope is the [Worker integration](#current-worker-integration) after
+protected native and inert UI adoption. The prerequisite preparation paragraphs
+and correction records below retain their historical scope and evidence limits.
 
 CLI PR #20 merged normally as protected docs/UI prerequisite P
 `9e3f8ef11dc083c31b651b9dae15a98e086e3359`, tree
@@ -44,6 +44,18 @@ See proposal.md for scope. At the start of this change, the local relay gate had
 At the initial Cloudflare inspection, Wrangler could access the account, but no ejm-cli-relay Worker or matching D1 database existed and custom domains did not include relay.ejmlabs.com. That inspection did not expose billing subscription details; it reported the standard usage model. The initial relay config had placeholder deployment values and closed admission. The D1 database has since been created and migrations applied. This prepared native layer contains no relay config and does not establish current deployment acceptance. Do not upgrade or downgrade the account; release and authenticated deployment checks remain open.
 
 ## Current inert prerequisite
+
+This section records the preparation scope accepted by PR #22. Reviewed head
+`f44c57396bc220562a8dae83767e188977e2c2ce` passed
+[run 39520822069](https://github.com/ejmlabs/ejm-cli/actions/runs/39520822069):
+Linux/macOS quality, registry, standards and both complete, zero-finding reviews.
+Human approval comment `6305211216` authorized that exact head. The normal
+protected squash merge at `2026-10-21T00:51:27Z` produced
+`78810826cd376588d3303f13bc237309fb5170a8`, tree
+`dca23befbbe5bf065807f8ed06a98aa5b4c7a159`, with sole parent 71d0 below.
+The reviewed and merged trees match; protection remained enforced. Its following
+preparation instructions are historical. They accept static inputs, not the
+Worker, new UI installation, browser runtime or deployment.
 
 Native PR #21 reviewed head `6cbc5b7d1f8cd70109dd72ae464bef29f8483f11`
 merged normally through protection at **2026-10-20T23:19:40Z** as
@@ -112,6 +124,414 @@ The next complete Worker PR must inherit
 the new UI pin from protected BASE and verify the full UI archive,
 lifecycle-disabled installed proof and full native/WASM/Worker/browser gate
 before closed deployment. All eleven whole release tasks remain unchecked.
+
+## Current Worker integration
+
+Start on actual protected parent 78810826 above. Inherit its UI source selector,
+thirteen install metadata bindings, complete changed-owner source supplement,
+Relay npm lock and review manifest. Keep the harness at protected 42e, the 40d
+callers and canonical workflow context unchanged. The protected-BASE UI archive
+now selects 79a1 rather than M. Verify its complete 941-file tree and bind the
+lifecycle-disabled installed public packages before claiming consumer acceptance.
+
+### Owners and scope
+
+- ejm-ui owns tokens, appearance, components, interactions and Relay artwork.
+  The consumer uses public `@ejm/core`, `@ejm/tokens` and `@ejm/ui` exports only.
+  The accepted screen overlay is product state and composition, not a second
+  component or token system. Its four-line production CSS imports shared styles.
+  React is build-time only; production screens retain their small module bootstrap.
+  Account closure uses an inline form with the public NativeCheckbox and Button
+  inside Disclosure, replacing the remaining browser confirmation popup. Require
+  an explicit checked choice before sending the destructive API request and cover
+  unchecked/confirmed behavior through the real browser and account fixture.
+- ejm-cli owns the Worker account/relay adapters, browser state and actions,
+  the memory-only browser Noise adapter and native transport fixtures.
+  Better Auth owns account/session/device-flow infrastructure. Stripe remains
+  configured off. Cloudflare owns Worker, D1 and hibernating DO infrastructure.
+- ejm-harness owns native execution, persistence and credential storage. Add no
+  shared execution or vault implementation to the browser or Worker. Preserve
+  accepted native queue, cancellation and pairing contracts while correcting
+  the CLI stop and browser recovery adapters below.
+
+Port only finite provisional Relay source, schema/configuration, browser and
+Worker tests, WASM crate, two native transport fixtures and the gate adapter.
+Do not copy generated assets, installed dependencies, ignored local files,
+credentials, old native source, old terminal supervisor or the preview Cargo lock.
+Add only the test-module declarations to accepted native transport. Preserve
+`queue_ready`/`settle`, all fourteen native PTY cases and seventeen PTY sessions,
+atomic vault publication, cancellation and snapshot/expiry authority.
+
+### Expiry across storage waits
+
+The bounded Worker review found that time captured before D1 or quota I/O can
+outlive the authority it checked. Keep the authority lookup's original lease
+deadline, cap it by session and paid entitlement expiry, and use fresh time after
+D1 returns. Recheck ticket expiry before consuming it or reserving traffic.
+After a Room flush or quota renewal, check the effective sender lease, current
+peer attachment and retirement fence immediately before accounting and sending.
+The peer must still name the same account and room with the opposite role and
+an unexpired lease. Retain the renewed sender lease returned by quota.
+
+Use existing Workerd storage/socket fixtures and the platform clock spy to prove
+expiry during those waits fails closed, with old-code failures and corrected
+passes. Add no timer, per-frame D1 lookup, protocol, dependency or service.
+Room handler serialization protects the local retirement fence; account/device
+revocation elsewhere retains its documented bounded lease grace.
+
+The native storage fixture must permit only the Room's bounded retirement
+control record, not reject all application-owned tables. Verify its exact three
+fields, single-row/account/expiry bounds and the absence of content or keys in
+every stored row and captured log. Unexpected Room tables or retirement fields
+must still fail. Keep this fixture correction separate from production behavior.
+
+### Worker review corrections
+
+Both reviews in fresh run `39534461293` completed for Worker head
+`cf1efa10edc61647feac62b35b9e9c3420661283` and blocked adoption on five
+distinct defects. Their complete reports replace the earlier incomplete review
+attempt, not its quality evidence. Address these defects in the CLI owner before
+fresh human admission; keep existing models, timeouts, checks and merge controls.
+
+Bind each admitted socket pair to an opaque generation in existing Cloudflare
+hibernation attachments. Retain whether a socket has already paired, so a lone
+survivor cannot join a new handshake. Retire both old peers before replacement
+admission or an awaited usage flush. Scope close/error callbacks and forwarding
+to their own current generation; a delayed callback must not close a replacement.
+Legacy attachments without this authority fail closed and require reconnect.
+Use platform Web Crypto, with no SQL table, timer or dependency. Preserve live
+same-role rejection, quota accounting and persistent stop-retirement fences.
+
+Collect only the union of fields covered by current approved usage consents.
+Keep nonconsented counters and optional metadata out of commercial storage;
+transient activity detection does not authorize retaining raw traffic. Reuse
+the monthly schema but merge only unexpired rows and preserve the earliest
+included contribution's expiry. Later samples may expire earlier, never later.
+Exclude expired usage from access and buyer exports before cleanup runs.
+
+Reuse the existing operational hold boundary during rights deletion. Revoke
+relay and session authority even when identity records must be retained, and
+record the held categories as explicit exceptions. Route dashboard closure
+through the existing durable close-rights workflow before revoking sessions,
+including recipient follow-up and operational work. Return and display its
+one-time tracking key through existing public UI composition before navigation
+can discard it; never put that key in logs or a URL.
+
+Use existing Workerd, SQLite and browser fixtures for delayed old callbacks,
+old/new peer overlap, consent subsets, original-expiry boundaries, expired-row
+replacement, held deletion and dashboard closure after disclosure. Require
+meaningful failures on the old paths, corrected focused passes, the normal
+combined gate and fresh exact-source hosted acceptance. Commercial collection
+and account admission remain disabled. These corrections close no release task
+by themselves and do not change the approved policy text.
+
+### Follow-up Worker review corrections
+
+Both reviews in run `39539622114` completed for
+`9336df2fdd551fdc7a0d5d870788301d116b555c`. They found four medium
+blockers and one low advisory. Correct them before another human admission;
+do not treat a completed review as acceptance when it reports blockers.
+
+Persist one bounded Room owner and original share deadline independently of
+socket attachments. Claim it in the Worker after account quota issuance and
+before publishing a ticket. Never await Room claims from inside account quota
+serialization, since Room forwarding already awaits that quota authority.
+Check the durable owner on claim, connection and closure, including after
+disconnection or eviction. Repeated claims cannot extend the share deadline.
+Unowned legacy transports fail closed and need a fresh owned host share.
+
+Allow a verified account session to stop its own share without registering a
+relay transport device. Preserve the outer mutation-origin checks, account
+ownership and quota checks. Device-bound tickets and local controller pairing
+remain required for transport and execution authority.
+
+Revoke future quota authority first, but retain a bounded pending room closure
+until the Room acknowledges retirement or its original share deadline makes
+every transport lease invalid. Failed closure before that deadline must remain
+retryable through the existing rights workflow and cannot become completed
+operational work merely because a previous attempt revoked quota successfully.
+Bounded quota cleanup may remove safely expired targets; an expired retry must
+never contact or retire a later owner of the same routing ID.
+
+Record the usage rows and deadlines included in a disclosure projection. After
+the awaited digest, recheck their current presence and retention eligibility
+inside the final disclosure transaction, with fresh time and the existing
+consent and generation checks. Expired or deleted rows cannot be disclosed.
+
+Invoke the existing Python gate from the PowerShell relay shortcut and retain
+its prerequisite validation and exit status. Prove the real old paths fail,
+then pass focused tests and the unchanged full gate. Reuse existing platform
+storage and crypto, add no service, dependency, recurring timer or D1 migration,
+and keep all release, policy and admission controls unchanged.
+
+### Pre-terms closure and Checkout creation corrections
+
+Review 1 in run `39544920374` completed for
+`2de6de3958a288da4ed90c5379c26238a739e06d` and reported two medium
+blockers. Correct them under task 2.4 before fresh human admission. Review 2
+timed out after nine minutes without a final report; it supplies no acceptance.
+Platform gates remain separate evidence.
+
+Closing a verified identity before terms acceptance must persist a closed
+account marker in the existing D1 batch. Use an UPSERT selected from the
+existing identity so a stale retry cannot recreate a purged identity. Preserve
+original terms and closure/cleanup timestamps on conflict. Reuse existing
+authentication, retention, hold and rights rules without a schema change.
+Cover both closure routes through the real offline OAuth flow: a fresh linked
+login after closure cannot read an admitted account or accept terms.
+
+Keep the pinned Stripe client and its current bounded timeout/retry settings.
+Persist one Checkout key, plan and fixed 60-minute deadline before creation.
+Retry creation only with those exact parameters while at least 31 minutes
+remain; once inside that guard, reconcile through bounded provider reads.
+Do not slide the deadline or infer no session from an empty or truncated list.
+Only a typed provider validation rejection of `expires_at` for a key first
+allocated in the current invocation can conditionally release that unresolved
+key. A later user request can then allocate a fresh attempt. Pre-existing
+attempts remain guarded even after a validation error. Network, timeout, server,
+idempotency and conflict errors retain the original key and require
+reconciliation or review. Never rekey an ambiguous operation automatically.
+
+Use meaningful regressions that enforce Stripe's creation-time expiry window
+and distinguish definitive rejection from uncertain failure. Prove the intended
+old-code failures, then pass the focused and unchanged full gates. No new
+package, migration, service, timer, entitlement path or payment activation is
+included. Update affected public guides while keeping publication and live
+authenticated acceptance open.
+
+### Device history and partial quota corrections
+
+The complete reviews of `8a2e7feb8a9626173052160f6a34ab091b1c77f4`
+found two medium device-history defects and one low quota defect. Linux and
+macOS quality passed, but this source is not accepted for release.
+
+Keep the dashboard response at 64 safe device rows. Return every active device
+first, with newest-first ordering inside the active and revoked groups. Reuse
+the registration limit of 16 and existing indexes: union at most 16 active and
+64 revoked candidates, then cap the result at 64. Preserve account isolation,
+origin checks and revocation through a fresh account session. Measure the query
+plan and representative history; do not infer global scale from the two-account
+beta.
+
+Access and export tasks must deliver every retained device in their capture
+window. Read at most 65 rows per attempt and store at most 64 in one part, ordered
+by `(created_at,id)` under a fixed upper watermark captured on the first attempt.
+Add one D1 index on `(account_id,created_at,id)` for tied timestamps. Retain
+progress in the existing task result JSON when claiming work. Process one task
+and one part per scheduled invocation, within existing query and subrequest
+budgets. This is a paginated capture, not a transactionally frozen snapshot.
+
+Store bounded parts and canonical acknowledgements in the existing privacy
+authority's SQLite storage, keyed by request and part. Keep its operational
+result as a small manifest. A part must be durable before D1 advances, and a
+repeated part returns its original acknowledgement without replacing data.
+Conditional progress updates cannot regress a later cursor. Failed replies,
+failed progress writes and authority eviction remain retryable. Both stores
+stay pending until the terminal part is acknowledged. Each serialized UTF-8
+part stays below 48 KiB, under the existing 64 KiB internal request cap.
+
+Extend the existing private-key POST status API with an optional part number.
+Check the original request ID and key before reading any part, return bounded
+continuation metadata, and use only the existing public ejm-ui Input and Button
+for the status form. Keep keys out of URLs and logs. Parts inherit the original
+rights expiry without retry extensions; protect pending work and deny expired
+completed parts before bounded cleanup removes them. Total retained export
+storage grows with history and must be measured. No new dependency, binding,
+service or authority is needed. Older code cannot deliver or clean these parts,
+so recovery after storing them requires a compatible forward fix rather than
+an unqualified rollback.
+
+Bound cleanup reads before filtering protected requests. Use a composite part
+expiry index and a single-row SQLite cursor over `(expires_at,request_id,part)`
+in the same authority. Inspect at most 128 candidates per pass, advance past
+protected parts and wrap at most once. Delete only eligible candidates within
+that inspected range. Keep cursor progress and deletion in one transaction so
+a large expired pending prefix cannot cause an unbounded scan or starve later
+completed parts. Verify this concrete regression in the existing retention case.
+
+After renewing a quota reservation, check that both frame and byte allowances
+cover the pending frame before subtraction or forwarding. A positive partial
+reservation is not permission to exceed its remaining bytes. Retain fresh
+sender, peer and retirement checks and close with the existing quota status.
+
+Require meaningful failures on the old paths, corrected focused regressions,
+the unchanged full gate, measured source and artifact bounds, and fresh human
+admission and complete hosted reviews. Preserve all prior corrections and leave
+release task 2.4 open until protected acceptance and deployment evidence exist.
+
+### Atomic revocation and Unicode export correction
+
+The complete first review of `7f10bfab4c7dcc6bb4cd4aac2b570d778b3ec7ed`
+found two medium blockers. A session deletion failure after a separately
+committed device revocation leaves a credential that authenticates without an
+active device. Put the owner-scoped device update and session deletion in one
+existing D1 batch. Decide the response from the update result after the batch
+commits. Failure must roll back both changes so the same revocation can succeed
+on retry. Reuse the two existing statements and platform transaction boundary.
+
+Registration accepts at most 64 Unicode code points, while the generic export
+text validator counts UTF-16 units. Share the existing registration pattern as
+one product-specific label guard in the already imported privacy schema module.
+Use it at registration and operational export validation, retaining the existing
+text validator for other fields and the serialized UTF-8 part byte limit.
+
+Extend the existing revoked-session test with a real SQLite session-deletion
+failure and successful retry. Extend the complete-history export test with
+64 supplementary-plane letters per label and unchanged delivered values.
+Run these two focused cases against the old paths, then the corrected paths,
+followed by the unchanged normal gate once. Keep task 2.4 open pending exact-head
+hosted checks, complete reviews and protected acceptance.
+
+### Native retirement and browser gap correction
+
+Both reviews in run `39609395805` completed for
+`e0bf63238ee024b759eaf69510c470d262e06caf`. Linux/macOS quality, registry
+and standards passed. Review 1 reported two medium blockers; review 2 reported
+none. The earlier attempt's second review timed out without a final report.
+Neither run accepts the following correction.
+
+Both fixes belong to ejm-cli. Retain `/remote stop`, ordinary host shutdown,
+`POST /v1/rooms/ROOM_ID/stop` and the version 1 Events/Snapshot interfaces.
+After immediate local transport cancellation and share revocation, await the
+existing `serve_host` relay retirement on ordinary stop, session change and exit.
+Keep the bounded owned-task drain and abort fallback. Poll in-flight UI work
+with local revocation inside the five-second timeout so its authority guard can
+release. Temporary reconnect retains the reservation. Hard kill or unreachable
+relay cleanup remains best effort, with account dashboard stop or original expiry as
+recovery. Change no quota, API, authority, dependency, sibling or pin.
+
+An Events gap enters one existing Snapshot request. Suspend actions and
+incremental Events until the authoritative Snapshot sets the active run, role,
+event cursor and mutation high-water mark. Preserve an uncertain action's
+sequence and instruction for outcome recovery without resubmitting it. A gap
+inside a Snapshot remains visible but must not start another refresh loop.
+
+Extend only the existing native lifecycle and browser protocol regressions to
+cover stop-then-share and omitted run completion. Prove intended failures on
+e0bf and corrected passes, then run the unchanged normal gate once after both
+fixes. Fresh exact-head admission, complete reviews, approval, protected adoption
+and deployment remain required. All eleven release tasks stay open.
+
+### Retention and withdrawal corrections
+
+The Worker privacy authority owns these product-specific rules. Keep public
+APIs, owner pins, policy periods and closed release controls unchanged. Existing
+SQLite transactions rotate bounded subject cleanup through its durable primary
+key cursor, preserve the earliest current purge deadline across withdrawal,
+opt-out, GPC and ineligibility, and exclude live operational holds from
+unadmitted identity deletion. Fresh valid consent or an eligible profile update
+may establish a new baseline; closure still deletes a profile immediately.
+Preserve the existing regression assertions for these prior corrections.
+
+The complete first review of 86d8 in run `39659009589` found missing withdrawal
+follow-up and expired cohort eligibility. Its second review produced no final
+report. Refine task 2.4 for only these two confirmed blockers:
+
+- Within withdrawal's consent transaction, derive prior recipients from the
+  committed ledger, scoped by category and optional buyer. Reuse one pending
+  internal rights record per account, recipient progress and completion. Keep
+  operational work completed because withdrawal does not revoke relay access.
+  Preserve recipient state and deadlines on repeat, avoid duplicate disclosure
+  work, and keep automatic follow-up independent of the 32 user-request cap.
+  Include pending internal recipients in the existing 512-disclosure admission
+  bound so ledger expiry cannot cause unbounded follow-up or block withdrawal.
+- Shared profile eligibility must reject a due purge deadline during projection
+  and the final synchronous transaction. Exclude expired profiles before the
+  canonical cohort universe limit. Reuse existing SQL, clock and digest awaits;
+  add no service, dependency, schema, index or background work.
+- Extend the existing release/withdrawal and cohort cases only. Prove intended
+  failures on 86d8, then one combined corrected invocation and one normal gate.
+  Keep prepared manifests and ledger/cohort tables unchanged on expiry failure.
+  Fresh admission, complete reviews, approval, protected adoption, deployment
+  and authenticated acceptance remain required. All release tasks stay open.
+
+The complete first c147 review also identified deletion authority and rejoin
+presentation gaps. The CLI account adapter must await its existing revocation
+helper for both deletion and closure, passing whether privacy is already closed.
+The privacy renderer must offer unchecked category choices after confirmed rejoin
+without clearing the retained opt-out timestamp or restoring consent. Reuse public
+UI forms and existing suppression checks. Extend only the existing deletion/hold
+and rejoin cases; prove old failures, then one corrected invocation and one normal
+gate. Fresh admission and separate final approval remain required.
+
+The first complete 4f review found that Room usage collection drops optional
+device metadata. Carry the existing validated OS family and CLI major through
+the authenticated quota query, authority and lease into the existing usage
+sample. Preserve zero as a valid CLI major and keep field consent in the privacy
+service. Add no lookup, schema or dependency. Extend the existing forwarding and
+eviction case, prove the old failure, and retain one corrected invocation and
+one normal gate after both reviews finish.
+
+The complete b71 review found a hold race after retention subject selection;
+55c's first complete review found unguarded scheduled billing-event/session expiry.
+Use the indexed live-hold predicate within each deleting statement, including
+final deletion after quota purge. Keep the expiry batch and 200-row caps.
+Preserve expired held sessions without restoring authority or adding a cross-store
+transaction. Extend only the existing retention and populated scheduled cases;
+prove old failures and corrected passes, then run the normal gate once after both
+reviews finish. No schema, dependency, owner pin or release-control change.
+
+### Dependency and artifact bounds
+
+Activate the exact 51-line candidate manifest already reviewed with its inherited
+lock. Use pinned Node/npm and `npm ci --ignore-scripts --install-links`.
+The existing browser setup action omits `--install-links`; an isolated dry-run
+with pinned npm rejects the inherited lock as missing all three file packages.
+Align that one setup command with the full gate's install flags. The corrected
+dry-run and full installation must pass without changing the lock, enabling
+lifecycle scripts or changing workflow callers, pins or admission authority.
+Review fixtures remain inert and are never installed as packages or imported.
+Start Cargo resolution from accepted native lock SHA-256 02ba0f0097754444a40e106d683ce530886ec7c31d30009f0c5cc43750d6118b.
+Add the browser workspace member and only its required package/feature edges,
+including Snow's getrandom 0.3 browser backend, through Cargo. Compare the native
+dependency graph before and after. Retain patched rustls-webpki 0.103.16,
+webpki-root-certs 1.0.10, native root selection and the existing tempfile graph.
+Do not broaden upgrades, hand-edit the lock or restore obsolete root packages.
+
+The WASM target uses Snow's public maintained resolver and platform randomness.
+Native execution, harness, persistence and native TLS do not enter its selected
+target graph. Its numeric HTTP loopback fixture is debug-only; the production
+build excludes that feature. Build fixture and production into distinct outputs.
+
+Retain measured overlay budgets: production shared CSS gzip at most 14,336 bytes,
+all three templates at most 49,152 raw bytes and screen bootstrap at most 2,048
+gzip bytes. Production WASM is capped at 1,572,864 bytes. Recheck representative
+native/browser traffic, frame/queue/quota limits and scheduled database work;
+local wall time or bundle size does not prove production CPU or zero cost.
+
+The final PR caps remain 200 paths, 12,000 changed lines and 1,000,000 diff bytes.
+The selective runtime/docs/gate estimate was 83 paths, 8,855 lines and 717,907
+bytes before current plan and lock changes. It establishes feasibility only.
+Measure the actual combined diff before admission; preserve required behavior
+and split publication only if a real cap requires it.
+
+### Verification and launch sequence
+
+Run the normal full gate with at most two Cargo jobs, native tests and PTY checks,
+then exact UI source/install proof, Worker schema/types/tests, fixture and
+production WASM, Workerd/native transport and real browser fixtures. The native
+test executable must come from compiler-artifact JSON of that same locked test
+invocation. Source-only builds and sample previews cannot satisfy this gate.
+No paid provider calls belong in tests. Require Linux/macOS hosted quality and
+both complete exact-head reviews under fresh human readiness, then separate
+approval and a normal protected merge. Windows terminal acceptance stays separate.
+
+Build and deploy closed source-bound production assets only after those checks.
+Preserve the dedicated OAuth configuration and existing database. Inspect current
+migrations before applying reviewed additions. Keep admission false, cap two,
+billing off, commercial programs empty, alternate origins and logging disabled.
+Verify live TLS, auth, protected controller/assets and rollback identity. Then
+complete real account/device/pairing/reconnect/revocation checks before admission.
+
+The approved beta policy body and retention choices are unchanged, with effective
+dates pending publication. Public docs use the existing site build; reconcile
+new guides without rewriting accepted native guidance or unrelated site work.
+The active CLI docs deployment lacks an exact saved source/artifact binding.
+Do not replace its full asset set from an unmatched local build. Coordinate the
+two policy pages with the authorized site owner and record publication separately.
+This gap blocks opening accounts, not preparation of a closed UI deployment.
+All eleven whole release tasks remain open until their stated criteria are met.
+Keep new contracts in change deltas until verified sync and archive are appropriate.
 
 ## Native advisory correction
 

@@ -603,6 +603,10 @@ pub fn now_ms() -> u64 {
 }
 
 #[cfg(test)]
+#[path = "transport_fixture.rs"]
+mod worker_fixture;
+
+#[cfg(test)]
 #[expect(
     clippy::unwrap_used,
     reason = "test fixtures should fail at the assertion site"

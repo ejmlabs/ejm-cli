@@ -1,0 +1,7 @@
+dist/
+.fixture-dist/
+test-results/
+playwright-report/
+.ui/
+.ui-proof/
+.preview/

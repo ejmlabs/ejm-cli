@@ -70,7 +70,7 @@ def check_toolchain() -> None:
 
 def check_packages() -> None:
     workspace = tomllib.loads((ROOT / "Cargo.toml").read_text())
-    require(workspace["workspace"]["members"] == ["crates/ejm-cli"], "ejm-cli must remain a separate workspace.")
+    require(workspace["workspace"]["members"] == ["crates/ejm-cli", "crates/ejm-relay-web"], "ejm-cli must remain a separate workspace.")
     manifest = tomllib.loads((ROOT / "crates/ejm-cli/Cargo.toml").read_text())
     require(manifest["lints"]["workspace"] is True, "The CLI must inherit workspace lints.")
     extra = set(manifest["dependencies"]) - ALLOWED_DEPENDENCIES
@@ -82,12 +82,21 @@ def check_packages() -> None:
         configured = workspace["workspace"]["dependencies"][dependency]
         require(configured["path"].startswith("../ejm-harness/"), f"{dependency} must come from the independent sibling harness project.")
     require((ROOT / "Cargo.lock").is_file(), "Commit Cargo.lock and use --locked.")
-    for path in (ROOT / "crates/ejm-cli/src").rglob("*.rs"):
+    web = tomllib.loads((ROOT / "crates/ejm-relay-web/Cargo.toml").read_text())
+    require(web["lints"]["workspace"] is True, "The browser adapter must inherit workspace lints.")
+    web_allowed = {"anyhow", "serde", "serde_json", "snow", "wasm-bindgen", "base64", "zeroize", "sha2", "url", "getrandom"}
+    web_dependencies = set(web["dependencies"])
+    for target in web.get("target", {}).values():
+        web_dependencies.update(target.get("dependencies", {}))
+    require(web_dependencies <= web_allowed, "Review browser adapter dependencies; execution and account credentials cannot enter WASM.")
+    sources = list((ROOT / "crates/ejm-cli/src").rglob("*.rs"))
+    sources.extend((ROOT / "crates/ejm-relay-web/src").rglob("*.rs"))
+    for path in sources:
         source = path.read_text().split("#[cfg(test)]", 1)[0]
         require(not re.search(r"\bCommand::new\s*\(", source), f"{path}: arbitrary process execution belongs in ejm-harness.")
-        require(not re.search(r"(?:std|tokio)::process::(?:Command|Child)\b", source) or path.name == "browser.rs", f"{path}: only the browser host may supervise an OS URL launcher.")
+        require(not re.search(r"(?:std|tokio)::process::(?:Command|Child)\b", source) or path == ROOT / "crates/ejm-cli/src/browser.rs", f"{path}: only the browser host may supervise an OS URL launcher.")
         require("impl Provider for" not in source and "impl Tool for" not in source, f"{path}: providers and tools belong in ejm-harness.")
-        require("open::" not in source or path.name == "browser.rs", f"{path}: only the browser host may open the browser.")
+        require("open::" not in source or path == ROOT / "crates/ejm-cli/src/browser.rs", f"{path}: only the browser host may open the browser.")
         require(not re.search(r"#\s*!\s*\[\s*(?:allow|expect)\b", source), f"{path}: production lint exceptions must be scoped to an item with a reason.")
 
 

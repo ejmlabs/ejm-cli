@@ -44,15 +44,26 @@ pub(crate) async fn with_shutdown(
     cancel: tokio_util::sync::CancellationToken,
     operation: impl std::future::Future<Output = Result<()>>,
 ) -> Result<()> {
-    let guard = cancel.drop_guard();
+    let guard = cancel.clone().drop_guard();
     // The first poll registers SIGTERM before startup can own a raw terminal.
-    let result = tokio::select! {
-        biased;
-        () = termination_signal() => Ok(()),
-        result = operation => result,
+    let (result, interrupted) = {
+        tokio::pin!(operation);
+        tokio::select! {
+            biased;
+            () = termination_signal() => {
+                cancel.cancel();
+                let _ = tokio::time::timeout(Duration::from_secs(5), async {
+                    let _ = tokio::join!(backend.stop_sharing(), &mut operation);
+                }).await;
+                (Ok(()), true)
+            },
+            result = &mut operation => (result, false),
+        }
     };
     drop(guard);
-    backend.stop_sharing().await;
+    if !interrupted {
+        backend.stop_sharing().await;
+    }
     result
 }
 
@@ -67,8 +78,12 @@ async fn run_terminal(
     let mut terminal = TerminalGuard::enter()?;
     if let Some(role) = crate::remote::host_role(args) {
         remote.share(harness, args, &app.session.id, role).await?;
-        if remote.has_panel() {
-            terminal.reset_input()?;
+        if remote.has_panel()
+            && let Err(error) = terminal.reset_input()
+        {
+            drop(terminal);
+            remote.stop(harness).await;
+            return Err(error);
         }
     }
     run_app(harness, args, extensions, remote, app, terminal).await
@@ -82,6 +97,7 @@ pub(crate) async fn run_app(
     mut app: App,
     mut terminal: TerminalGuard,
 ) -> Result<()> {
+    let result = async {
     let mut events = harness.subscribe();
     let mut extension_tasks = ExtensionTasks::default();
     let mut widget_tick = tokio::time::interval(Duration::from_secs(1));
@@ -90,6 +106,9 @@ pub(crate) async fn run_app(
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut last_status_draw = Instant::now();
     'events: loop {
+        if remote.shutdown_requested() {
+            break;
+        }
         tokio::select! {
             _ = tick.tick() => {
                 let private_panel = remote.has_panel();
@@ -147,8 +166,12 @@ pub(crate) async fn run_app(
             }
         }
     }
-    remote.stop(harness).await;
     Ok(())
+    }
+    .await;
+    drop(terminal);
+    remote.stop(harness).await;
+    result
 }
 
 async fn initial_app(harness: &LocalBackend, args: &Args, extensions: &Extensions) -> Result<App> {

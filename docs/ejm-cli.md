@@ -135,7 +135,10 @@ account on that service. Protected CLI PR #21 accepted the native source after
 PR #20's docs/UI prerequisite; its [acceptance record](native-remote-publication.md)
 binds the merge, tree and Linux/macOS checks. It selects protected
 harness merge `42e4f9cf33bd3525aec344cfdffabc251271f782` for exact-run completion.
-Worker/browser adoption, binary distribution and live acceptance remain separate.
+The following [Worker/browser source](relay-publication.md) is being integrated
+on accepted inert PR #22. Its [local checks](relay-publication.md#current-local-checks)
+are recorded separately; hosted adoption and deployment remain pending.
+Binary distribution and authenticated live acceptance remain separate.
 There is no built-in service origin. Select an explicit HTTPS origin with `--relay` or
 `EJM_CLI_RELAY_URL`. `--memory-only` keeps this foreground process's relay token
 and endpoint identity out of persistent storage.
@@ -161,8 +164,10 @@ The host displays a private invitation and confirms the controller fingerprint.
 The controller never opens local model providers, tools or a journal. Setup,
 credential migration, memory-only use, failure handling and trust limits are
 in the [remote guide](remote-control.md). A missing marked endpoint key requires
-recovery, not silent replacement. The native guide does not promise a live relay
-or an updated public site.
+recovery, not silent replacement. See the [browser controller guide](relay-web.md)
+for account access, pairing and its operator-served-code trust boundary, and
+[relay operations](../relay/README.md) for APIs, quotas and recovery. These guides
+do not promise an open live relay or updated public docs site.
 
 ## Packages and trust
 

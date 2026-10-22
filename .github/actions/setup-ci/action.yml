@@ -51,7 +51,7 @@ runs:
       shell: bash
       working-directory: ${{ github.action_path }}/../../../relay
       run: |
-        npm ci --ignore-scripts
+        npm ci --ignore-scripts --install-links
         npm exec --no -- playwright install --with-deps chrome
 
     - name: Record tool versions

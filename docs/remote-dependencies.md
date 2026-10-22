@@ -10,7 +10,7 @@ require their own normal and hosted gates; live acceptance remains separate.
 
 Original dependency review: **2026-10-19 UTC**. The table records exact direct
 versions requested by the native manifest. After the October 20 TLS
-advisory correction, the current `Cargo.lock` SHA-256 is
+advisory correction, the accepted native baseline `Cargo.lock` SHA-256 is
 `02ba0f0097754444a40e106d683ce530886ec7c31d30009f0c5cc43750d6118b`.
 The earlier `5143432fc0201bedeef680d18ae1c4681e2215fddd6e2fb45cd4cbf0149f7d1b`
 lock from tree `3c5a8385c1bf7689e6efb83d3f272f1efa3f60c9` is historical.
@@ -19,12 +19,14 @@ The pin selects actual protected harness merge
 `826e02310f1097e13806ca5ca1bf5cc00d71e966` supplies the completion API.
 Native preparation began at protected CLI
 `c8e2239392f71df82cbef6166b1827c8e5f5f1c5`, with the same D49 tree as approved
-PR #9. Preserve the accepted lock through the following inert prerequisite;
-later source changes require their own exact-source locked gate and hosted checks.
+PR #9. The accepted inert PR #22 preserved that lock. The following Worker
+layer adds only the browser workspace/package and required feature edges through
+Cargo; its changed lock must preserve native package identities and patched TLS.
+It requires its own exact-source locked gate and hosted checks.
 The [corrected d8 local result](native-remote-publication.md) and
 [earlier passes](native-remote-publication.md#historical-local-pass) remain
-historical, separate from PR #21's acceptance. This metadata slice claims no new
-build or runtime result.
+historical, separate from PR #21's acceptance. This native baseline record claims no new
+build or runtime result for the following Worker layer.
 
 Existing Tokio, Serde, URL, harness and terminal packages remain shared. The
 versioned links below are primary API references retained from the source
@@ -149,5 +151,8 @@ gate](contributing.md), the native protected-input/PTY scenarios and hosted
 platform checks on each following source. The original native layer introduced
 no Worker, npm, browser or WASM package. The following
 [inert UI/Relay prerequisite](ci-bootstrap.md#current-inert-shared-ui-and-relay-inputs)
-adds install review data without a runnable Relay manifest; full Worker/UI
-acceptance and deployment remain pending.
+accepted install review data without a runnable Relay manifest. The new Worker
+source activates that reviewed manifest and adds the browser crate. See
+[publication boundaries](relay-publication.md#source-and-dependency-boundaries)
+for public UI contracts, source/install binding and the minimal browser lock
+change. Full Worker/UI acceptance and deployment remain pending.
