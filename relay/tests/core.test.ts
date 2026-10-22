@@ -9,6 +9,7 @@ import { operationalCleanup } from "../src/cleanup.js";
 import { credentialHeaders, hashToken, mutationAllowed } from "../src/http.js";
 import { AccountQuota, leaseExpiry, windowBoundary } from "../src/quota.js";
 import { Room } from "../src/rooms.js";
+import type { PrivacyAuthority } from "../src/privacy/index.js";
 import { subscriptionEntitlement } from "../src/billing.js";
 import { retentionCleanup, retentionPolicy } from "../src/retention.js";
 import type { Env, Lease } from "../src/types.js";
@@ -685,6 +686,7 @@ describe("durable admission and hibernating forwarding", () => {
     const quota = bindings.ACCOUNT_QUOTA.get(bindings.ACCOUNT_QUOTA.idFromName(owner.accountId));
     await evictDurableObject(quota);
     const host = await connect(room, "host", hostTicket); expect(host.status).toBe(101);
+    await bindings.DB.prepare("UPDATE relay_devices SET cli_major=0 WHERE id=?").bind(owner.deviceId).run();
     const controller = await connect(room, "controller", controllerTicket); expect(controller.status).toBe(101);
     const hostSocket = host.webSocket!; const controllerSocket = controller.webSocket!; hostSocket.accept(); controllerSocket.accept(); hostSocket.binaryType = "arraybuffer"; controllerSocket.binaryType = "arraybuffer";
     const sentinel = new TextEncoder().encode("SENTINEL_ciphertext_fixture_never_persist_7d0aa");
@@ -700,7 +702,20 @@ describe("durable admission and hibernating forwarding", () => {
     expect(attachments.map((value: { frames: number }) => value.frames)).toEqual([511, 511]);
     const persisted = await runInDurableObject(stub, async (_instance, state) => Array.from(await state.storage.list()));
     expect(JSON.stringify(persisted)).not.toContain("SENTINEL");
+    const usage: Record<string, unknown>[] = [];
+    const authority = bindings.PRIVACY_AUTHORITY.get(bindings.PRIVACY_AUTHORITY.idFromName("privacy-v1"));
+    await runInDurableObject(authority, async instance => {
+      const service = instance as PrivacyAuthority; const original = service.fetch.bind(service);
+      vi.spyOn(service, "fetch").mockImplementation(async request => {
+        if (new URL(request.url).pathname === "/internal/usage") usage.push(await request.clone().json<Record<string, unknown>>());
+        return original(request);
+      });
+    });
+    await runInDurableObject(stub, async (instance, state) => (instance as Room).webSocketClose(state.getWebSockets("host")[0]!));
     hostSocket.close(); controllerSocket.close();
+    expect(usage).toHaveLength(2);
+    expect(usage).toMatchObject([{ accountId: owner.accountId, frames: 1, osFamily: "linux", cliMajor: 1 }, { accountId: owner.accountId, frames: 1, osFamily: "linux", cliMajor: 0 }]);
+    expect(JSON.stringify(usage)).not.toContain("SENTINEL");
   });
   it.each(["webSocketClose", "webSocketError"] as const)("isolates delayed old %s callbacks from a replacement pair after hibernation", async callback => {
     const owner = await identity(); const room = `opaque_generation_${callback}`;

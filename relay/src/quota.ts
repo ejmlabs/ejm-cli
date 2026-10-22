@@ -11,17 +11,17 @@ function time(value: unknown): number {
   if (typeof value === "string") return /^\d+$/.test(value) ? Number(value) : Date.parse(value);
   return 0;
 }
-export interface Authority { plan: "free" | "paid"; frames: number; bytes: number; expiresAt: number }
+export interface Authority { plan: "free" | "paid"; frames: number; bytes: number; expiresAt: number; osFamily?: string; cliMajor?: number }
 export async function authority(env: Env, accountId: string, deviceId: string, sessionId: string): Promise<Authority | null> {
   const startedAt = Date.now();
-  const row = await env.DB.prepare('SELECT a.status,a.terms_version,d.revoked_at,s."expiresAt" AS session_expires,b.plan,b.status AS payment_status,b.paid_until FROM relay_accounts a JOIN relay_devices d ON d.account_id=a.id JOIN "session" s ON s.id=d.session_id AND s."userId"=a.id LEFT JOIN relay_billing b ON b.account_id=a.id WHERE a.id=? AND d.id=? AND d.session_id=?').bind(accountId, deviceId, sessionId).first<{ status: string; terms_version: string; revoked_at: number | null; session_expires: unknown; plan: string | null; payment_status: string | null; paid_until: number | null }>();
+  const row = await env.DB.prepare('SELECT a.status,a.terms_version,d.revoked_at,d.os_family,d.cli_major,s."expiresAt" AS session_expires,b.plan,b.status AS payment_status,b.paid_until FROM relay_accounts a JOIN relay_devices d ON d.account_id=a.id JOIN "session" s ON s.id=d.session_id AND s."userId"=a.id LEFT JOIN relay_billing b ON b.account_id=a.id WHERE a.id=? AND d.id=? AND d.session_id=?').bind(accountId, deviceId, sessionId).first<{ status: string; terms_version: string; revoked_at: number | null; os_family: string | null; cli_major: number | null; session_expires: unknown; plan: string | null; payment_status: string | null; paid_until: number | null }>();
   if (!row || row.status !== "active" || row.terms_version !== env.TERMS_VERSION || row.revoked_at !== null) return null;
   const now = Date.now();
   // The D1 snapshot cannot extend authority by taking longer to return.
   const expiresAt = Math.min(startedAt + LIMITS.leaseMs, time(row.session_expires));
   if (!Number.isFinite(expiresAt) || expiresAt <= now) return null;
   const paid = row.plan === "paid" && ["active", "trialing"].includes(row.payment_status ?? "") && (row.paid_until ?? 0) > now;
-  return { plan: paid ? "paid" : "free", frames: paid ? integer(env.PAID_DAILY_FRAMES, LIMITS.dailyFrames, LIMITS.dailyFrames) : LIMITS.dailyFrames, bytes: paid ? integer(env.PAID_DAILY_BYTES, LIMITS.dailyBytes, LIMITS.dailyBytes) : LIMITS.dailyBytes, expiresAt: paid ? Math.min(expiresAt, row.paid_until ?? 0) : expiresAt };
+  return { plan: paid ? "paid" : "free", frames: paid ? integer(env.PAID_DAILY_FRAMES, LIMITS.dailyFrames, LIMITS.dailyFrames) : LIMITS.dailyFrames, bytes: paid ? integer(env.PAID_DAILY_BYTES, LIMITS.dailyBytes, LIMITS.dailyBytes) : LIMITS.dailyBytes, expiresAt: paid ? Math.min(expiresAt, row.paid_until ?? 0) : expiresAt, ...(row.os_family === null ? {} : { osFamily: row.os_family }), ...(row.cli_major === null ? {} : { cliMajor: row.cli_major }) };
 }
 interface ScopeRequest extends TicketScope { hash: string }
 interface Window extends Record<string, number> { frames: number; bytes: number; controls: number }
@@ -164,7 +164,7 @@ export class AccountQuota extends DurableObject<Env> {
     const bytes = Math.min(LIMITS.blockBytes, allowed.bytes - (row?.bytes ?? 0));
     if (frames <= 0 || bytes <= 0) return failure(429, "daily_quota_exhausted");
     this.ctx.storage.sql.exec("INSERT INTO windows(day,frames,bytes,controls) VALUES(?,?,?,0) ON CONFLICT(day) DO UPDATE SET frames=frames+excluded.frames,bytes=bytes+excluded.bytes", day, frames, bytes);
-    const lease: Lease = { accountId: scope.accountId, deviceId: scope.deviceId, sessionId: scope.sessionId, room: scope.room, role: scope.role, expiresAt: Math.min(leaseExpiry(now), allowed.expiresAt, current.expires_at), frames, bytes };
+    const lease: Lease = { accountId: scope.accountId, deviceId: scope.deviceId, sessionId: scope.sessionId, room: scope.room, role: scope.role, expiresAt: Math.min(leaseExpiry(now), allowed.expiresAt, current.expires_at), frames, bytes, ...(allowed.osFamily === undefined ? {} : { osFamily: allowed.osFamily }), ...(allowed.cliMajor === undefined ? {} : { cliMajor: allowed.cliMajor }) };
     return Response.json(lease);
   }
   private cleanup(now: number): void {

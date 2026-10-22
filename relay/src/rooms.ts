@@ -288,7 +288,7 @@ export class Room extends DurableObject<Env> {
   private async flush(socket: WebSocket): Promise<void> {
     const state = socket.deserializeAttachment() as Attachment | null;
     if (!state || state.measuredFrames === 0) return;
-    const request = { accountId: state.accountId, bytes: state.measuredBytes, frames: state.measuredFrames, connectedMs: Math.max(0, Math.min(Date.now(), state.expiresAt) - state.usageStartedAt), quality: "measured", measuredAt: state.usageStartedAt };
+    const request = { accountId: state.accountId, bytes: state.measuredBytes, frames: state.measuredFrames, connectedMs: Math.max(0, Math.min(Date.now(), state.expiresAt) - state.usageStartedAt), quality: "measured", measuredAt: state.usageStartedAt, ...(state.osFamily === undefined ? {} : { osFamily: state.osFamily }), ...(state.cliMajor === undefined ? {} : { cliMajor: state.cliMajor }) };
     state.measuredFrames = 0; state.measuredBytes = 0; state.usageStartedAt = Date.now();
     socket.serializeAttachment(state);
     // The privacy authority discards these operational counters unless a current scoped choice permits collection.

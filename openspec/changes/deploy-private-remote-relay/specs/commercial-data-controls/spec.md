@@ -31,7 +31,7 @@ Commercial data SHALL use an explicit field allowlist and provenance. Profile fi
 
 #### Scenario: Consent covers only part of usage data
 - **WHEN** current usage consent covers only a subset of available fields
-- **THEN** collection retains only the counters and optional metadata needed for those fields and does not store unrelated traffic, duration or device metadata
+- **THEN** collection retains the consented counters and available authenticated optional metadata, including OS family and CLI major, without storing unrelated traffic, duration or device metadata
 
 ### Requirement: Excluded commercial data
 Commercial storage and exports SHALL exclude application contents, prompts, output, commands, keys, credentials, files, repository names, raw IPs, precise locations, exact session traces, device fingerprints, contact details, authentication identity and payment data. No endpoint SHALL offer a broader arbitrary account export to buyers.

@@ -6,14 +6,23 @@ This Worker/browser layer is prepared on actual protected CLI parent
 and inert install/review inputs. It does not accept this complete Worker,
 new UI installation or browser runtime.
 
-For published Worker head `c14793c426b1b50cd8738de54cfa46b2596f81c8`,
-[run 39667399563](https://github.com/ejmlabs/ejm-cli/actions/runs/39667399563)
-produced one complete review with two medium findings. The second review failed
-execution without a final report. Neither result accepts the source. The
-prepared correction revokes account authority before acknowledging deletion and
-shows fresh unchecked consent choices after confirmed rejoin while retaining
-solicitation suppression. It preserves scoped withdrawal follow-up and profile
-expiry checks. See [privacy contracts](relay-privacy.md#user-controls).
+For published Worker head `4f2912b36dbc85a7d1c8614035f2cd60fae8ae44`,
+[run 39760650121](https://github.com/ejmlabs/ejm-cli/actions/runs/39760650121)
+produced one complete review with a medium finding: production usage collection
+dropped optional device OS family and CLI major. The second review timed out
+without a final report. Neither result accepts the source. The prepared
+correction carries validated metadata through the existing authenticated query
+and lease to the consent filter, preserving version zero after room eviction.
+It adds no database read, schema or dependency. One existing forwarding and
+eviction case reproduces the omission on 4f and passes on the correction.
+
+Earlier head `c14793c426b1b50cd8738de54cfa46b2596f81c8` received two medium
+findings in [run 39667399563](https://github.com/ejmlabs/ejm-cli/actions/runs/39667399563);
+its second review failed without a final report. The 4f correction revokes
+account authority before acknowledging deletion and shows fresh unchecked
+consent choices after confirmed rejoin while retaining solicitation suppression.
+It preserves scoped withdrawal follow-up and profile expiry checks. See
+[privacy contracts](relay-privacy.md#user-controls).
 
 The correction requires its own local gate, exact-source hosted checks, two
 complete final reviews, separate final approval, protected adoption, deployment

@@ -41,6 +41,8 @@ export interface Lease {
   expiresAt: number;
   frames: number;
   bytes: number;
+  osFamily?: string;
+  cliMajor?: number;
 }
 export interface TicketScope {
   accountId: string;

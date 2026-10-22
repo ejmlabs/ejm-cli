@@ -454,6 +454,14 @@ UI forms and existing suppression checks. Extend only the existing deletion/hold
 and rejoin cases; prove old failures, then one corrected invocation and one normal
 gate. Fresh admission and separate final approval remain required.
 
+The first complete 4f review found that Room usage collection drops optional
+device metadata. Carry the existing validated OS family and CLI major through
+the authenticated quota query, authority and lease into the existing usage
+sample. Preserve zero as a valid CLI major and keep field consent in the privacy
+service. Add no lookup, schema or dependency. Extend the existing forwarding and
+eviction case, prove the old failure, and retain one corrected invocation and
+one normal gate after both reviews finish.
+
 ### Dependency and artifact bounds
 
 Activate the exact 51-line candidate manifest already reviewed with its inherited
