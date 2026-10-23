@@ -13,6 +13,8 @@ ALLOWED_DEPENDENCIES = {
     "snow", "keyring-core", "getrandom", "base64", "sha2",
     "apple-native-keyring-store", "windows-native-keyring-store", "dbus-secret-service-keyring-store",
     "oauth2", "reqwest", "tokio-tungstenite", "futures-util",
+    # Existing Rustls transport and patched bundled roots, without the old bridge.
+    "tokio-rustls", "webpki-roots",
     "anyhow", "clap", "crossterm", "ejm-harness-auth", "ejm-harness-coding", "ejm-harness-exec", "ejm-harness",
     "ratatui", "serde_json", "tokio", "tokio-util", "unicode-width",
     # Host-only sign-in URL validation and OS browser launch.

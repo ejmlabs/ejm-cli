@@ -84,7 +84,7 @@ pub async fn run(args: &Args, command: &RemoteCommand) -> Result<bool> {
     let cancel = CancellationToken::new();
     tokio::select! {
         biased;
-        () = crate::ui::termination_signal() => { cancel.cancel(); bail!("relay operation cancelled"); }
+        _ = tokio::signal::ctrl_c() => { cancel.cancel(); bail!("relay operation cancelled"); }
         result = execute(args, command, cancel.clone()) => result,
     }
 }

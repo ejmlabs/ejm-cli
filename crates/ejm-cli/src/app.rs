@@ -1,9 +1,10 @@
 use std::{collections::VecDeque, fmt::Write};
 
-use ejm_harness::{Event, EventKind, Session, ToolOutput};
+use ejm_harness::{Event, EventKind, RunStatus, RunSummary, Session, SessionView, ToolOutput};
 
 pub use crate::ejm_tui::BlockKind;
 use crate::{
+    args::ProviderKind,
     commands::{self, CommandEntry, CommandPicker},
     render::safe_text,
 };
@@ -11,6 +12,14 @@ use crate::{
 const MAX_BLOCKS: usize = 256;
 const MAX_DISPLAY_BYTES: usize = 256 * 1024;
 const MAX_COMPOSER_BYTES: usize = 64 * 1024;
+
+pub const LOGIN_PROVIDERS: &[(ProviderKind, &str)] = &[
+    (ProviderKind::Chatgpt, "ChatGPT"),
+    (ProviderKind::Claude, "Claude"),
+    (ProviderKind::Openai, "OpenAI-compatible API"),
+    (ProviderKind::Responses, "OpenAI Responses API"),
+    (ProviderKind::Anthropic, "Anthropic API"),
+];
 
 pub struct TranscriptBlock {
     pub kind: BlockKind,
@@ -20,12 +29,18 @@ pub struct TranscriptBlock {
 }
 
 pub enum Overlay {
+    Login {
+        selected: usize,
+    },
     Help {
         selected: usize,
     },
-    Sessions {
-        sessions: Vec<Session>,
+    Models {
+        models: Vec<ejm_harness::AvailableModel>,
         selected: usize,
+    },
+    Sessions {
+        picker: crate::sessions::SessionPicker,
     },
 }
 
@@ -39,6 +54,11 @@ pub enum RunState {
 pub struct RemoteBadge {
     pub label: String,
     pub controller: bool,
+}
+
+struct StopAcknowledgement {
+    run_id: String,
+    outcome: Option<RunStatus>,
 }
 
 pub struct App {
@@ -57,18 +77,26 @@ pub struct App {
     pub commands: Vec<CommandEntry>,
     pub command_picker: CommandPicker,
     pub connection_ready: bool,
+    pub capacity: Option<ejm_harness::CapacitySnapshot>,
     display_bytes: usize,
     received_text: bool,
+    local_control_revision: u64,
+    stop_acknowledgement: Option<StopAcknowledgement>,
 }
 
 impl App {
     pub fn new(session: Session) -> Self {
+        let run_state = if session.status == ejm_harness::SessionStatus::Running {
+            RunState::Running
+        } else {
+            RunState::Idle
+        };
         Self {
             session,
             remote: None,
             blocks: VecDeque::new(),
             composer: Composer::default(),
-            run_state: RunState::Idle,
+            run_state,
             scroll_from_bottom: 0,
             last_sequence: 0,
             status: "Ready. Ask a question or describe a change.".into(),
@@ -79,13 +107,92 @@ impl App {
             commands: commands::catalog(&[]),
             command_picker: CommandPicker::default(),
             connection_ready: true,
+            capacity: None,
             display_bytes: 0,
             received_text: false,
+            local_control_revision: 0,
+            stop_acknowledgement: None,
         }
     }
 
     pub fn is_running(&self) -> bool {
         self.run_state != RunState::Idle
+    }
+
+    pub(crate) fn local_control_revision(&self) -> u64 {
+        self.local_control_revision
+    }
+
+    pub(crate) fn record_local_control(&mut self) {
+        self.local_control_revision = self.local_control_revision.wrapping_add(1);
+    }
+
+    pub(crate) fn set_local_run_state(&mut self, state: RunState) {
+        self.record_local_control();
+        if state == RunState::Running {
+            self.stop_acknowledgement = None;
+        }
+        self.run_state = state;
+    }
+
+    pub(crate) fn acknowledge_stop(&mut self, run_id: Option<String>) {
+        self.record_local_control();
+        self.dirty = true;
+        self.stop_acknowledgement = run_id.map(|run_id| StopAcknowledgement {
+            run_id,
+            outcome: None,
+        });
+        self.run_state = if self.stop_acknowledgement.is_some() {
+            RunState::Stopping
+        } else {
+            RunState::Idle
+        };
+        self.status = self
+            .stop_status()
+            .unwrap_or("No active run in this session.")
+            .into();
+    }
+
+    pub(crate) fn apply_run_snapshot(&mut self, view: &SessionView) {
+        let mut stopping = self.run_state == RunState::Stopping;
+        if let Some(stop) = &mut self.stop_acknowledgement {
+            stopping = view.run_id.as_deref() == Some(stop.run_id.as_str());
+            let transition = view.last_transition.as_ref();
+            if view
+                .run_id
+                .as_ref()
+                .or_else(|| transition.and_then(|value| value.run_id.as_ref()))
+                .is_some_and(|run| run != &stop.run_id)
+            {
+                self.stop_acknowledgement = None;
+            } else if let Some(transition) = transition
+                && transition.run_id.as_deref() == Some(stop.run_id.as_str())
+                && transition.outcome.is_some()
+            {
+                stop.outcome.clone_from(&transition.outcome);
+            }
+        }
+        self.run_state = if view.run_id.is_none() {
+            RunState::Idle
+        } else if stopping {
+            RunState::Stopping
+        } else {
+            RunState::Running
+        };
+    }
+
+    pub(crate) fn stop_status(&self) -> Option<&'static str> {
+        self.stop_acknowledgement
+            .as_ref()
+            .map(|stop| match &stop.outcome {
+                None if self.run_state == RunState::Stopping => "Stopping…",
+                None => "Stop requested",
+                Some(RunStatus::Cancelled) => "cancelled",
+                Some(RunStatus::Completed) => "completed",
+                Some(RunStatus::Failed) => "failed",
+                Some(RunStatus::Interrupted) => "interrupted",
+                Some(RunStatus::BudgetExhausted) => "budget_exhausted",
+            })
     }
 
     pub fn command_query(&self) -> Option<&str> {
@@ -118,9 +225,14 @@ impl App {
     }
 
     pub fn switch_session(&mut self, mut next: Self) {
+        if self.session.id == next.session.id {
+            next.local_control_revision = self.local_control_revision;
+            next.stop_acknowledgement = self.stop_acknowledgement.take();
+        }
         next.commands = std::mem::take(&mut self.commands);
         next.palette = self.palette;
         next.connection_ready = self.connection_ready;
+        next.capacity = self.capacity.take();
         next.widget_lines = std::mem::take(&mut self.widget_lines);
         next.composer = std::mem::take(&mut self.composer);
         *self = next;
@@ -142,6 +254,13 @@ impl App {
         self.dirty = true;
         match event.kind {
             EventKind::RunStarted { prompt } => {
+                if self
+                    .stop_acknowledgement
+                    .as_ref()
+                    .is_some_and(|stop| event.run_id.as_deref() != Some(stop.run_id.as_str()))
+                {
+                    self.stop_acknowledgement = None;
+                }
                 self.run_state = RunState::Running;
                 self.received_text = false;
                 self.status = "Thinking".into();
@@ -192,25 +311,7 @@ impl App {
                 self.status = format!("Running {}", safe_text(&call.name));
             }
             EventKind::ToolFinished { call_id, output } => self.finish_tool(&call_id, output),
-            EventKind::RunFinished { summary } => {
-                self.run_state = RunState::Idle;
-                if !self.received_text && !summary.text.is_empty() {
-                    self.push(BlockKind::Assistant, "ejm-cli", &summary.text, None);
-                }
-                self.status = format!(
-                    "{} · {} steps · {} in / {} out tokens",
-                    serde_json::to_value(&summary.status)
-                        .ok()
-                        .and_then(|value| value.as_str().map(str::to_owned))
-                        .unwrap_or_else(|| "finished".into()),
-                    summary.steps,
-                    summary.usage.input_tokens,
-                    summary.usage.output_tokens,
-                );
-                if let Some(error) = summary.error {
-                    self.error(error);
-                }
-            }
+            EventKind::RunFinished { summary } => self.finish_run(summary),
             EventKind::Steered { text } => {
                 self.push(BlockKind::Notice, "steering", &text, None);
             }
@@ -229,6 +330,50 @@ impl App {
                 ));
             }
             EventKind::Usage { .. } => {}
+        }
+        if self
+            .stop_acknowledgement
+            .as_ref()
+            .is_some_and(|stop| stop.outcome.is_none())
+        {
+            self.run_state = RunState::Stopping;
+            self.status = "Stopping…".into();
+        }
+    }
+
+    pub(crate) fn apply_saved(&mut self, event: Event) {
+        // Saved output cannot change current authority or a newer local Stop.
+        let run_state = self.run_state;
+        let status = std::mem::take(&mut self.status);
+        let stop = self.stop_acknowledgement.take();
+        self.apply(event);
+        self.run_state = run_state;
+        self.status = status;
+        self.stop_acknowledgement = stop;
+    }
+
+    fn finish_run(&mut self, summary: RunSummary) {
+        if let Some(stop) = &mut self.stop_acknowledgement
+            && stop.run_id == summary.run_id
+        {
+            stop.outcome = Some(summary.status.clone());
+        }
+        self.run_state = RunState::Idle;
+        if !self.received_text && !summary.text.is_empty() {
+            self.push(BlockKind::Assistant, "ejm-cli", &summary.text, None);
+        }
+        self.status = format!(
+            "{} · {} steps · {} in / {} out tokens",
+            serde_json::to_value(&summary.status)
+                .ok()
+                .and_then(|value| value.as_str().map(str::to_owned))
+                .unwrap_or_else(|| "finished".into()),
+            summary.steps,
+            summary.usage.input_tokens,
+            summary.usage.output_tokens,
+        );
+        if let Some(error) = summary.error {
+            self.error(error);
         }
     }
 
@@ -461,46 +606,46 @@ mod tests {
     #[test]
     fn command_prefix_completion_preserves_the_conversation() {
         let mut app = app();
-        app.composer.insert("/s");
-        assert_eq!(app.command_query(), Some("s"));
+        app.composer.insert("/mod");
+        assert_eq!(app.command_query(), Some("mod"));
         assert_eq!(
             app.command_matches()
                 .iter()
                 .map(|entry| entry.name.as_str())
                 .collect::<Vec<_>>(),
-            ["status", "sessions", "steer", "stop", "skill"]
+            ["model", "models"]
         );
 
         app.complete_command();
-        assert_eq!(app.composer.text, "/status");
+        assert_eq!(app.composer.text, "/model ");
         assert_eq!(app.composer.cursor, app.composer.text.len());
         assert!(app.command_query().is_none());
         assert!(app.blocks.is_empty());
         assert_eq!(app.run_state, RunState::Idle);
 
-        app.composer.replace("/s");
+        app.composer.replace("/mod");
         app.command_picker = CommandPicker {
-            selected: 2,
+            selected: 1,
             dismissed: false,
         };
         app.complete_command();
-        assert_eq!(app.composer.text, "/steer ");
+        assert_eq!(app.composer.text, "/models");
         assert!(app.command_picker.dismissed);
     }
 
     #[test]
     fn command_dismissal_and_noncommand_drafts_keep_text_editable() {
         let mut app = app();
-        app.composer.insert("/s");
+        app.composer.insert("/mod");
         app.command_picker.dismissed = true;
         assert!(app.command_query().is_none());
-        assert_eq!(app.composer.text, "/s");
+        assert_eq!(app.composer.text, "/mod");
 
         app.command_picker = CommandPicker::default();
         app.composer.left();
         assert!(app.command_query().is_none());
         app.composer.right();
-        assert_eq!(app.command_query(), Some("s"));
+        assert_eq!(app.command_query(), Some("mod"));
         for draft in [
             "ordinary text",
             " /mod",

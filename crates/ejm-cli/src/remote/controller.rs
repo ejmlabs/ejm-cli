@@ -20,11 +20,12 @@ use anyhow::{Context, Result, bail, ensure};
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
 use ejm_harness::{Event as HarnessEvent, Session};
 use std::{
+    collections::VecDeque,
     sync::{
         Arc,
         atomic::{AtomicU64, Ordering},
     },
-    time::Duration,
+    time::{Duration, Instant},
 };
 use tokio::{
     sync::{Notify, RwLock, mpsc, oneshot},
@@ -223,23 +224,12 @@ impl Controller {
         let shutdown = ui::termination_signal();
         tokio::pin!(shutdown);
         let mut output_open = true;
+        let mut display: Option<DisplayBatch> = None;
         loop {
             tokio::select! {
                 biased;
                 () = cancel.cancelled() => break,
                 () = &mut shutdown => break,
-                update = self.output.recv(), if output_open => {
-                    match update {
-                        Some(Update::Server(message)) => apply_update(message, &mut self.app, &mut self.controls),
-                        Some(Update::Notice(message)) => { self.app.notice(message); self.app.connection_ready = false; }
-                        Some(Update::Ended) | None => {
-                            self.app.notice("Remote connection ended. Your draft remains here. Use /quit to leave. No uncertain action was resubmitted.");
-                            self.app.connection_ready = false;
-                            output_open = false;
-                        }
-                    }
-                    self.backend.ack_cursor(self.app.last_sequence);
-                }
                 _ = tick.tick() => {
                     for _ in 0..64 {
                         if !terminal.poll_input()? { break; }
@@ -249,6 +239,10 @@ impl Controller {
                             Err(error) => self.app.error(format!("{error:#}")),
                         }
                     }
+                    if let Some(batch) = &mut display {
+                        if batch.apply(&mut self.app, &mut self.controls) { display = None; }
+                        self.backend.ack_cursor(self.app.last_sequence);
+                    }
                     if self.app.dirty {
                         let snapshot = ejm_harness::HarnessSnapshot { active_agents: usize::from(self.app.is_running()),
                             model_requests: 0, waiting_model_requests: 0, tools: ejm_harness_exec::GovernorSnapshot::default() };
@@ -256,9 +250,109 @@ impl Controller {
                         self.app.dirty = false;
                     }
                 }
+                update = self.output.recv(), if output_open && display.is_none() => {
+                    match update {
+                        Some(Update::Server(message)) => display = DisplayBatch::begin(message, &mut self.app, &mut self.controls),
+                        Some(Update::Notice(message)) => { self.app.notice(message); self.app.connection_ready = false; }
+                        Some(Update::Ended) | None => {
+                            self.app.notice("Remote connection ended. Your draft remains here. Use /quit to leave. No uncertain action was resubmitted.");
+                            self.app.connection_ready = false;
+                            output_open = false;
+                        }
+                    }
+                    self.backend.ack_cursor(self.app.last_sequence);
+                }
             }
         }
         Ok(true)
+    }
+}
+
+struct DisplayBatch {
+    events: VecDeque<HarnessEvent>,
+    through: u64,
+    gap: bool,
+    authoritative: bool,
+}
+
+impl DisplayBatch {
+    fn begin(mut message: ServerMessage, app: &mut App, controls: &mut Controls) -> Option<Self> {
+        let (events, through, gap, authoritative) = match &mut message {
+            ServerMessage::Snapshot {
+                events,
+                through_sequence,
+                gap,
+                ..
+            } => {
+                let batch = (
+                    std::mem::take(events),
+                    *through_sequence,
+                    gap.take().is_some(),
+                    true,
+                );
+                *through_sequence = app.last_sequence;
+                batch
+            }
+            ServerMessage::Events {
+                events,
+                through_sequence,
+                gap,
+            } => {
+                let batch = (
+                    std::mem::take(events),
+                    *through_sequence,
+                    gap.take().is_some(),
+                    false,
+                );
+                *through_sequence = app.last_sequence;
+                batch
+            }
+            _ => {
+                apply_update(message, app, controls);
+                return None;
+            }
+        };
+        // Commit current authority before replaying history over several frames.
+        apply_update(message, app, controls);
+        if gap {
+            app.notice("Some remote output was omitted. The display remains bounded.");
+        }
+        Some(Self {
+            events: events.into(),
+            through,
+            gap,
+            authoritative,
+        })
+    }
+
+    fn apply(&mut self, app: &mut App, controls: &mut Controls) -> bool {
+        let started = Instant::now();
+        let mut active = controls.active.clone();
+        for _ in 0..16 {
+            let Some(event) = self.events.pop_front() else {
+                break;
+            };
+            apply_event(event, app, &mut active);
+            if started.elapsed() >= Duration::from_millis(2) {
+                break;
+            }
+        }
+        if !self.authoritative {
+            controls.active = active;
+        }
+        app.run_state = if controls.active.is_some() {
+            RunState::Running
+        } else {
+            RunState::Idle
+        };
+        if !self.events.is_empty() {
+            return false;
+        }
+        if self.gap {
+            app.last_sequence = app.last_sequence.max(self.through);
+        }
+        app.dirty = true;
+        true
     }
 }
 
@@ -574,19 +668,7 @@ fn apply_events(
         app.notice("Some remote output was omitted. The display remains bounded.");
     }
     for event in events {
-        if event.sequence <= app.last_sequence {
-            continue;
-        }
-        match &event.kind {
-            ejm_harness::EventKind::RunStarted { .. } => active.clone_from(&event.run_id),
-            ejm_harness::EventKind::RunFinished { summary }
-                if active.as_deref() == Some(&summary.run_id) =>
-            {
-                *active = None;
-            }
-            _ => {}
-        }
-        app.apply(event);
+        apply_event(event, app, active);
     }
     if gap {
         app.last_sequence = app.last_sequence.max(through);
@@ -596,6 +678,22 @@ fn apply_events(
     } else {
         RunState::Idle
     };
+}
+
+fn apply_event(event: HarnessEvent, app: &mut App, active: &mut Option<String>) {
+    if event.session_id != app.session.id || event.sequence <= app.last_sequence {
+        return;
+    }
+    match &event.kind {
+        ejm_harness::EventKind::RunStarted { .. } => active.clone_from(&event.run_id),
+        ejm_harness::EventKind::RunFinished { summary }
+            if active.as_deref() == Some(&summary.run_id) =>
+        {
+            *active = None;
+        }
+        _ => {}
+    }
+    app.apply(event);
 }
 
 struct NetworkGuard {

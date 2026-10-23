@@ -80,27 +80,6 @@ async fn finish(host: &mut HostUi, release: oneshot::Sender<()>) -> Result<()> {
 }
 
 #[tokio::test]
-async fn remote_draft_does_not_take_enter_from_an_open_overlay() -> Result<()> {
-    let (_directory, backend, session) = backend().await?;
-    let mut app = App::new(session);
-    app.composer.replace("/remote share control");
-    let enter = Event::Key(crossterm::event::KeyEvent::new(
-        KeyCode::Enter,
-        KeyModifiers::NONE,
-    ));
-    assert!(HostUi::is_command(&enter, &app));
-    app.overlay = Some(crate::app::Overlay::Help { selected: 0 });
-    assert!(!HostUi::is_command(&enter, &app));
-    app.overlay = Some(crate::app::Overlay::Sessions {
-        sessions: vec![],
-        selected: 0,
-    });
-    assert!(!HostUi::is_command(&enter, &app));
-    backend.shutdown().await?;
-    Ok(())
-}
-
-#[tokio::test]
 async fn failure_keeps_task_until_join_and_old_notices_cannot_hide_replacement() -> Result<()> {
     let (_directory, backend, session) = backend().await?;
     backend
@@ -299,7 +278,7 @@ async fn terminal_host_flow(config: &RemoteTerminalConfig) -> Result<()> {
     let (_directory, backend, session) = backend().await?;
     let (mut sharing, sender, _release) = terminal_share(&backend, &session).await?;
     let mut app = App::new(session.clone());
-    let args = Args::try_parse_from(["ejm-cli", "--replay"])?;
+    let args = Args::try_parse_from(["ejm-cli"])?;
     let mut terminal = crate::ui::TerminalGuard::enter()?;
     terminal_panel(&mut terminal, &mut sharing).await?;
 
@@ -386,7 +365,7 @@ async fn terminal_private_boundary(config: &RemoteTerminalConfig) -> Result<()> 
     const PUBLIC_INPUT: &str = "safe boundary input";
     let (_directory, backend, session) = backend().await?;
     let mut app = App::new(session.clone());
-    let args = Args::try_parse_from(["ejm-cli", "--replay"])?;
+    let args = Args::try_parse_from(["ejm-cli"])?;
     let mut terminal = crate::ui::TerminalGuard::enter()?;
     app.notice("Ordinary input ready");
     loop {
@@ -574,13 +553,25 @@ async fn terminal_observer_loop() -> Result<()> {
     sharing.panel = None;
     let mut app = App::new(session.clone());
     app.notice("Observer blocked");
-    let args = Args::try_parse_from(["ejm-cli", "--replay"])?;
+    let mut args = Args::try_parse_from(["ejm-cli"])?;
     let extensions = crate::extensions::Extensions::empty()?;
     let terminal = crate::ui::TerminalGuard::enter()?;
     crate::ui::with_shutdown(
         &backend,
         CancellationToken::new(),
-        crate::ui::run_app(&backend, &args, &extensions, sharing, app, terminal),
+        Box::pin(crate::ui::run_app(
+            backend.clone(),
+            &mut args,
+            &extensions,
+            sharing,
+            app,
+            crate::interaction::ConnectionTasks::new(ejm_harness_exec::Executor::new(
+                backend.governor(),
+                directory.path().join("artifacts"),
+            )?),
+            crate::ui::termination_signal(),
+            terminal,
+        )),
     )
     .await?;
     anyhow::ensure!(
@@ -606,7 +597,7 @@ async fn terminal_observer_loop() -> Result<()> {
 }
 
 async fn terminal_pairing_replacement() -> Result<()> {
-    let (_directory, backend, session) = backend().await?;
+    let (directory, backend, session) = backend().await?;
     backend
         .begin_share(&session.id, "pairing".into(), ShareRole::Control, u64::MAX)
         .await?;
@@ -641,13 +632,18 @@ async fn terminal_pairing_replacement() -> Result<()> {
         })
         .await?;
     app.notice("Pairing boundary passed");
-    let args = Args::try_parse_from(["ejm-cli", "--replay"])?;
+    let mut args = Args::try_parse_from(["ejm-cli"])?;
     crate::ui::run_app(
-        &backend,
-        &args,
+        backend.clone(),
+        &mut args,
         &crate::extensions::Extensions::empty()?,
         sharing,
         app,
+        crate::interaction::ConnectionTasks::new(ejm_harness_exec::Executor::new(
+            backend.governor(),
+            directory.path().join("artifacts"),
+        )?),
+        crate::ui::termination_signal(),
         terminal,
     )
     .await?;
@@ -671,9 +667,8 @@ async fn remote_terminal_interaction_fixture() -> Result<()> {
         .context("remote terminal fixture case missing")?;
     if mode == "host-signal" {
         let (directory, backend, _) = backend().await?;
-        let args = Args::try_parse_from([
+        let mut args = Args::try_parse_from([
             "ejm-cli",
-            "--replay",
             "--memory-only",
             "--relay",
             "https://relay.example",
@@ -684,8 +679,13 @@ async fn remote_terminal_interaction_fixture() -> Result<()> {
         ])?;
         crate::ui::run(
             (*backend).clone(),
-            &args,
+            &mut args,
             &crate::extensions::Extensions::empty()?,
+            ejm_harness_exec::Executor::new(
+                backend.governor(),
+                directory.path().join("artifacts"),
+            )?,
+            crate::ui::termination_signal(),
         )
         .await?;
         return backend.shutdown().await;

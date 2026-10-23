@@ -32,7 +32,7 @@ ejm-cli is the Rust terminal app for ejm-harness, made by ejmlabs. The harness l
 | Path | Holds |
 | --- | --- |
 | `crates/ejm-cli/src` | `args`, `auth`, `browser`, `app`, `ui`, `render`, `extensions`, `packages`, `main`, plus the kit modules `ejm_theme` (generated, never hand edited) and `ejm_tui` |
-| `crates/ejm-cli/tests/cli.rs` | Integration tests that run the real binary against `--replay` |
+| `crates/ejm-cli/tests/cli.rs` | Integration tests that run the real binary against internal provider fixtures |
 | `docs/` | `ejm-cli.md` reference, `benchmarks.md` evidence, `contributing.md` gates and ownership |
 | `scripts/` | `check` (the one gate), `check_architecture.py`, `check_terminal.py`, `install-hooks`, `sync-design-kit.sh` |
 | `site/` | The static cli.ejmlabs.com page and its Cloudflare Worker config |
@@ -43,7 +43,7 @@ ejm-cli is the Rust terminal app for ejm-harness, made by ejmlabs. The harness l
 ```sh
 ./scripts/check                      # the full gate used by local work, the pre-commit hook and CI
 cargo test -p ejm-cli NAME           # a focused test
-cargo run -p ejm-cli -- --replay     # the TUI with the offline demo provider
+cargo run -p ejm-cli -- --help       # supported CLI options
 ```
 
 ## Required workflow

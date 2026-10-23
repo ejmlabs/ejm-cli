@@ -28,7 +28,7 @@ serde.workspace = true
 clap = { version = "4.5", features = ["derive", "env"] }
 ratatui = { version = "0.30.2", default-features = false, features = ["crossterm_0_29", "layout-cache"] }
 crossterm = "0.29"
-# Owned terminal parser; keep rendering on the existing Crossterm backend.
+# Owned parser for bounded input and private-screen resets on every native OS.
 termwiz = { version = "=0.23.3", default-features = false }
 unicode-width = "0.2"
 url = "2"
@@ -37,7 +37,6 @@ hyper = { version = "1", features = ["http1", "server"] }
 hyper-util = { version = "0.1", features = ["tokio"] }
 http-body-util = "0.1"
 vte = { version = "0.15", default-features = false }
-
 # Relay protocol, OS secrets and certificate-verified transport. See docs/remote-dependencies.md.
 snow = { version = "=0.10.0", default-features = false, features = ["std", "default-resolver", "use-curve25519", "use-chacha20poly1305", "use-sha2", "use-getrandom"] }
 keyring-core = "=1.0.1"
@@ -47,28 +46,38 @@ base64 = "=0.23.1"
 sha2 = "=0.10.9"
 oauth2 = { version = "=5.0.0", default-features = false }
 reqwest = { version = "=0.13.5", default-features = false, features = ["rustls", "json", "stream"] }
-tokio-tungstenite = { version = "=0.30.0", default-features = false, features = ["connect", "rustls-tls-native-roots"] }
+# Pinned feature seam for the public connector. Revisit when an advertised
+# upstream feature supports patched bundled roots without the 0.26 bridge.
+tokio-tungstenite = { version = "=0.30.0", default-features = false, features = ["connect", "__rustls-tls"] }
+tokio-rustls = { version = "=0.26.6", default-features = false, features = ["aws_lc_rs"] }
+webpki-roots = "=1.0.10"
 futures-util = { version = "=0.3.34", default-features = false, features = ["sink", "std"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 apple-native-keyring-store = { version = "=1.0.2", default-features = false, features = ["keychain"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-native-keyring-store = "=1.1.0"
+# Reuse Crossterm's safe native wrappers to restore exact console modes.
+crossterm_winapi = "=0.9.1"
+# Safe console input flushing without custom Windows bindings.
+winsafe = { version = "=0.0.29", default-features = false, features = ["kernel"] }
 
 [target.'cfg(all(unix, not(any(target_os = "macos", target_os = "ios", target_os = "android"))))'.dependencies]
 # Encrypt Secret Service transport; use the distro-maintained libdbus.
 dbus-secret-service-keyring-store = { version = "=1.0.1", default-features = false, features = ["crypto-rust"] }
 
 [target.'cfg(unix)'.dependencies]
-# Safe nonblocking raw input and exact mode restoration.
-rustix = { version = "=1.1.5", default-features = false, features = ["std", "termios"] }
-
-[target.'cfg(windows)'.dependencies]
-windows-native-keyring-store = "=1.1.0"
-# Safe native console mode and input-queue operations.
-crossterm_winapi = "=0.9.1"
-winsafe = { version = "=0.0.29", default-features = false, features = ["kernel"] }
+# Safe snapshot and restoration of the terminal mode across external sign-in.
+rustix = { version = "1.1.5", default-features = false, features = ["std", "termios"] }
 
 [dev-dependencies]
-# Exercise certificate rejection against a real local TLS endpoint.
-tokio-rustls = { version = "=0.26.6", default-features = false, features = ["aws_lc_rs"] }
+# The shared offline workload keeps terminal acceptance separate from providers.
+ejm-harness = { workspace = true, features = ["test-support"] }
+ejm-harness-bench = { version = "0.2.0", path = "../../../ejm-harness/crates/ejm-harness-bench" }
 async-trait = "=0.1.92"
 tempfile.workspace = true
+
+[target.'cfg(unix)'.dev-dependencies]
+# Direct process signals and exit checks for real-binary startup cleanup.
+rustix = { version = "1.1.5", default-features = false, features = ["process"] }

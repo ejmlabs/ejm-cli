@@ -7,7 +7,7 @@ use ratatui::{
 };
 
 use crate::{
-    app::{App, Overlay, RunState},
+    app::{App, LOGIN_PROVIDERS, Overlay, RunState},
     args::Args,
     ejm_theme::Glyphs,
     ejm_tui::{
@@ -107,7 +107,6 @@ fn draw_screen(
                 ("Alt+Enter", "new line"),
                 ("Ctrl+K", "steer"),
                 ("Ctrl+S", "sessions"),
-                ("/help", "commands"),
             ],
             usize::from(area.width),
         )),
@@ -187,7 +186,7 @@ fn draw_header(
         theme,
         glyphs,
         &Header {
-            app: "ejm-cli",
+            app: ">_ ejm-cli",
             provider: &safe_text(
                 if app.remote.as_ref().is_some_and(|remote| remote.controller) {
                     "remote session"
@@ -223,7 +222,7 @@ fn draw_transcript(frame: &mut Frame<'_>, app: &mut App, theme: &Theme, transcri
             &[
                 "Ask about this repository, investigate a bug, or describe a change.",
                 "Read tools are ready. Write and shell access require explicit flags.",
-                "Use /help for commands. Sessions are saved locally.",
+                "Type / to choose a command. Sessions are saved locally.",
             ],
             width,
         ));
@@ -270,6 +269,14 @@ fn draw_status(
             snapshot.tools.running, snapshot.tools.queued
         ),
     ];
+    if let Some(capacity) = &app.capacity {
+        counts.push(format!(
+            "{} target m{}/t{}",
+            crate::capacity::mode(capacity.mode),
+            capacity.model_target,
+            capacity.operating.target.max_jobs
+        ));
+    }
     if let Some(remote) = &app.remote {
         counts.insert(0, remote.label.clone());
     }
@@ -346,7 +353,36 @@ fn draw_overlay(frame: &mut Frame<'_>, app: &App, theme: &Theme, glyphs: &Glyphs
     let area = frame.area();
     match &app.overlay {
         Some(Overlay::Help { selected }) => draw_help(frame, app, *selected, theme, glyphs),
-        Some(Overlay::Sessions { sessions, selected }) => {
+        Some(Overlay::Login { selected }) => draw_login(frame, *selected, theme, glyphs),
+        Some(Overlay::Models { models, selected }) => {
+            let area = popup(area, 86, 20);
+            frame.render_widget(Clear, area);
+            let block = titled_block(
+                glyphs,
+                "models: Up/Down choose, Enter use, Esc close",
+                theme.plain,
+            );
+            let width = usize::from(block.inner(area).width);
+            let items = models
+                .iter()
+                .enumerate()
+                .map(|(index, model)| {
+                    ListItem::new(list_row(
+                        theme,
+                        glyphs,
+                        &safe_text(&model.slug),
+                        &safe_text(&model.display_name),
+                        index == *selected,
+                        width,
+                    ))
+                })
+                .collect::<Vec<_>>();
+            let mut state = ListState::default().with_selected(Some(*selected));
+            frame.render_stateful_widget(List::new(items).block(block), area, &mut state);
+        }
+        Some(Overlay::Sessions { picker }) => {
+            let sessions = &picker.sessions;
+            let selected = picker.selected;
             let popup = popup(area, 86, 20);
             frame.render_widget(Clear, popup);
             let (arrows, dot) = (
@@ -359,13 +395,25 @@ fn draw_overlay(frame: &mut Frame<'_>, app: &App, theme: &Theme, glyphs: &Glyphs
             );
             let block = titled_block(
                 glyphs,
-                &format!("sessions {dot} {arrows} choose {dot} Enter open {dot} Esc close"),
+                &format!(
+                    "sessions {} {dot} {} {dot} {arrows} choose {dot} PgUp/PgDn page",
+                    safe_text(&picker.query),
+                    if picker.pending {
+                        "loading"
+                    } else {
+                        "type to search"
+                    }
+                ),
                 theme.plain,
             );
             let width = usize::from(block.inner(popup).width);
+            let visible = usize::from(block.inner(popup).height).max(1);
+            let start = selected.saturating_sub(visible.saturating_sub(1));
             let items = sessions
                 .iter()
                 .enumerate()
+                .skip(start)
+                .take(visible)
                 .map(|(index, session)| {
                     let status = match session.status {
                         ejm_harness::SessionStatus::Idle => "idle",
@@ -377,16 +425,45 @@ fn draw_overlay(frame: &mut Frame<'_>, app: &App, theme: &Theme, glyphs: &Glyphs
                         glyphs,
                         short_id(&session.id),
                         &format!("[{status}]  {}", safe_text(&session.title)),
-                        index == *selected,
+                        index == selected,
                         width,
                     ))
                 })
                 .collect::<Vec<_>>();
-            let mut state = ListState::default().with_selected(Some(*selected));
+            let mut state =
+                ListState::default().with_selected(Some(selected.saturating_sub(start)));
             frame.render_stateful_widget(List::new(items).block(block), popup, &mut state);
         }
         None => {}
     }
+}
+
+fn draw_login(frame: &mut Frame<'_>, selected: usize, theme: &Theme, glyphs: &Glyphs) {
+    let area = popup(frame.area(), 86, 20);
+    frame.render_widget(Clear, area);
+    let title = if area.width >= 47 {
+        "login: Up/Down choose, PageUp/PageDown jump"
+    } else if area.width >= 25 {
+        "login: Up/Down choose"
+    } else {
+        "login: Up/Down"
+    };
+    let controls = if area.width >= 29 {
+        "Enter continue, Esc close"
+    } else {
+        "Enter / Esc"
+    };
+    let block = titled_block(glyphs, title, theme.plain).title_bottom(format!(" {controls} "));
+    let width = usize::from(block.inner(area).width);
+    let items = LOGIN_PROVIDERS
+        .iter()
+        .enumerate()
+        .map(|(index, (_, label))| {
+            ListItem::new(list_row(theme, glyphs, label, "", index == selected, width))
+        })
+        .collect::<Vec<_>>();
+    let mut state = ListState::default().with_selected(Some(selected));
+    frame.render_stateful_widget(List::new(items).block(block), area, &mut state);
 }
 
 fn draw_help(frame: &mut Frame<'_>, app: &App, selected: usize, theme: &Theme, glyphs: &Glyphs) {
@@ -602,7 +679,7 @@ mod tests {
 
     #[test]
     fn renderer_handles_small_screens_and_shows_grants() {
-        let args = Args::try_parse_from(["ejm-cli", "--replay", "--allow-write"]).unwrap();
+        let args = Args::try_parse_from(["ejm-cli", "--allow-write"]).unwrap();
         for (width, height) in [(10, 5), (40, 10), (100, 30)] {
             let text = screen(&args, &UNICODE, width, height);
             if width == 100 {
@@ -619,7 +696,7 @@ mod tests {
 
     #[test]
     fn plain_mode_draws_only_ascii() {
-        let args = Args::try_parse_from(["ejm-cli", "--replay", "--plain"]).unwrap();
+        let args = Args::try_parse_from(["ejm-cli", "--plain"]).unwrap();
         let text = screen(&args, ejm_tui::glyphs_from_env(args.plain), 100, 30);
         assert!(text.is_ascii(), "{text}");
         assert!(text.contains("> Describe a task..."));
@@ -628,17 +705,17 @@ mod tests {
 
     #[test]
     fn command_picker_filters_and_keeps_selection_visible_without_color() {
-        let args = Args::try_parse_from(["ejm-cli", "--replay", "--plain", "--no-color"]).unwrap();
+        let args = Args::try_parse_from(["ejm-cli", "--plain", "--no-color"]).unwrap();
         for (width, height) in [(100, 30), (40, 10)] {
             let mut app = app();
-            app.composer.insert("/s");
-            app.command_picker.selected = 2;
+            app.composer.insert("/mod");
+            app.command_picker.selected = 1;
             let buffer = render_app(&args, &crate::ejm_theme::ASCII, width, height, app);
             let text = text(&buffer);
             assert!(text.is_ascii(), "{text}");
-            assert!(text.contains("/sessions"), "{text}");
-            assert!(text.contains("/steer MESSAGE"), "{text}");
-            assert!(!text.contains("/reload"), "{text}");
+            assert!(text.contains("/model [PROVIDER]"), "{text}");
+            assert!(text.contains("/models"), "{text}");
+            assert!(!text.contains("/login"), "{text}");
             assert!(
                 buffer
                     .content()
@@ -656,20 +733,20 @@ mod tests {
 
     #[test]
     fn dismissed_picker_preserves_the_visible_draft() {
-        let args = Args::try_parse_from(["ejm-cli", "--replay"]).unwrap();
+        let args = Args::try_parse_from(["ejm-cli"]).unwrap();
         let mut app = app();
-        app.composer.insert("/s");
+        app.composer.insert("/mod");
         app.command_picker.dismissed = true;
         let text = text(&render_app(&args, &UNICODE, 100, 30, app));
-        assert!(text.contains("› /s"), "{text}");
+        assert!(text.contains("› /mod"), "{text}");
         assert!(!text.contains("commands: Up/Down"), "{text}");
     }
 
     #[test]
     fn help_scrolls_selected_commands_into_view_on_short_screens() {
-        let args = Args::try_parse_from(["ejm-cli", "--replay", "--plain"]).unwrap();
+        let args = Args::try_parse_from(["ejm-cli", "--plain"]).unwrap();
         for (width, height) in [(100, 30), (40, 10)] {
-            for name in ["help", "sessions", "reload", "exit"] {
+            for name in ["model", "login", "logout", "reload", "exit"] {
                 let mut app = app();
                 let selected = app
                     .commands
@@ -689,6 +766,60 @@ mod tests {
                     "{width}x{height}: {text}"
                 );
                 assert!(text.is_ascii(), "{text}");
+            }
+        }
+    }
+
+    #[test]
+    fn model_overlay_scrolls_and_sanitizes_provider_labels() {
+        let args = Args::try_parse_from(["ejm-cli", "--plain"]).unwrap();
+        let mut app = app();
+        app.overlay = Some(Overlay::Models {
+            models: (0..20)
+                .map(|index| ejm_harness::AvailableModel {
+                    slug: format!("model-{index:02}"),
+                    display_name: "Fixture\x1b]52;c;private\x07".into(),
+                })
+                .collect(),
+            selected: 19,
+        });
+        let text = text(&render_app(&args, &crate::ejm_theme::ASCII, 40, 10, app));
+        assert!(text.contains("model-19"), "{text}");
+        assert!(text.contains("Fixture"), "{text}");
+        assert!(!text.contains("private"), "{text}");
+        assert!(text.is_ascii(), "{text}");
+    }
+
+    #[test]
+    fn login_picker_keeps_choices_and_selection_readable_at_supported_sizes() {
+        let args = Args::try_parse_from(["ejm-cli", "--plain", "--no-color"]).unwrap();
+        for (width, height) in [(100, 30), (40, 10), (20, 8)] {
+            let mut app = app();
+            app.overlay = Some(Overlay::Login {
+                selected: LOGIN_PROVIDERS.len() - 1,
+            });
+            let buffer = render_app(&args, &crate::ejm_theme::ASCII, width, height, app);
+            let text = text(&buffer);
+            let selection = buffer
+                .content()
+                .iter()
+                .filter(|cell| cell.modifier.contains(Modifier::REVERSED))
+                .map(ratatui::buffer::Cell::symbol)
+                .collect::<String>();
+            assert!(text.is_ascii(), "{width}x{height}: {text}");
+            for key in ["Up/Down", "Enter", "Esc"] {
+                assert!(text.contains(key), "{width}x{height}: {text}");
+            }
+            if width >= 40 {
+                for (_, label) in LOGIN_PROVIDERS {
+                    assert!(text.contains(*label), "{width}x{height}: {text}");
+                }
+                assert!(selection.contains("Anthropic API"), "{selection}");
+            } else {
+                assert!(selection.contains("Anthropic"), "{selection}");
+            }
+            if width == 100 {
+                assert!(text.contains("PageUp/PageDown"), "{text}");
             }
         }
     }

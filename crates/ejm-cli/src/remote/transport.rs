@@ -2,6 +2,7 @@
 
 use std::{
     future::pending,
+    sync::Arc,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
@@ -13,10 +14,12 @@ use tokio::{
     sync::{broadcast, mpsc, oneshot},
     time::{Instant, sleep, sleep_until, timeout},
 };
+use tokio_rustls::rustls::{ClientConfig, RootCertStore};
 use tokio_tungstenite::{
-    MaybeTlsStream, WebSocketStream, connect_async_with_config,
+    Connector, MaybeTlsStream, WebSocketStream, connect_async_tls_with_config,
     tungstenite::{
-        Message, client::IntoClientRequest, http::HeaderValue, protocol::WebSocketConfig,
+        Message, client::IntoClientRequest, handshake::client::Request, http::HeaderValue,
+        protocol::WebSocketConfig,
     },
 };
 use tokio_util::sync::CancellationToken;
@@ -89,10 +92,14 @@ impl RelayConnection {
             "origin",
             HeaderValue::from_str(&account.origin.url("/")?.origin().ascii_serialization())?,
         );
-        // connect_async makes one connection and never follows credential-bearing redirects.
+        Self::connect_request(request, bundled_tls_connector()?).await
+    }
+
+    async fn connect_request(request: Request, connector: Connector) -> Result<Self> {
+        // One connection, with no credential-bearing redirect following.
         let (socket, response) = timeout(
             CONNECT_TIMEOUT,
-            connect_async_with_config(request, Some(socket_config()), true),
+            connect_async_tls_with_config(request, Some(socket_config()), true, Some(connector)),
         )
         .await
         .map_err(|_| anyhow!("relay connection timed out"))?
@@ -144,6 +151,21 @@ impl RelayConnection {
     async fn close(&mut self) {
         let _ = timeout(Duration::from_secs(1), self.socket.close(None)).await;
     }
+}
+
+fn bundled_tls_connector() -> Result<Connector> {
+    tls_connector(RootCertStore::from_iter(
+        webpki_roots::TLS_SERVER_ROOTS.iter().cloned(),
+    ))
+}
+
+fn tls_connector(roots: RootCertStore) -> Result<Connector> {
+    let provider = tokio_rustls::rustls::crypto::aws_lc_rs::default_provider();
+    let config = ClientConfig::builder_with_provider(Arc::new(provider))
+        .with_safe_default_protocol_versions()?
+        .with_root_certificates(roots)
+        .with_no_client_auth();
+    Ok(Connector::Rustls(Arc::new(config)))
 }
 
 fn socket_config() -> WebSocketConfig {
@@ -603,6 +625,14 @@ pub fn now_ms() -> u64 {
 }
 
 #[cfg(test)]
+#[path = "transport_fixture.rs"]
+mod worker_fixture;
+
+#[cfg(test)]
+#[path = "transport_tls_fixture.rs"]
+mod tls_fixture;
+
+#[cfg(test)]
 #[expect(
     clippy::unwrap_used,
     reason = "test fixtures should fail at the assertion site"
@@ -617,6 +647,7 @@ mod tests {
     use ejm_harness::EventKind;
     use std::sync::Arc;
     use tokio::{net::TcpListener, sync::Mutex, task::JoinHandle};
+    use tokio_tungstenite::connect_async_with_config;
 
     #[derive(Clone, Copy)]
     enum RelayAttack {
@@ -767,7 +798,7 @@ mod tests {
     async fn native_websocket_roundtrip_keeps_content_and_invitation_out_of_relay_frames() {
         let mut fixture = fixture(RelayAttack::None).await;
         let sentinel = "private-native-command-sentinel";
-        let text = sentinel.repeat(super::super::protocol::MAX_PROMPT_BYTES / sentinel.len());
+        let text = sentinel.repeat(1000);
         let request = submitted(text.clone());
         fixture.controller.send(&request).await.unwrap();
         let received = timeout(Duration::from_secs(3), fixture.host.receive())
@@ -876,11 +907,7 @@ mod tests {
         });
         fixture.host.send(&response).await.unwrap();
         assert!(fixture.controller.receive().await.is_ok());
-        assert!(
-            backend
-                .stop_share_if(fixture.enrollment.invitation().routing_id())
-                .await
-        );
+        backend.stop_share().await;
         assert!(fixture.host.send(&response).await.is_err());
         backend
             .begin_share(

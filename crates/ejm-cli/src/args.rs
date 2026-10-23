@@ -9,7 +9,22 @@ pub enum ProviderKind {
     Openai,
     Responses,
     Chatgpt,
+    Claude,
     Anthropic,
+}
+
+/// Capacity policy. Automatic activation remains explicit until native crash recovery is verified.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, ValueEnum)]
+pub enum CapacityMode {
+    Auto,
+    #[default]
+    Fixed,
+}
+
+#[derive(Clone, Debug, Subcommand)]
+pub enum CapacityCommand {
+    #[command(about = "Reset local learned capacity without changing reservations or permissions")]
+    Reset,
 }
 
 /// Terminal background the TUI palette is tuned for.
@@ -36,36 +51,29 @@ impl From<Appearance> for crate::ejm_tui::Appearance {
     clippy::struct_excessive_bools,
     reason = "CLI switches represent independent grants, provider selection and presentation settings."
 )]
-#[derive(Debug, Parser)]
+#[derive(Clone, Debug, Parser)]
 #[command(
     name = "ejm-cli",
     version,
     about = "A fast, local coding agent built on the open ejm-harness",
     long_about = "A fast, local coding agent built on the open ejm-harness.\n\nStart without a command for the TUI. Tools are read only unless you grant\nwrite or shell access. Local use needs no relay account. Remote access requires\na relay account and local device pairing.",
-    after_help = "Examples:\n  ejm-cli --replay                         Try the TUI offline\n  ejm-cli login chatgpt                    Sign in through your browser\n  ejm-cli --provider chatgpt               Use your saved account in the TUI\n  ejm-cli run \"Find the parser\" --json      Stream durable JSON events\n  ejm-cli --session ID                     Resume a saved conversation\n\nProvider keys are read from the environment and never accepted as arguments.\nSaved account credentials stay in the private local auth store.\nIn the TUI: /help shows commands and keyboard shortcuts."
+    after_help = "Examples:\n  ejm-cli                                  Open the TUI and choose a provider\n  ejm-cli login chatgpt                    Sign in through your browser\n  ejm-cli login claude                     Sign in through the official Claude client\n  ejm-cli --provider claude                Use your Claude subscription\n  ejm-cli --provider chatgpt               Use your saved account in the TUI\n  ejm-cli run \"Find the parser\" --json      Stream durable JSON events\n  ejm-cli --session ID                     Resume a saved conversation\n\nProvider keys are read from the environment and never accepted as arguments.\nChatGPT credentials stay in the encrypted harness vault; the native OS service protects its key.\nClaude credentials stay with the official client.\nIn the TUI: type / to choose a command, /model to choose a model,\n/login to pick a sign-in provider, or /help for commands and keyboard shortcuts."
 )]
 pub struct Args {
     #[command(subcommand)]
     pub command: Option<Command>,
 
-    #[arg(
-        long,
-        global = true,
-        help = "Use the deterministic offline echo provider"
-    )]
-    pub replay: bool,
-
-    #[arg(
-        long,
-        global = true,
-        conflicts_with = "replay",
-        value_name = "JSON",
-        help = "Read deterministic model responses from a JSON array"
-    )]
-    pub replay_file: Option<PathBuf>,
-
-    #[arg(long, global = true, value_enum, default_value_t = ProviderKind::Openai, help = "Model provider; ChatGPT uses a saved browser sign-in")]
+    #[arg(long, global = true, value_enum, default_value_t = ProviderKind::Openai, help = "Model provider; chatgpt uses saved sign-in, claude uses the official client's subscription")]
     pub provider: ProviderKind,
+
+    #[arg(
+        long,
+        global = true,
+        env = "EJM_CLI_CLAUDE_PATH",
+        value_name = "PATH",
+        help = "Official Claude Code executable (defaults to its native installation, then PATH)"
+    )]
+    pub claude_path: Option<PathBuf>,
 
     #[arg(
         long,
@@ -87,7 +95,7 @@ pub struct Args {
         long,
         global = true,
         env = "EJM_CLI_MODEL",
-        help = "Model identifier; ChatGPT defaults to its account catalog, OpenAI compatible APIs to gpt-4.1-mini"
+        help = "Model identifier; Claude defaults to sonnet, ChatGPT to its account catalog, OpenAI compatible APIs to gpt-4.1-mini"
     )]
     pub model: Option<String>,
 
@@ -157,22 +165,26 @@ pub struct Args {
     )]
     pub allow_shell: bool,
 
-    #[arg(long, global = true, default_value_t = 100, value_parser = clap::value_parser!(usize), help = "Maximum managed sessions")]
-    pub max_sessions: usize,
-
-    #[arg(long, global = true, default_value_t = 8, value_parser = clap::value_parser!(usize), help = "Maximum in-flight model requests")]
-    pub model_concurrency: usize,
-
     #[arg(
         long,
         global = true,
-        default_value_t = 4,
-        help = "Maximum executing local tools across all sessions"
+        value_enum,
+        help = "Shared host capacity mode (default: auto on macOS, legacy fixed elsewhere)"
     )]
-    pub tool_concurrency: usize,
+    #[cfg_attr(target_os = "macos", arg(default_value = "auto"))]
+    pub capacity: Option<CapacityMode>,
 
-    #[arg(long, global = true, default_value_t = 512, value_parser = clap::value_parser!(u64).range(1..=1_048_576), help = "Aggregate local tool memory admission budget in MiB")]
-    pub tool_memory_mib: u64,
+    #[arg(long, global = true, value_parser = positive_count, help = "Managed-session ceiling (fixed mode default: 100)")]
+    pub max_sessions: Option<usize>,
+
+    #[arg(long, global = true, value_parser = positive_count, help = "In-flight model-request ceiling (fixed mode default: 8)")]
+    pub model_concurrency: Option<usize>,
+
+    #[arg(long, global = true, value_parser = positive_count, help = "Executing local-tool ceiling (fixed mode default: 4)")]
+    pub tool_concurrency: Option<usize>,
+
+    #[arg(long, global = true, value_parser = clap::value_parser!(u64).range(1..=1_048_576), help = "Aggregate admitted tool-memory ceiling in MiB (fixed mode default: 512)")]
+    pub tool_memory_mib: Option<u64>,
 
     #[arg(long, global = true, default_value_t = 32, value_parser = clap::value_parser!(u32).range(1..=256), help = "Maximum model steps in one run")]
     pub max_steps: u32,
@@ -226,8 +238,13 @@ pub struct Args {
     pub widget: Vec<String>,
 }
 
-#[derive(Debug, Subcommand)]
+#[derive(Clone, Debug, Subcommand)]
 pub enum Command {
+    #[command(about = "Manage local learned capacity")]
+    Capacity {
+        #[command(subcommand)]
+        command: CapacityCommand,
+    },
     #[command(about = "Share or control one session through an end-to-end encrypted relay")]
     Remote {
         #[command(subcommand)]
@@ -235,24 +252,35 @@ pub enum Command {
     },
     #[command(aliases = ["packages", "pkg"], about = "Discover, install, trust, and publish ejm-harness packages")]
     Package {
+        #[arg(
+            long,
+            global = true,
+            env = "EJM_REGISTRY_URL",
+            value_name = "ORIGIN",
+            help = "Package registry origin; required for registry operations (no default)"
+        )]
+        registry: Option<String>,
         #[command(subcommand)]
         command: crate::packages::PackageCommand,
     },
-    #[command(about = "Sign in to ChatGPT in your browser, or show provider sign-in guidance")]
+    #[command(about = "Sign in to ChatGPT or the official Claude client, or show API-key guidance")]
     Login {
         #[arg(value_enum, value_name = "PROVIDER")]
         service: ProviderKind,
-        #[arg(long, help = "Print the safe sign-in URL instead of opening a browser")]
+        #[arg(
+            long,
+            help = "For ChatGPT, print the safe sign-in URL instead of opening a browser"
+        )]
         no_browser: bool,
     },
-    #[command(about = "List saved account registrations without showing credentials")]
+    #[command(about = "List saved ChatGPT accounts and safe official Claude client status")]
     Accounts {
         #[arg(long, help = "Print safe account metadata as JSON")]
         json: bool,
     },
-    #[command(about = "Remove a saved account and attempt provider revocation")]
+    #[command(about = "Remove a saved ChatGPT account, or sign out of the official Claude client")]
     Logout {
-        #[arg(value_name = "REGISTRATION")]
+        #[arg(value_name = "REGISTRATION|claude")]
         registration: String,
     },
     #[command(about = "List available models for ChatGPT or OpenAI Responses access")]
@@ -277,6 +305,19 @@ pub enum Command {
 }
 
 impl Args {
+    pub fn claude_program(&self) -> PathBuf {
+        let configured = self.claude_path.as_ref().map(|path| {
+            if path.is_relative()
+                && path.components().count() > 1
+                && let Ok(directory) = std::env::current_dir()
+            {
+                return directory.join(path);
+            }
+            path.clone()
+        });
+        ejm_harness_auth::resolve_claude_code_program(configured.as_deref())
+    }
+
     pub fn api_key(&self) -> Option<String> {
         std::env::var(&self.api_key_env)
             .ok()
@@ -339,8 +380,8 @@ impl Args {
 
     pub fn resources(&self) -> ejm_harness_exec::ResourceLimits {
         ejm_harness_exec::ResourceLimits {
-            max_jobs: self.tool_concurrency,
-            memory_bytes: self.tool_memory_mib * 1024 * 1024,
+            max_jobs: self.tool_concurrency.unwrap_or(4),
+            memory_bytes: self.tool_memory_mib.unwrap_or(512) * 1024 * 1024,
             ..ejm_harness_exec::ResourceLimits::default()
         }
     }
@@ -359,16 +400,26 @@ impl Args {
     pub fn provider_label(&self) -> &str {
         if let Some(provider) = &self.package_provider {
             provider
-        } else if self.replay || self.replay_file.is_some() {
-            "offline replay"
         } else {
             self.model.as_deref().unwrap_or(match self.provider {
                 ProviderKind::Openai | ProviderKind::Responses => "gpt-4.1-mini",
                 ProviderKind::Chatgpt => "ChatGPT account model",
+                ProviderKind::Claude => "sonnet",
                 ProviderKind::Anthropic => "Anthropic",
             })
         }
     }
+
+    pub fn uses_builtin(&self, provider: ProviderKind) -> bool {
+        self.provider == provider && self.package_provider.is_none()
+    }
+}
+
+fn positive_count(value: &str) -> std::result::Result<usize, String> {
+    value
+        .parse::<std::num::NonZeroUsize>()
+        .map(std::num::NonZeroUsize::get)
+        .map_err(|_| "expected a positive integer".into())
 }
 
 #[cfg(test)]
@@ -381,17 +432,70 @@ mod tests {
     use clap::CommandFactory;
 
     #[test]
-    fn accepts_global_flags_after_command() {
-        let args = Args::try_parse_from([
+    fn capacity_keeps_omitted_ceilings_distinct_from_fixed_defaults() {
+        let fixed = Args::try_parse_from(["ejm-cli"]).unwrap();
+        assert_eq!(
+            fixed.capacity,
+            if cfg!(target_os = "macos") {
+                Some(CapacityMode::Auto)
+            } else {
+                None
+            }
+        );
+        assert_eq!(fixed.max_sessions, None);
+        assert_eq!(fixed.model_concurrency, None);
+        assert_eq!(fixed.resources().max_jobs, 4);
+        assert_eq!(fixed.resources().memory_bytes, 512 * 1024 * 1024);
+        let automatic =
+            Args::try_parse_from(["ejm-cli", "--capacity", "auto", "--model-concurrency", "3"])
+                .unwrap();
+        assert_eq!(automatic.capacity, Some(CapacityMode::Auto));
+        assert_eq!(automatic.model_concurrency, Some(3));
+        assert_eq!(automatic.tool_concurrency, None);
+        let explicit = Args::try_parse_from([
             "ejm-cli",
-            "run",
-            "Explain this",
-            "--json",
-            "--replay",
-            "--allow-write",
+            "--capacity",
+            "fixed",
+            "--max-sessions",
+            "4096",
+            "--tool-concurrency",
+            "2",
+            "--tool-memory-mib",
+            "256",
         ])
         .unwrap();
-        assert!(args.replay && args.allow_write && !args.allow_shell);
+        assert_eq!(explicit.max_sessions, Some(4096));
+        assert_eq!(explicit.resources().max_jobs, 2);
+        assert_eq!(explicit.resources().memory_bytes, 256 * 1024 * 1024);
+        for option in [
+            "--max-sessions",
+            "--model-concurrency",
+            "--tool-concurrency",
+            "--tool-memory-mib",
+        ] {
+            assert!(Args::try_parse_from(["ejm-cli", option, "0"]).is_err());
+        }
+        assert!(Args::try_parse_from(["ejm-cli", "--capacity", "unknown"]).is_err());
+    }
+
+    #[test]
+    fn capacity_reset_is_a_local_shell_command() {
+        let args = Args::try_parse_from(["ejm-cli", "capacity", "reset"]).unwrap();
+        assert!(matches!(
+            args.command,
+            Some(Command::Capacity {
+                command: CapacityCommand::Reset
+            })
+        ));
+        assert!(Args::try_parse_from(["ejm-cli", "capacity", "reset", "--all"]).is_err());
+    }
+
+    #[test]
+    fn accepts_global_flags_after_command() {
+        let args =
+            Args::try_parse_from(["ejm-cli", "run", "Explain this", "--json", "--allow-write"])
+                .unwrap();
+        assert!(args.allow_write && !args.allow_shell);
         assert!(matches!(
             args.command,
             Some(Command::Run { json: true, .. })
@@ -400,7 +504,7 @@ mod tests {
 
     #[test]
     fn grants_are_explicit_and_keys_cannot_be_passed_as_arguments() {
-        let args = Args::try_parse_from(["ejm-cli", "--replay"]).unwrap();
+        let args = Args::try_parse_from(["ejm-cli"]).unwrap();
         assert_eq!(args.grants(), "read");
         assert!(Args::try_parse_from(["ejm-cli", "--api-key", "secret"]).is_err());
         assert!(Args::try_parse_from(["ejm-cli", "run"]).is_err());
@@ -431,12 +535,34 @@ mod tests {
             Some(Command::Package {
                 command: crate::packages::PackageCommand::Enable {
                     trust: true, grant_provider, grant_widget, ..
-                }
+                },
+                ..
             }) if grant_provider == ["offline"] && grant_widget == ["status"]
         ));
         assert!(
             Args::try_parse_from(["ejm-cli", "package", "enable", "@example/workflow"]).is_err()
         );
+    }
+
+    #[test]
+    fn registry_migration_requires_explicit_old_writer_exclusion() {
+        assert!(Args::try_parse_from(["ejm-cli", "package", "migrate-credentials"]).is_err());
+        let args = Args::try_parse_from([
+            "ejm-cli",
+            "package",
+            "migrate-credentials",
+            "--old-clients-stopped",
+        ])
+        .unwrap();
+        assert!(matches!(
+            args.command,
+            Some(Command::Package {
+                command: crate::packages::PackageCommand::MigrateCredentials {
+                    old_clients_stopped: true
+                },
+                ..
+            })
+        ));
     }
 
     #[test]

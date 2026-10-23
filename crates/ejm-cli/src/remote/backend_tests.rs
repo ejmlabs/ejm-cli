@@ -4,10 +4,12 @@
 mod contracts {
 
     use std::{
+        future::{Future, poll_fn},
         sync::{
             Arc,
             atomic::{AtomicU64, Ordering},
         },
+        task::Poll,
         time::Duration,
     };
 
@@ -37,7 +39,7 @@ mod contracts {
     const EXPIRES: u64 = 10_000;
 
     struct Fixture {
-        _directory: tempfile::TempDir,
+        directory: tempfile::TempDir,
         backend: LocalBackend,
         session: Session,
         gate: Arc<Gate>,
@@ -77,7 +79,7 @@ mod contracts {
                 .begin_share(&session.id, EPOCH.into(), role, EXPIRES)
                 .await?;
             Ok(Self {
-                _directory: directory,
+                directory,
                 backend,
                 session,
                 gate,
@@ -1252,6 +1254,151 @@ mod contracts {
             fixture.started_prompts().await?,
             ["eviction target", "evicted queued action"]
         );
+        fixture.backend.shutdown().await
+    }
+
+    #[tokio::test]
+    async fn inactive_authority_views_are_evicted_without_resetting_share_order() -> Result<()> {
+        let fixture = Fixture::new(None, ShareRole::Control).await?;
+        let session = fixture
+            .backend
+            .create_session(SessionOptions {
+                cwd: fixture.directory.path().into(),
+                title: "new after cache filled".into(),
+            })
+            .await?;
+        {
+            let mut state = fixture.backend.authority.lock().await;
+            for index in 0..999 {
+                state.sessions.insert(
+                    format!("inactive-{index}"),
+                    super::super::Observed::default(),
+                );
+            }
+            assert_eq!(state.sessions.len(), 1000);
+        }
+        fixture.backend.select_session(&session.id).await?;
+        let state = fixture.backend.authority.lock().await;
+        assert_eq!(state.sessions.len(), 1000);
+        assert!(state.sessions.contains_key(&fixture.session.id));
+        assert!(state.sessions.contains_key(&session.id));
+        assert!(
+            state
+                .share
+                .as_ref()
+                .is_some_and(|share| share.epoch == EPOCH)
+        );
+        drop(state);
+        fixture.backend.shutdown().await?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn protected_authority_cache_rejects_new_entries_and_keeps_stop_available() -> Result<()>
+    {
+        let mut fixture =
+            Fixture::new(Some(vec![gate_response("protected")]), ShareRole::Control).await?;
+        fixture.backend.view_limit = 2;
+        let mut run = fixture
+            .backend
+            .start(&fixture.session.id, "protected run".into())
+            .await?;
+        fixture.gate.wait_until_entered().await?;
+        let selected = fixture
+            .backend
+            .create_session(SessionOptions {
+                cwd: fixture.directory.path().into(),
+                title: "selected protected view".into(),
+            })
+            .await?;
+        fixture.backend.select_session(&selected.id).await?;
+        let session = fixture
+            .backend
+            .create_session(SessionOptions {
+                cwd: fixture.directory.path().into(),
+                title: "outside protected cache".into(),
+            })
+            .await?;
+        let error = fixture
+            .backend
+            .select_session(&session.id)
+            .await
+            .err()
+            .context("protected entries were evicted")?;
+        assert!(error.to_string().contains("protected"));
+        let _ = fixture.backend.cancel(&fixture.session.id).await?;
+        assert_eq!(wait(&mut run).await?.status, RunStatus::Cancelled);
+        assert_eq!(fixture.backend.authority.lock().await.sessions.len(), 2);
+        fixture.backend.shutdown().await?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn completed_runs_cannot_leave_stale_pins_in_a_full_authority_cache() -> Result<()> {
+        let fixture = Fixture::new(None, ShareRole::Control).await?;
+        let session = fixture
+            .backend
+            .create_session(SessionOptions {
+                cwd: fixture.directory.path().into(),
+                title: "after stale active views".into(),
+            })
+            .await?;
+        {
+            let mut state = fixture.backend.authority.lock().await;
+            for index in 0..999 {
+                state.sessions.insert(
+                    format!("completed-{index}"),
+                    super::super::Observed {
+                        active: Some(format!("past-run-{index}")),
+                        ..super::super::Observed::default()
+                    },
+                );
+            }
+        }
+        fixture.backend.select_session(&session.id).await?;
+        assert_eq!(fixture.backend.authority.lock().await.sessions.len(), 1000);
+        fixture.backend.shutdown().await?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn local_cancel_uses_live_replacement_after_waiting_for_authority() -> Result<()> {
+        let fixture = Fixture::new(
+            Some(vec![
+                gate_response("gate-first"),
+                gate_response("gate-replacement"),
+            ]),
+            ShareRole::Control,
+        )
+        .await?;
+        let mut first = fixture
+            .backend
+            .start(&fixture.session.id, "first local turn".into())
+            .await?;
+        fixture.gate.wait_until_entered().await?;
+
+        let authority = fixture.backend.authority.lock().await;
+        let cancel = fixture.backend.cancel(&fixture.session.id);
+        tokio::pin!(cancel);
+        assert!(poll_fn(|cx| Poll::Ready(cancel.as_mut().poll(cx).is_pending())).await);
+
+        // Replace the run through the public harness without refreshing the host's cache.
+        fixture
+            .backend
+            .harness
+            .cancel_run(&fixture.session.id, &first.id)
+            .await?;
+        assert_eq!(wait(&mut first).await?.status, RunStatus::Cancelled);
+        let mut replacement = fixture
+            .backend
+            .harness
+            .start(&fixture.session.id, "replacement local turn".into())
+            .await?;
+        fixture.gate.wait_until_entered().await?;
+
+        drop(authority);
+        assert_eq!(cancel.await?.as_deref(), Some(replacement.id.as_str()));
+        assert_eq!(wait(&mut replacement).await?.status, RunStatus::Cancelled);
         fixture.backend.shutdown().await
     }
 }
