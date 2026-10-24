@@ -13,10 +13,12 @@ done
 python3 scripts/check_architecture.py
 cargo fmt --package ejm-cli -- --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
-cargo test --workspace --all-targets --locked
+test_messages="$(mktemp "${TMPDIR:-/tmp}/ejm-cli-test-messages.XXXXXX")"
+trap 'rm -f "$test_messages"' EXIT
+cargo test --workspace --all-targets --locked --message-format=json-render-diagnostics | tee "$test_messages"
 cargo build --workspace --release --locked
 RUSTDOCFLAGS='-D warnings' cargo doc --workspace --no-deps --locked
 cargo machete --with-metadata
 cargo deny --locked --all-features check
 target_directory="${CARGO_TARGET_DIR:-target}"
-python3 scripts/check_terminal.py "$target_directory/release/ejm-cli"
+python3 scripts/check_terminal.py "$target_directory/release/ejm-cli" "$test_messages"

@@ -4,8 +4,8 @@ use anyhow::{Context, Result, bail, ensure};
 use clap::Subcommand;
 use ejm_harness_exec::Governor;
 use ejm_harness_packages::{
-    PackageGrants, PackageManager, RegistryClient, install_source, load_registry_token,
-    pack_directory, save_registry_token,
+    PackageGrants, PackageManager, RegistryClient, delete_registry_token, install_source,
+    load_registry_token, migrate_registry_token, pack_directory, save_registry_token,
 };
 use tokio_util::sync::CancellationToken;
 
@@ -68,6 +68,14 @@ pub enum PackageCommand {
     Login {
         #[arg(long)]
         no_browser: bool,
+    },
+    MigrateCredentials {
+        #[arg(
+            long,
+            required = true,
+            help = "Confirm every older CLI and IDE registry credential writer has stopped"
+        )]
+        old_clients_stopped: bool,
     },
     Logout,
     Whoami,
@@ -186,6 +194,9 @@ async fn dispatch(
             );
         }
         PackageCommand::Login { no_browser } => login(manager, registry, *no_browser).await?,
+        PackageCommand::MigrateCredentials {
+            old_clients_stopped,
+        } => migrate_credentials(manager, registry, *old_clients_stopped)?,
         PackageCommand::Logout => logout(manager, registry).await?,
         PackageCommand::Whoami => {
             show(
@@ -213,6 +224,38 @@ async fn dispatch(
         }
         PackageCommand::DiscardRetiredSession => {}
     }
+    Ok(())
+}
+
+fn finish_logout(revoked: Result<()>, clear: impl FnOnce() -> Result<()>) -> Result<()> {
+    clear()?;
+    revoked.context("local session removed; remote revocation failed")
+}
+
+async fn logout(manager: &PackageManager, registry: &RegistryClient) -> Result<()> {
+    let token = require_session(manager, registry.origin())?;
+    let revoked = registry.logout(&token).await;
+    finish_logout(revoked, || {
+        delete_registry_token(manager.root(), registry.origin())
+    })?;
+    println!("Registry session revoked and removed.");
+    Ok(())
+}
+
+fn migrate_credentials(
+    manager: &PackageManager,
+    registry: &RegistryClient,
+    old_clients_stopped: bool,
+) -> Result<()> {
+    let retired = migrate_registry_token(manager.root(), registry.origin(), old_clients_stopped)?;
+    println!(
+        "{}",
+        if retired {
+            "Legacy registry session retired."
+        } else {
+            "No legacy registry session found."
+        }
+    );
     Ok(())
 }
 
@@ -278,54 +321,25 @@ fn show(value: &impl serde::Serialize) -> Result<()> {
 const LEGACY_SESSION: &str = "registry-session.json";
 const MAX_LEGACY_SESSION: u64 = 8192;
 
-async fn logout(manager: &PackageManager, registry: &RegistryClient) -> Result<()> {
-    let origin = registry.origin();
-    if let Some(message) = unusable_session_message(manager.root())? {
-        bail!("{message}");
-    }
-    match usable_origin(manager.root())? {
-        Some(saved) if saved == origin => {
-            let token = load_registry_token(manager.root(), origin)?;
-            let revoked = registry.logout(&token).await;
-            match std::fs::remove_file(manager.root().join(LEGACY_SESSION)) {
-                Ok(()) => {}
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-                Err(error) => return Err(error).context("remove registry session"),
-            }
-            revoked.context("local session removed; remote revocation failed")?;
-            println!("Registry session revoked and removed.");
-        }
-        _ => {
-            println!(
-                "No registry session for {}.",
-                safe_text(&display_registry_url(origin))
-            );
-        }
-    }
-    Ok(())
-}
-
 fn require_session(
     manager: &PackageManager,
     origin: &str,
 ) -> Result<ejm_harness_auth::SecretString> {
-    if let Some(message) = unusable_session_message(manager.root())? {
+    if let Some(message) = retired_registry_session_notice(manager.root())? {
         bail!("{message}");
     }
-    match usable_origin(manager.root())? {
-        Some(saved) if saved == origin => load_registry_token(manager.root(), origin),
-        _ => bail!("no registry session for {}", display_registry_url(origin)),
-    }
+    load_registry_token(manager.root(), origin)
+        .with_context(|| format!("no registry session for {}", display_registry_url(origin)))
 }
 
 fn discard_retired_session(root: &std::path::Path) -> Result<()> {
     match classify_legacy(root)? {
         LegacyPath::Missing => println!("No leftover registry session file."),
-        LegacyPath::Session { retired: false, .. } => {
+        LegacyPath::Session { retired: false } => {
             println!("Saved registry session is not for a meetgerry.ai host. Left it in place.");
         }
         LegacyPath::Directory => bail!("{}", directory_session_message(&session_path(root))),
-        LegacyPath::Session { retired: true, .. } | LegacyPath::Remove => {
+        LegacyPath::Session { retired: true } | LegacyPath::Remove => {
             unlink_legacy(root)?;
             println!("Discarded the legacy registry session path. No request was sent.");
         }
@@ -335,17 +349,17 @@ fn discard_retired_session(root: &std::path::Path) -> Result<()> {
 
 /// Local equivalent of `ejm_harness_packages::retired_registry_session_notice`.
 ///
-/// The pinned harness does not export that function. `package login` and
-/// `doctor` call this instead. The check uses `lstat`, does not follow a
-/// symlink, and does not return a token.
+/// The pinned harness does not export that function. Registry session commands
+/// and `doctor` call this instead. The check uses `lstat`, does not follow a
+/// symlink, and does not return a token. Usable tokens come only from the vault.
 ///
 /// # Errors
 ///
 /// Returns an error when the legacy path cannot be inspected.
 pub fn retired_registry_session_notice(packages_root: &std::path::Path) -> Result<Option<String>> {
     match classify_legacy(packages_root)? {
-        LegacyPath::Session { retired: true, .. } => Ok(Some(retired_registry_message())),
-        LegacyPath::Missing | LegacyPath::Session { retired: false, .. } => Ok(None),
+        LegacyPath::Session { retired: true } => Ok(Some(retired_registry_message())),
+        LegacyPath::Missing | LegacyPath::Session { retired: false } => Ok(None),
         LegacyPath::Remove | LegacyPath::Directory => unusable_session_message(packages_root),
     }
 }
@@ -356,13 +370,6 @@ fn unusable_session_message(root: &std::path::Path) -> Result<Option<String>> {
         LegacyPath::Remove => Some(unsafe_session_message(&path)),
         LegacyPath::Directory => Some(directory_session_message(&path)),
         LegacyPath::Missing | LegacyPath::Session { .. } => None,
-    })
-}
-
-fn usable_origin(root: &std::path::Path) -> Result<Option<String>> {
-    Ok(match classify_legacy(root)? {
-        LegacyPath::Session { origin, .. } => Some(origin),
-        LegacyPath::Missing | LegacyPath::Remove | LegacyPath::Directory => None,
     })
 }
 
@@ -386,7 +393,7 @@ fn directory_session_message(path: &std::path::Path) -> String {
 
 enum LegacyPath {
     Missing,
-    Session { origin: String, retired: bool },
+    Session { retired: bool },
     Remove,
     Directory,
 }
@@ -414,7 +421,6 @@ fn classify_legacy(root: &std::path::Path) -> Result<LegacyPath> {
     match parsed_origin(&path) {
         Ok(origin) if url::Url::parse(&origin).is_ok() => Ok(LegacyPath::Session {
             retired: origin_is_retired(&origin),
-            origin,
         }),
         _ => Ok(LegacyPath::Remove),
     }
@@ -479,4 +485,66 @@ fn origin_is_retired(origin: &str) -> bool {
         .ok()
         .and_then(|url| url.host().map(|host| host_is_meetgerry(&host)))
         .unwrap_or(false)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{cell::Cell, ffi::OsStr};
+
+    use clap::Parser;
+
+    use super::*;
+    use crate::args::Command;
+
+    #[test]
+    fn failed_revocation_still_clears_local_session() {
+        let cleared = Cell::new(false);
+        let result = finish_logout(Err(anyhow::anyhow!("fixture revocation failure")), || {
+            cleared.set(true);
+            Ok(())
+        });
+        assert!(cleared.get());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn local_clear_failure_prevents_logout_success() {
+        let result = finish_logout(Ok(()), || Err(anyhow::anyhow!("fixture storage failure")));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn registry_migration_requires_confirmation_before_storage() -> Result<()> {
+        let directory = tempfile::tempdir()?;
+        let state = directory.path().join("state");
+        let result = Args::try_parse_from([
+            OsStr::new("ejm-cli"),
+            OsStr::new("--state-dir"),
+            state.as_os_str(),
+            OsStr::new("package"),
+            OsStr::new("migrate-credentials"),
+        ]);
+        assert!(result.is_err());
+        assert!(!state.exists());
+        Ok(())
+    }
+
+    #[test]
+    fn registry_migration_accepts_explicit_confirmation() -> Result<()> {
+        let args = Args::try_parse_from([
+            "ejm-cli",
+            "package",
+            "migrate-credentials",
+            "--old-clients-stopped",
+        ])?;
+        assert!(matches!(
+            args.command,
+            Some(Command::Package {
+                command: PackageCommand::MigrateCredentials {
+                    old_clients_stopped: true
+                }
+            })
+        ));
+        Ok(())
+    }
 }

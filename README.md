@@ -90,6 +90,30 @@ See the registry section of [the CLI reference](docs/ejm-cli.md).
 
 See [the full CLI guide](docs/ejm-cli.md) for controls, configuration, and limits.
 
+### Native remote access
+
+Native CLI PR #21 is accepted at protected merge
+`71d0f47f8b05c6314eca4dc0750ffaad833d6afb`; the
+[acceptance record](docs/native-remote-publication.md) binds its tree and
+Linux/macOS results. It uses the locked native graph and selects
+protected harness merge `42e4f9cf33bd3525aec344cfdffabc251271f782`, the exact
+358-file completion API tree `826e0231...`. A compatible separately operated
+relay account service is required. Local use still needs no relay account.
+
+Before first persistent host or controller use, stop older relay writers and
+run `ejm-cli remote migrate-credentials`, including on fresh installations.
+Confirm locally only after those processes have stopped. Then sign in with
+`remote login`. `remote host` shares one session read-only; `remote host
+--control` grants prompt, steer, queue and cancel actions. `remote connect`
+reads the private invitation in a protected terminal. Compare the fingerprint on
+both screens, then confirm pairing on the host. The host's tool grants still apply.
+
+See [remote setup and recovery](docs/remote-control.md),
+[dependency choices](docs/remote-dependencies.md) and the
+[source acceptance and remaining release gates](docs/native-remote-publication.md). This native layer
+contains no Worker, browser UI or deployment. It claims no formal crypto audit
+or performance improvement.
+
 ### Resource limits
 
 Ratatui and Crossterm render the TUI. Rust and Tokio drive the harness directly.
@@ -117,6 +141,15 @@ dependency policy, release builds, and real PTY checks run through one command:
 - [Performance evidence](docs/benchmarks.md): measurements, method and limits.
 - [Development guide](docs/contributing.md): tools, ownership and the required gate.
 - [Release policy](RELEASING.md): versions and publication requirements.
+
+### Native remote guides
+
+These guides describe the accepted native source. Worker/browser adoption,
+binary distribution and live acceptance remain pending:
+
+- [Remote control](docs/remote-control.md): setup, controls, trust and recovery.
+- [Remote dependencies](docs/remote-dependencies.md): package choices and dependency review.
+- [Native remote source and review inputs](docs/native-remote-publication.md): native acceptance, the following inert UI/Relay prerequisite and remaining release gates.
 
 ## Contributing
 

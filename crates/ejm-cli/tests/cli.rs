@@ -225,6 +225,28 @@ fn write_session(state: &Path, origin: &str, token: &str) -> std::path::PathBuf 
     path
 }
 
+fn migrate_session(state: &Path, origin: &str, secret: &str) {
+    let output = cli(
+        state,
+        &[
+            "--registry",
+            origin,
+            "package",
+            "migrate-credentials",
+            "--old-clients-stopped",
+        ],
+    );
+    assert!(output.status.success(), "{}", output_text(&output.stderr));
+    hidden(&output, secret);
+    assert!(!state.join("packages/registry-session.json").exists());
+    let encrypted = std::fs::read(state.join("packages/credentials/vault.bin")).unwrap();
+    assert!(
+        !encrypted
+            .windows(secret.len())
+            .any(|window| window == secret.as_bytes())
+    );
+}
+
 fn quiet_listener(host: &str) -> std::net::TcpListener {
     let listener = std::net::TcpListener::bind((host, 0)).unwrap();
     listener.set_nonblocking(true).unwrap();
@@ -617,14 +639,17 @@ fn pinned_registry_client_still_rejects_other_loopback_addresses() {
 #[test]
 fn logout_removes_only_the_session_for_the_origin_in_effect() {
     let state = tempfile::tempdir().unwrap();
+    let packages = state.path().join("packages");
     let (origin, requests) = spawn_registry(200, "{}");
     let secret = "logout-token-do-not-print";
     let path = write_session(state.path(), &format!("{origin}/"), secret);
+    migrate_session(state.path(), &origin, secret);
     let output = cli(state.path(), &["--registry", &origin, "package", "logout"]);
     assert!(output.status.success(), "{}", output_text(&output.stderr));
     assert!(output_text(&output.stdout).contains("Registry session revoked and removed."));
     hidden(&output, secret);
     assert!(!path.exists());
+    assert!(ejm_harness_packages::load_registry_token(&packages, &origin).is_err());
     let request = requests
         .recv_timeout(std::time::Duration::from_secs(5))
         .unwrap();
@@ -636,12 +661,13 @@ fn logout_removes_only_the_session_for_the_origin_in_effect() {
     );
 
     let output = cli(state.path(), &["--registry", &origin, "package", "logout"]);
-    assert!(output.status.success(), "{}", output_text(&output.stderr));
-    assert!(output_text(&output.stdout).contains(&format!("No registry session for {origin}.")));
+    assert!(!output.status.success());
+    assert!(output_text(&output.stderr).contains(&format!("no registry session for {origin}")));
 
     let (origin, requests) = spawn_registry(500, "{}");
     let secret = "logout-failed-token";
     let path = write_session(state.path(), &format!("{origin}/"), secret);
+    migrate_session(state.path(), &origin, secret);
     let output = cli(state.path(), &["--registry", &origin, "package", "logout"]);
     assert!(!output.status.success());
     assert!(
@@ -649,6 +675,7 @@ fn logout_removes_only_the_session_for_the_origin_in_effect() {
     );
     hidden(&output, secret);
     assert!(!path.exists());
+    assert!(ejm_harness_packages::load_registry_token(&packages, &origin).is_err());
     let request = requests
         .recv_timeout(std::time::Duration::from_secs(5))
         .unwrap();
@@ -658,11 +685,19 @@ fn logout_removes_only_the_session_for_the_origin_in_effect() {
     let origin = format!("http://{}", listener.local_addr().unwrap());
     let secret = "other-origin-token";
     let path = write_session(state.path(), "https://registry.ejmlabs.com/", secret);
+    migrate_session(state.path(), "https://registry.ejmlabs.com/", secret);
     let output = cli(state.path(), &["--registry", &origin, "package", "logout"]);
-    assert!(output.status.success(), "{}", output_text(&output.stderr));
-    assert!(output_text(&output.stdout).contains(&format!("No registry session for {origin}.")));
+    assert!(!output.status.success());
+    assert!(output_text(&output.stderr).contains(&format!("no registry session for {origin}")));
     hidden(&output, secret);
-    assert!(path.exists());
+    assert!(!path.exists());
+    // A failed assertion must not print either token.
+    let session_preserved =
+        ejm_harness_packages::load_registry_token(&packages, "https://registry.ejmlabs.com/")
+            .unwrap()
+            .expose_secret()
+            == secret;
+    assert!(session_preserved, "the other origin's session changed");
     assert_no_connection(&listener);
 
     let output = cli(state.path(), &["--registry", &origin, "package", "whoami"]);
@@ -1148,4 +1183,37 @@ fn whoami_names_discard_for_a_session_missing_an_origin() {
 #[test]
 fn whoami_names_discard_for_an_oversize_session_file() {
     assert_session_hazard(SessionHazard::Oversize, SessionCommand::Whoami);
+}
+
+#[test]
+fn relay_metadata_and_rejected_controller_do_not_initialize_provider_or_journal() {
+    let state = tempfile::tempdir().unwrap();
+    let missing_replay = state.path().join("provider-must-not-be-opened.json");
+    let command = || {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_ejm-cli"));
+        command
+            .arg("--state-dir")
+            .arg(state.path())
+            .arg("--replay-file")
+            .arg(&missing_replay)
+            .env_remove("EJM_CLI_API_KEY")
+            .env_remove("OPENAI_API_KEY")
+            .env_remove("EJM_CLI_PROVIDER")
+            .stdin(std::process::Stdio::null());
+        command
+    };
+    let accounts = command().args(["remote", "accounts"]).output().unwrap();
+    assert!(
+        accounts.status.success(),
+        "{}",
+        String::from_utf8_lossy(&accounts.stderr)
+    );
+    assert!(String::from_utf8_lossy(&accounts.stdout).contains("No saved relay account."));
+    let connect = command()
+        .args(["--relay", "https://relay.example", "remote", "connect"])
+        .output()
+        .unwrap();
+    assert!(!connect.status.success());
+    assert!(String::from_utf8_lossy(&connect.stderr).contains("terminal"));
+    assert_eq!(std::fs::read_dir(state.path()).unwrap().count(), 0);
 }

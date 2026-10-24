@@ -41,7 +41,7 @@ impl From<Appearance> for crate::ejm_tui::Appearance {
     name = "ejm-cli",
     version,
     about = "A fast, local coding agent built on the open ejm-harness",
-    long_about = "A fast, local coding agent built on the open ejm-harness.\n\nStart without a command for the TUI. Tools are read only unless you grant\nwrite or shell access. No account or server connection is needed.",
+    long_about = "A fast, local coding agent built on the open ejm-harness.\n\nStart without a command for the TUI. Tools are read only unless you grant\nwrite or shell access. Local use needs no relay account. Remote access requires\na relay account and local device pairing.",
     after_help = "Examples:\n  ejm-cli --replay                         Try the TUI offline\n  ejm-cli login chatgpt                    Sign in through your browser\n  ejm-cli --provider chatgpt               Use your saved account in the TUI\n  ejm-cli run \"Find the parser\" --json      Stream durable JSON events\n  ejm-cli --session ID                     Resume a saved conversation\n\nProvider keys are read from the environment and never accepted as arguments.\nSaved account credentials stay in the private local auth store.\nIn the TUI: /help shows commands and keyboard shortcuts."
 )]
 pub struct Args {
@@ -127,6 +127,21 @@ pub struct Args {
         help = "Resume a saved session"
     )]
     pub session: Option<String>,
+
+    #[arg(
+        long,
+        global = true,
+        env = "EJM_CLI_RELAY_URL",
+        help = "Explicit HTTPS relay origin for remote access"
+    )]
+    pub relay: Option<String>,
+
+    #[arg(
+        long,
+        global = true,
+        help = "Keep relay identity and login in memory for this foreground process"
+    )]
+    pub memory_only: bool,
 
     #[arg(
         long,
@@ -274,6 +289,11 @@ pub enum RegistryChoice {
 
 #[derive(Debug, Subcommand)]
 pub enum Command {
+    #[command(about = "Share or control one session through an end-to-end encrypted relay")]
+    Remote {
+        #[command(subcommand)]
+        command: crate::remote::RemoteCommand,
+    },
     #[command(aliases = ["packages", "pkg"], about = "Discover, install, trust, and publish ejm-harness packages")]
     Package {
         #[command(subcommand)]

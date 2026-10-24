@@ -36,8 +36,14 @@ pub enum RunState {
     Stopping,
 }
 
+pub struct RemoteBadge {
+    pub label: String,
+    pub controller: bool,
+}
+
 pub struct App {
     pub session: Session,
+    pub remote: Option<RemoteBadge>,
     pub blocks: VecDeque<TranscriptBlock>,
     pub composer: Composer,
     pub run_state: RunState,
@@ -50,6 +56,7 @@ pub struct App {
     pub widget_lines: Vec<String>,
     pub commands: Vec<CommandEntry>,
     pub command_picker: CommandPicker,
+    pub connection_ready: bool,
     display_bytes: usize,
     received_text: bool,
 }
@@ -58,6 +65,7 @@ impl App {
     pub fn new(session: Session) -> Self {
         Self {
             session,
+            remote: None,
             blocks: VecDeque::new(),
             composer: Composer::default(),
             run_state: RunState::Idle,
@@ -70,6 +78,7 @@ impl App {
             widget_lines: Vec::new(),
             commands: commands::catalog(&[]),
             command_picker: CommandPicker::default(),
+            connection_ready: true,
             display_bytes: 0,
             received_text: false,
         }
@@ -111,6 +120,7 @@ impl App {
     pub fn switch_session(&mut self, mut next: Self) {
         next.commands = std::mem::take(&mut self.commands);
         next.palette = self.palette;
+        next.connection_ready = self.connection_ready;
         next.widget_lines = std::mem::take(&mut self.widget_lines);
         next.composer = std::mem::take(&mut self.composer);
         *self = next;
@@ -458,11 +468,11 @@ mod tests {
                 .iter()
                 .map(|entry| entry.name.as_str())
                 .collect::<Vec<_>>(),
-            ["sessions", "steer", "stop", "skill"]
+            ["status", "sessions", "steer", "stop", "skill"]
         );
 
         app.complete_command();
-        assert_eq!(app.composer.text, "/sessions");
+        assert_eq!(app.composer.text, "/status");
         assert_eq!(app.composer.cursor, app.composer.text.len());
         assert!(app.command_query().is_none());
         assert!(app.blocks.is_empty());
@@ -470,7 +480,7 @@ mod tests {
 
         app.composer.replace("/s");
         app.command_picker = CommandPicker {
-            selected: 1,
+            selected: 2,
             dismissed: false,
         };
         app.complete_command();

@@ -51,7 +51,7 @@ ejm-cli logout REGISTRATION
 
 An account selector accepts a full registration ID or a unique prefix. If several accounts are saved, choose one explicitly. `accounts` reads cached metadata without contacting the provider. `models` retrieves the selected account's current model catalog. When `--model` and `EJM_CLI_MODEL` are absent, ChatGPT selects the first model from that catalog. Logout removes the saved registration and attempts provider revocation, reporting when revocation is unconfirmed.
 
-Credentials live under the configured state directory's `auth` subdirectory. On Unix, the store enforces owner-only directory and file permissions, atomic writes and cross-process locking. This is a private local file store, not an encrypted keychain. Account storage fails closed on platforms without supported private-file handling. Keep the entire state directory private.
+Credentials live under the configured state directory's `auth` subdirectory. The selected shared-vault harness revision encrypts provider and native relay records and protects its key with the native key service. It owns private paths, locking and atomic writes. Unavailable, denied or corrupt key access fails closed. Keep the original vault and native key together for recovery, and keep the entire state directory private. The accepted native source binds that harness revision and its locked platform checks; see [dependency integration](native-remote-publication.md#dependency-integration).
 
 Native OpenAI Responses access with an API key uses:
 
@@ -107,6 +107,8 @@ Terminals vary in how they encode modifier keys. Ctrl+J is the newline fallback 
 | Command | Action |
 | --- | --- |
 | `/help` | Show keys and choose a command to complete |
+| `/status` | Show local connection, account, session, grants and work metadata |
+| `/remote share [view\|control]`, `/remote status`, `/remote stop` | Share the selected session, inspect it or revoke sharing |
 | `/new [title]` | Create a session in the configured workspace |
 | `/sessions` | Choose a saved session |
 | `/agents` | Choose among managed sessions |
@@ -123,7 +125,44 @@ Terminals vary in how they encode modifier keys. Ctrl+J is the newline fallback 
 
 Switching sessions keeps the composer draft and sent-message history, selected
 package palette, command catalog and widget lines. Other runs remain managed by
-the same ejm-harness. `/stop` targets the selected session. Exiting cancels and drains all runs owned by this CLI process.
+the same ejm-harness. `/stop` targets the selected session, including retained
+cleanup and queued local successors. Exiting cancels and drains all runs owned by this CLI process.
+
+## Native remote access
+
+Native remote access requires a compatible separately operated relay and an
+account on that service. Protected CLI PR #21 accepted the native source after
+PR #20's docs/UI prerequisite; its [acceptance record](native-remote-publication.md)
+binds the merge, tree and Linux/macOS checks. It selects protected
+harness merge `42e4f9cf33bd3525aec344cfdffabc251271f782` for exact-run completion.
+Worker/browser adoption, binary distribution and live acceptance remain separate.
+There is no built-in service origin. Select an explicit HTTPS origin with `--relay` or
+`EJM_CLI_RELAY_URL`. `--memory-only` keeps this foreground process's relay token
+and endpoint identity out of persistent storage.
+
+| Command | Purpose |
+| --- | --- |
+| `remote migrate-credentials` | Prepare persistent secrets after stopping older writers, even on a fresh installation |
+| `remote login [--no-browser]` | Approve a relay device sign-in through the browser |
+| `remote accounts` | Read cached relay account metadata without contacting the service |
+| `remote devices [--revoke DEVICE_ID]` | List account devices or revoke one |
+| `remote logout` | Remove the local token and request relay revocation |
+| `remote host [--control]` | Share the selected local TUI session, read-only unless control is granted |
+| `remote connect` | Read a private invitation in a protected terminal and control or view its session |
+
+Normal local use needs no relay account. A local TUI can use `/remote share
+[view|control]`, `/remote status` and `/remote stop`; `/status` shows local
+connection and work metadata. Native controllers expose only their allowed
+commands. View access cannot mutate. Control access retains the host's local
+tool grants and exact-run authority. Switching sessions or stopping the share
+discards queued remote prompts while a started run may continue locally.
+
+The host displays a private invitation and confirms the controller fingerprint.
+The controller never opens local model providers, tools or a journal. Setup,
+credential migration, memory-only use, failure handling and trust limits are
+in the [remote guide](remote-control.md). A missing marked endpoint key requires
+recovery, not silent replacement. The native guide does not promise a live relay
+or an updated public site.
 
 ## Packages and trust
 
@@ -205,16 +244,57 @@ ejm-cli package whoami
 ejm-cli package logout
 ```
 
-Registry sign-in uses a revocable account session, separate from model-provider accounts. Approve only the request you started. The CLI saves that session for the origin in effect and never accepts or displays the token. `whoami`, `publisher`, `publish`, and `logout` use only the session saved for that origin. A session for another origin is not sent. `package logout` asks that origin to revoke the session and then removes the local session. If remote revocation fails, the local session is still removed and the command reports that failure. Logout does not fail when no session file remains.
+Registry sign-in uses a revocable account session, separate from model-provider
+and relay accounts. Approve only the request you started. The shared harness
+stores registry tokens in the package store's encrypted `credentials` vault,
+scoped to the registry origin. The native key service protects its key. The CLI
+never accepts or displays saved tokens as arguments.
 
-On this build the session is the private file `registry-session.json` under the package store. A newer harness may keep the same session in the local vault instead. This CLI build removes the file. It does not delete a vault record created by that newer harness.
+To import an older `registry-session.json`, first stop every older CLI and IDE
+that can write registry credentials, then run:
 
-A session saved for `meetgerry.ai` or a subdomain is not sent and is not copied to `https://registry.ejmlabs.com`. `package login` stops before the device flow and names `ejm-cli package discard-retired-session`. That command unlinks the legacy path and opens no connection. It does not follow a symlink or read a symlink target. A file with loose permissions, malformed JSON, a missing origin, or more than 8192 bytes is removed the same way. When that path is a directory, the command prints the path and does not delete it. `package login`, `package logout`, and `package whoami` print the path and name this command when the file cannot be used. It does not require other clients to be stopped. An older CLI cannot restore the discarded file. Sign in again for the new origin. A private, readable session for any other origin is left in place. Moving that same-origin file into the harness vault is `migrate_registry_token` in ejm-harness. This build still reads the file directly and does not call that function. The pinned harness does not export `retired_registry_session_notice`, so `package login` and `doctor` use the local check of that name.
+```sh
+ejm-cli package migrate-credentials --old-clients-stopped
+```
+
+The required flag confirms that exclusion; it does not stop other processes.
+The harness commits and reloads the encrypted record before retiring the legacy
+file. If cleanup fails, keep older clients stopped and retry the same command.
+A result of no legacy session can still initialize the credential store.
+Unavailable keys, unsafe state and corrupt storage fail closed. Preserve the
+original vault and its native key for recovery; there is no plaintext fallback.
+
+Logout first loads the encrypted session, then attempts remote revocation and
+local vault deletion. It reports a local storage failure before claiming success,
+and still clears the local token when remote revocation fails. A permanent
+retirement marker prevents an old file from restoring a deleted session. Missing
+credentials remain an error. This correction is included in the accepted native
+source; [dependency integration](native-remote-publication.md#dependency-integration)
+binds its tested graph. Following source changes need fresh locked and hosted checks.
+
+A session saved for `meetgerry.ai` or a subdomain is not sent and is not copied to
+`https://registry.ejmlabs.com`. When that legacy session is present, `package
+login` stops before the device flow and names `ejm-cli package
+discard-retired-session`. That command unlinks only the legacy path and opens no
+connection. It does not follow a symlink or read a symlink target. A file with
+loose permissions, malformed JSON, a missing origin, or more than 8192 bytes is
+removed the same way. When that path is a directory, the command prints the path
+and does not delete it. `package login`, `package logout`, and `package whoami`
+print the path and name the discard command when the legacy file cannot be used.
 
 ```sh
 ejm-cli package discard-retired-session
 ejm-cli package login --no-browser
 ```
+
+Discarding the legacy path does not require other clients to be stopped and does
+not delete encrypted vault records. A private, readable legacy session for any
+other origin is left in place; import it with the controlled migration command
+above. The pinned harness does not export `retired_registry_session_notice`, so
+registry session commands and `doctor` use the local check of that name. They do
+not load tokens from the legacy file. `whoami`, `publisher`, `publish`, and
+`logout` use only the encrypted session for the selected origin; a session for
+another origin is not sent.
 
 `ejm-cli package pack DIRECTORY --output package.tgz` creates a new local archive and refuses to overwrite an existing file. `package publisher HANDLE --display-name NAME` claims a registry namespace, and `package publish DIRECTORY` uploads a package using the saved registry session. Those last two commands change the remote registry. They are deliberate author actions, separate from installing or running the CLI.
 
