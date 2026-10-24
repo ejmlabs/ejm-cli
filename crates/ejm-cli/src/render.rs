@@ -188,10 +188,23 @@ fn draw_header(
         glyphs,
         &Header {
             app: "ejm-cli",
-            provider: &safe_text(args.provider_label()),
+            provider: &safe_text(
+                if app.remote.as_ref().is_some_and(|remote| remote.controller) {
+                    "remote session"
+                } else if app.connection_ready {
+                    args.provider_label()
+                } else {
+                    "not connected"
+                },
+            ),
             title: &safe_text(&app.session.title),
-            grants: &args.grants(),
-            elevated: args.allow_shell || args.allow_write,
+            grants: &if app.remote.as_ref().is_some_and(|remote| remote.controller) {
+                "host grants apply".into()
+            } else {
+                args.grants()
+            },
+            elevated: app.remote.as_ref().is_none_or(|remote| !remote.controller)
+                && (args.allow_shell || args.allow_write),
             cwd: &safe_text(&app.session.cwd.display().to_string()),
             session_id: &app.session.id,
         },
@@ -246,7 +259,7 @@ fn draw_status(
     status: Rect,
     snapshot: &ejm_harness::HarnessSnapshot,
 ) {
-    let counts = [
+    let mut counts = vec![
         format!("{} agents", snapshot.active_agents),
         format!(
             "models {}+{}q",
@@ -257,6 +270,9 @@ fn draw_status(
             snapshot.tools.running, snapshot.tools.queued
         ),
     ];
+    if let Some(remote) = &app.remote {
+        counts.insert(0, remote.label.clone());
+    }
     let state = if app.scroll_from_bottom > 0 {
         ejm_tui::RunState::ScrolledUp(app.scroll_from_bottom)
     } else {
@@ -616,7 +632,7 @@ mod tests {
         for (width, height) in [(100, 30), (40, 10)] {
             let mut app = app();
             app.composer.insert("/s");
-            app.command_picker.selected = 1;
+            app.command_picker.selected = 2;
             let buffer = render_app(&args, &crate::ejm_theme::ASCII, width, height, app);
             let text = text(&buffer);
             assert!(text.is_ascii(), "{text}");

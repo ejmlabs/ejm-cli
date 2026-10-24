@@ -25,6 +25,7 @@ mod ejm_tui;
 mod endpoint;
 mod extensions;
 mod packages;
+mod remote;
 mod render;
 mod terminal;
 mod terminal_input;
@@ -73,6 +74,11 @@ enum AgentMode {
 async fn run(mut args: Args) -> Result<bool> {
     let state_dir = args.state_dir();
     let mode = match &args.command {
+        Some(Command::Remote {
+            command: remote::RemoteCommand::Host { .. },
+        })
+        | None => AgentMode::Interactive,
+        Some(Command::Remote { command }) => return remote::run(&args, command).await,
         Some(Command::Package { command }) => return packages::run(&args, command).await,
         Some(Command::Doctor) => return doctor(&args),
         Some(Command::Login {
@@ -89,7 +95,6 @@ async fn run(mut args: Args) -> Result<bool> {
             json: *json,
         },
         Some(Command::Sessions { json }) => AgentMode::Sessions { json: *json },
-        None => AgentMode::Interactive,
     };
     let extensions = if matches!(mode, AgentMode::Sessions { .. }) {
         extensions::Extensions::empty()?

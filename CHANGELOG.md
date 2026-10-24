@@ -7,16 +7,26 @@ Changes follow [Semantic Versioning](https://semver.org/). Each repository is ve
 ### Added
 
 - Shared repository standards, explicit human admission, protected merge gates, two-pass Codex review, and a draft source release pipeline.
+- Adopt native remote hosting and control with Noise pairing, protected invitations, exact-run authority and a shared credential vault through protected CLI PR #21. Its [source acceptance](docs/native-remote-publication.md) covers Linux/macOS; live acceptance remains pending.
 
 ### Fixed
 
 - Reject a provider base URL that is not https, except http on a loopback host (`localhost`, `127.0.0.0/8`, or `::1`). The CLI checks this before it reads the API key. A rejected `run` exits 1 and the error does not print the URL. `doctor` marks a disallowed endpoint rejected. Userinfo, a query, or a fragment is rejected, and an endpoint line cannot carry a raw line break. An http loopback URL is also refused when `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, or the lowercase form is set and `NO_PROXY` does not contain that host exactly. `*` and a bracketed IPv6 entry are not coverage. The error names the variable that was set and not its value. `.github/harness-revision` stays `4a751c6a3f24d7d143140f79ff53517fb93e3531`. This change does not protect other ejm-harness callers. The pin bump waits until the harness https check is on main, and this note does not assign that harness release number.
-- Prepare the retained shared reviewer source-extraction update with exact b2/40d context and an isolated Linux CI Secret Service for existing persistent-account fixtures. Preserve the working harness pin, lock, provider and macOS setup. Fresh local, hosted and installed-reviewer checks remain pending.
-- Prepare the shared review-completion guard with exact installed and proposed workflow source evidence, preserving the existing CLI setup hook and harness pin. Hosted adoption and installed-guard verification remain pending.
-- Prepare the retained shared harness selector with complete canonical C4/b2 source context. Keep the current harness pin and lock unchanged. Normal product gates, protected caller adoption and installed-selector execution remain pending for this change.
+- Publish relay account metadata and credentials atomically in the shared vault; stop normal JSON cache writes and preserve newer logins during logout. Protected PR #21 includes the correction and its exact-source acceptance.
+- Correct the TLS advisory lock and native WSS root loading, reusing the existing certificate loader. Extend untrusted-peer coverage to WSS tickets; the patched native graph passed PR #21's gates.
+- Correct snapshot authority through its delivered cursor and fresh expiry checks after mutation waits. The complete 061 review found both defects; d8's local macOS result remains historical alongside PR #21's later source acceptance.
+- Require fresh approval after each displayed pairing confirmation, cancel vault lock waits, recover snapshots after server gaps and permit enrolled-controller restarts until share expiry. Both earlier f66 reviews blocked adoption on these defects; protected PR #21 contains the corrections.
+- Retain responsive local revocation during completion observers, signal cleanup before protected startup, trusted local stop and real-command SIGTERM restoration. The f66 normal and Linux/macOS quality gates remain earlier evidence; PR #21 records the accepted successor.
+- Adopt the retained 40d shared reviewer source context and isolated Linux CI Secret Service through protected PR #9. Its baseline Linux/macOS gates passed; installed 40d readable harness review and the native vault gate remain separate.
+- Keep display recovery ordered through acknowledged journal catch-up, suppressing newer live events until recovery completes.
+- Adopt immutable exact-run completion waits for accepted remote prompts, discard local-successor handoffs and reject text above 16 KiB of UTF-8 before acknowledgement. Protected PR #21 binds the selected 42e API and tested native graph.
+- Adopt the shared review-completion guard through protected PR #4 while preserving the CLI setup hook and harness pin; retain its dated evidence in the CI guide.
+- Adopt the retained shared harness selector and canonical C4/b2 source context through protected PR #7. The later native dependency pair has its separate PR #21 acceptance record.
 
 ### Changed
 
+- Adopt the planned native remote-control guides and protected shared UI pin `24935aa85355ea99f49bdbecc4186a5e95049393` with complete install review context through CLI PR #20. That historical prerequisite retains C8's runtime; native PR #21 followed it. Hosted UI consumer acceptance and release remain separate.
+- Prepare the [inert UI and Relay input prerequisite](docs/ci-bootstrap.md#current-inert-shared-ui-and-relay-inputs) on protected native merge `71d0f47f8b05c6314eca4dc0750ffaad833d6afb`, selecting protected UI `79a1aa8b1075f834717bc0c0299dc2c41a22b966`. Keep thirteen complete readable metadata bindings, reuse twelve verified fixtures, add the separate complete 28-path owner source supplement, and include the inert Relay lock with a complete candidate manifest and provenance. The earlier metadata-only head received two incomplete reviews; the successor still needs its own gates and protected adoption. No runnable Relay package or deployment is included.
 - Consolidate source setup, local checks, and site-migration limits in the CI guide, replacing the obsolete publication prelude note and its inbound links.
 
 ## [0.1.0] - 2026-10-18
