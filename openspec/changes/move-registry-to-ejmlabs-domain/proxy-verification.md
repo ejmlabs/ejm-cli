@@ -3,10 +3,12 @@
 ## Scope and ownership
 
 This 2026-10-20 follow-up starts at
-`7df81ba5610ae4168bf2c917531fbe054565d841`. The immutable harness pin remains
-`4a751c6a3f24d7d143140f79ff53517fb93e3531`.
+`7df81ba5610ae4168bf2c917531fbe054565d841`. The harness pin at verification time
+was `4a751c6a3f24d7d143140f79ff53517fb93e3531`. After merging main, the pin is
+`42e4f9cf33bd3525aec344cfdffabc251271f782`. Both lack loopback `no_proxy()` on
+`RegistryClient::new`, so the CLI proxy guard remains required.
 
-That pin lacks the direct HTTP loopback transport now present on the harness
+The pin lacks the direct HTTP loopback transport now present on the harness
 registry branch. `Args::registry_choice` adds only a temporary configuration
 refusal. It checks at most six environment variables for a validated HTTP
 origin. Any nonempty value, including non-UTF8 bytes, rejects the choice.

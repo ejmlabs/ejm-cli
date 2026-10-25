@@ -325,11 +325,21 @@ fn require_session(
     manager: &PackageManager,
     origin: &str,
 ) -> Result<ejm_harness_auth::SecretString> {
-    if let Some(message) = retired_registry_session_notice(manager.root())? {
-        bail!("{message}");
+    // Vault records are origin-scoped. A leftover retired or unusable legacy
+    // path must not block revoke/use of a different origin's vault session.
+    // Only when the vault has no record for this origin do we surface the
+    // legacy notice (so meetgerry leftovers are not mislabeled as migrate).
+    match load_registry_token(manager.root(), origin) {
+        Ok(token) => Ok(token),
+        Err(error) => {
+            if let Some(message) = retired_registry_session_notice(manager.root())? {
+                bail!("{message}");
+            }
+            Err(error).with_context(|| {
+                format!("no registry session for {}", display_registry_url(origin))
+            })
+        }
     }
-    load_registry_token(manager.root(), origin)
-        .with_context(|| format!("no registry session for {}", display_registry_url(origin)))
 }
 
 fn discard_retired_session(root: &std::path::Path) -> Result<()> {

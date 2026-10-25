@@ -48,7 +48,7 @@ The CLI MUST reject a registry override that is not a plain origin, uses a schem
 - **THEN** the CLI asks that origin to revoke the session, removes the local session, and does not fail when no legacy session file remains
 
 ### Requirement: Retired-origin sessions can be discarded
-When a saved session for the retired `meetgerry.ai` origin exists, the CLI MUST NOT send it anywhere. A blocked `package login` MUST name `ejm-cli package discard-retired-session`. That command MUST discard the retired session locally with no network request and MUST leave a session for any other origin in place. Same-origin legacy handoff stays harness `migrate_registry_token`, which this CLI does not call.
+When a saved session for the retired `meetgerry.ai` origin exists, the CLI MUST NOT send it anywhere. A blocked `package login` MUST name `ejm-cli package discard-retired-session`. That command MUST discard the retired session locally with no network request and MUST leave a session for any other origin in place.
 
 #### Scenario: Login blocked by a retired session
 - **WHEN** a legacy session for `https://harness.meetgerry.ai` exists and the user runs `package login`
@@ -57,6 +57,13 @@ When a saved session for the retired `meetgerry.ai` origin exists, the CLI MUST 
 #### Scenario: Discard the retired session
 - **WHEN** the user runs `ejm-cli package discard-retired-session`
 - **THEN** the retired session is removed locally with no network request, and `package login` is no longer blocked by that session
+
+### Requirement: Vault sessions stay usable beside a leftover legacy file
+Same-origin legacy handoff stays harness `migrate_registry_token` via `package migrate-credentials --old-clients-stopped`. A leftover retired legacy file MUST NOT block logout, whoami, publisher, or publish when the encrypted vault already has a session for the origin in effect.
+
+#### Scenario: Vault session outranks a leftover retired legacy file
+- **WHEN** the encrypted vault has a session for the origin in effect and a retired meetgerry `registry-session.json` is also present
+- **THEN** `package whoami` and `package logout` use only the vault session for that origin and do not send the retired token
 
 ### Requirement: Doctor reports the registry origin
 `ejm-cli doctor` MUST show the registry origin in effect and whether it came from the default, `EJM_CLI_REGISTRY_URL`, or `--registry`. An invalid override MUST be shown as rejected. Both registry lines MUST use one helper that prints a parsed URL without userinfo, query, or fragment and strips control characters. An unparseable value MUST be `(invalid registry URL)`, never the raw input.

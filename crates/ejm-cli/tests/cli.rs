@@ -708,6 +708,65 @@ fn logout_removes_only_the_session_for_the_origin_in_effect() {
 }
 
 #[test]
+fn vault_session_remains_usable_when_a_retired_legacy_file_is_left_behind() {
+    let state = tempfile::tempdir().unwrap();
+    let packages = state.path().join("packages");
+    let (origin, requests) = spawn_registry(200, r#"{"handle":"fixture"}"#);
+    let vault_secret = "vault-origin-token-do-not-print";
+    let retired_secret = "retired-meetgerry-token-do-not-send";
+    write_session(state.path(), &format!("{origin}/"), vault_secret);
+    migrate_session(state.path(), &origin, vault_secret);
+    let retired = write_session(
+        state.path(),
+        "https://harness.meetgerry.ai/",
+        retired_secret,
+    );
+
+    let output = cli(state.path(), &["--registry", &origin, "package", "whoami"]);
+    assert!(output.status.success(), "{}", output_text(&output.stderr));
+    assert!(output_text(&output.stdout).contains("fixture"));
+    hidden(&output, vault_secret);
+    hidden(&output, retired_secret);
+    assert!(retired.exists());
+    let request = requests
+        .recv_timeout(std::time::Duration::from_secs(5))
+        .unwrap();
+    assert!(request.contains("GET /v1/me"));
+    assert!(
+        request
+            .to_ascii_lowercase()
+            .contains(&format!("bearer {vault_secret}"))
+    );
+    assert!(!request.contains(retired_secret));
+
+    let (origin, requests) = spawn_registry(200, "{}");
+    write_session(state.path(), &format!("{origin}/"), vault_secret);
+    migrate_session(state.path(), &origin, vault_secret);
+    let retired = write_session(
+        state.path(),
+        "https://harness.meetgerry.ai/",
+        retired_secret,
+    );
+    let output = cli(state.path(), &["--registry", &origin, "package", "logout"]);
+    assert!(output.status.success(), "{}", output_text(&output.stderr));
+    assert!(output_text(&output.stdout).contains("Registry session revoked and removed."));
+    hidden(&output, vault_secret);
+    hidden(&output, retired_secret);
+    assert!(retired.exists());
+    assert!(ejm_harness_packages::load_registry_token(&packages, &origin).is_err());
+    let request = requests
+        .recv_timeout(std::time::Duration::from_secs(5))
+        .unwrap();
+    assert!(request.contains("POST /api/auth/sign-out"));
+    assert!(
+        request
+            .to_ascii_lowercase()
+            .contains(&format!("bearer {vault_secret}"))
+    );
+    assert!(!request.contains(retired_secret));
+}
+
+#[test]
 fn discard_retired_session_is_local_and_login_stays_blocked_until_then() {
     let state = tempfile::tempdir().unwrap();
     let listener = quiet_listener("127.0.0.1");
