@@ -1,0 +1,138 @@
+name: Release binaries
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      macos:
+        description: Also build macOS Apple silicon. It is not offered for download until it is notarized.
+        required: false
+        default: false
+        type: boolean
+permissions: {}
+env:
+  CARGO_BUILD_JOBS: "2"
+  CARGO_INCREMENTAL: "0"
+jobs:
+  linux-x86_64:
+    name: Build and smoke Linux x86_64
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    env:
+      TARGET: x86_64-unknown-linux-gnu
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: work/ejm-cli
+          persist-credentials: false
+      - name: Read the reviewed harness revision
+        id: harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          revision="$(tr -d '\n' < work/ejm-cli/.github/harness-revision)"
+          [[ "$revision" =~ ^[0-9a-f]{40}$ ]] || { echo "harness revision is not a full SHA" >&2; exit 1; }
+          echo "revision=$revision" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: ejmlabs/ejm-harness
+          ref: ${{ steps.harness.outputs.revision }}
+          path: work/ejm-harness
+          persist-credentials: false
+      - name: Install build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends pkg-config libdbus-1-dev
+          rustup toolchain install 1.99.1 --profile minimal
+          rustup default 1.99.1
+      - name: Build
+        working-directory: work/ejm-cli
+        run: cargo build --release --locked -p ejm-cli
+      - name: Archive, smoke and record digests
+        working-directory: work/ejm-cli
+        run: python3 -I scripts/package_release.py "$TARGET" target/release/ejm-cli "$RUNNER_TEMP/out"
+      - name: Record provenance
+        shell: bash
+        run: |
+          {
+            echo "commit: $GITHUB_SHA"
+            echo "harness: ${{ steps.harness.outputs.revision }}"
+            echo "runner glibc: $(ldd --version | head -n 1)"
+            echo '```'
+            cat "$RUNNER_TEMP/out/SHA256SUMS"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Read the version
+        id: version
+        run: echo "value=$(tr -d '\n' < work/ejm-cli/VERSION)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ejm-cli-${{ steps.version.outputs.value }}-${{ env.TARGET }}
+          path: ${{ runner.temp }}/out/*
+          if-no-files-found: error
+          retention-days: 14
+
+  # Waiting for notarization. This job proves the macOS Apple silicon build
+  # only. Do not offer its archive for download, and do not describe it as
+  # signed or notarized, until a notarization run for the exact release is
+  # recorded. It runs only when a maintainer asks for it.
+  macos-arm64:
+    name: Build and smoke macOS Apple silicon (waiting for notarization)
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.macos }}
+    runs-on: macos-15
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    env:
+      TARGET: aarch64-apple-darwin
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: work/ejm-cli
+          persist-credentials: false
+      - name: Read the reviewed harness revision
+        id: harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          revision="$(tr -d '\n' < work/ejm-cli/.github/harness-revision)"
+          [[ "$revision" =~ ^[0-9a-f]{40}$ ]] || { echo "harness revision is not a full SHA" >&2; exit 1; }
+          echo "revision=$revision" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: ejmlabs/ejm-harness
+          ref: ${{ steps.harness.outputs.revision }}
+          path: work/ejm-harness
+          persist-credentials: false
+      - name: Install the pinned Rust toolchain
+        run: |
+          rustup toolchain install 1.99.1 --profile minimal
+          rustup default 1.99.1
+      - name: Build
+        working-directory: work/ejm-cli
+        run: cargo build --release --locked -p ejm-cli
+      - name: Archive, smoke and record digests
+        working-directory: work/ejm-cli
+        run: python3 -I scripts/package_release.py "$TARGET" target/release/ejm-cli "$RUNNER_TEMP/out"
+      - name: Record provenance
+        shell: bash
+        run: |
+          {
+            echo "commit: $GITHUB_SHA"
+            echo "harness: ${{ steps.harness.outputs.revision }}"
+            echo "not signed and not notarized"
+            echo '```'
+            cat "$RUNNER_TEMP/out/SHA256SUMS"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Read the version
+        id: version
+        run: echo "value=$(tr -d '\n' < work/ejm-cli/VERSION)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ejm-cli-${{ steps.version.outputs.value }}-${{ env.TARGET }}
+          path: ${{ runner.temp }}/out/*
+          if-no-files-found: error
+          retention-days: 14
