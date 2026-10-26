@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           path: work/ejm-cli
           persist-credentials: false
@@ -26,7 +26,7 @@ jobs:
           revision="$(tr -d '\n' < work/ejm-cli/.github/harness-revision)"
           [[ "$revision" =~ ^[0-9a-f]{40}$ ]] || { echo "harness revision is not a full SHA" >&2; exit 1; }
           echo "revision=$revision" >> "$GITHUB_OUTPUT"
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           repository: ejmlabs/ejm-harness
           ref: ${{ steps.harness.outputs.revision }}
@@ -44,6 +44,11 @@ jobs:
       - name: Archive and smoke
         working-directory: work/ejm-cli
         run: python3 -I scripts/package_release.py linux-x86_64 target/release/ejm-cli "$RUNNER_TEMP/out"
+      - name: Check the glibc floor
+        run: |
+          highest="$(objdump -T work/ejm-cli/target/release/ejm-cli | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -n 1)"
+          echo "highest glibc symbol: $highest"
+          [ "$(printf '%s\n' "$highest" GLIBC_2.39 | sort -V | tail -n 1)" = GLIBC_2.39 ]
       - name: Record provenance
         run: |
           {
@@ -51,7 +56,7 @@ jobs:
             echo "harness: ${{ steps.harness.outputs.revision }}"
             echo "runner glibc: $(ldd --version | head -n 1)"
           } >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: build-linux-x86_64
           path: ${{ runner.temp }}/out/*
@@ -65,11 +70,12 @@ jobs:
 
   collect:
     name: Collect release files
-    needs: [linux-x86_64]
+    needs:
+      - linux-x86_64
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           pattern: build-*
           merge-multiple: true
@@ -83,7 +89,7 @@ jobs:
           sha256sum -- * > ../build-sha256.txt
           mv ../build-sha256.txt build-sha256.txt
           cat build-sha256.txt >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: release-files
           path: release-files/*

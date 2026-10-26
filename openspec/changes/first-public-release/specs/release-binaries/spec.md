@@ -18,7 +18,7 @@ The release build SHALL run `cargo build --release --locked` on a native runner 
 - **THEN** the job fails and uploads no artifact
 
 ### Requirement: macOS waits for notarization
-The macOS Apple silicon build SHALL be manual-only and SHALL NOT be offered for download until a notarization run for that exact release is recorded.
+The macOS Apple silicon build SHALL NOT be built in the release workflow or offered for download until a notarization run for that exact release is recorded.
 
 #### Scenario: No notarization record
 - **WHEN** the release notes are drafted before notarization

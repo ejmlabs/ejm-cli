@@ -3,6 +3,7 @@
 
 Usage: package_release.py TARGET BINARY OUT_DIR
 """
+import gzip
 import hashlib
 import io
 import os
@@ -53,9 +54,9 @@ def package(target, binary, out_dir):
         (f"{stem}/THIRD_PARTY_NOTICES.md", (ROOT / "THIRD_PARTY_NOTICES.md").read_bytes(), 0o644),
         (f"{stem}/HARNESS_REVISION", f"{revision}\n".encode(), 0o644),
     ]
-    with archive_path.open("wb") as raw, tarfile.open(
-        fileobj=raw, mode="w:gz", format=tarfile.PAX_FORMAT, compresslevel=9
-    ) as archive:
+    with archive_path.open("wb") as raw, gzip.GzipFile(
+        filename="", mode="wb", compresslevel=9, fileobj=raw, mtime=0
+    ) as compressed, tarfile.open(fileobj=compressed, mode="w", format=tarfile.PAX_FORMAT) as archive:
         for name, data, mode in files:
             add(archive, name, data, mode)
     return version, stem, archive_path

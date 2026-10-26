@@ -11,6 +11,7 @@ for required in cargo rustc python3; do
 done
 
 python3 scripts/check_architecture.py
+python3 -m unittest discover -s scripts -p 'test_*.py'
 cargo fmt --package ejm-cli -- --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
 test_messages="$(mktemp "${TMPDIR:-/tmp}/ejm-cli-test-messages.XXXXXX")"
