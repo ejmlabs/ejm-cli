@@ -6,6 +6,7 @@ Changes follow [Semantic Versioning](https://semver.org/). Each repository is ve
 
 ### Added
 
+- Build and smoke Linux x86_64 release binaries with read-only jobs, add a manual macOS Apple silicon job that waits for notarization, draft the [0.1.0 release notes](docs/release-notes/0.1.0.md), and add version and platform fields to the bug form plus a feedback form. No release, tag or download exists yet.
 - Shared repository standards, explicit human admission, protected merge gates, two-pass Codex review, and a draft source release pipeline.
 - Adopt native remote hosting and control with Noise pairing, protected invitations, exact-run authority and a shared credential vault through protected CLI PR #21. Its [source acceptance](docs/native-remote-publication.md) covers Linux/macOS; live acceptance remains pending.
 
