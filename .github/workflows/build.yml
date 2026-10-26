@@ -6,8 +6,8 @@ on:
 permissions:
   contents: read
 env:
-  CARGO_BUILD_JOBS: "2"
-  CARGO_INCREMENTAL: "0"
+  CARGO_BUILD_JOBS: 2
+  CARGO_INCREMENTAL: 0
 jobs:
   linux-x86_64:
     name: Build and smoke Linux x86_64
@@ -62,12 +62,10 @@ jobs:
           path: ${{ runner.temp }}/out/*
           if-no-files-found: error
           retention-days: 14
-
   # macOS Apple silicon is waiting for notarization. Add its build and smoke
   # job here, and list it in collect, only after a notarization run for the
   # exact release is recorded. Until then no macOS file is offered and nothing
   # is described as signed or notarized.
-
   collect:
     name: Collect release files
     needs:

@@ -24,3 +24,4 @@ registry-session.json
 **/.ruff_cache/
 .wrangler/
 .DS_Store
+__pycache__/
