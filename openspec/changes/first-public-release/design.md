@@ -6,12 +6,12 @@ The build workflow never writes to the repository. Its jobs run project code (ca
 
 ## Artifact contract
 
-One workflow artifact per target, named `ejm-cli-<version>-<target>`, with these files at its root:
+Each build job uploads its own artifact (`build-linux-x86_64`). The `collect` job downloads them into one directory, writes one combined `build-sha256.txt` in `sha256sum` format and uploads the directory as the single `release-files` artifact. It holds only regular files at its root:
 
-- `ejm-cli-<version>-<target>.tar.gz`, holding one top directory of the same name with `ejm-cli`, `LICENSE`, `THIRD_PARTY_NOTICES.md` and `HARNESS_REVISION`.
-- `SHA256SUMS`, one `sha256  filename` line per file in the artifact, including the archive.
+- `ejm-cli-<version>-<platform>.tar.gz`, holding one top directory of the same name with `ejm-cli`, `LICENSE`, `THIRD_PARTY_NOTICES.md` and `HARNESS_REVISION`.
+- `build-sha256.txt`, one line per release file.
 
-Targets are `x86_64-unknown-linux-gnu` and `aarch64-apple-darwin`. The version is read from `VERSION` and must equal the workspace version. The build records `GITHUB_SHA` in the job summary so the attach workflow can compare it with the tagged commit.
+Platforms are `linux-x86_64` now and `macos-arm64` after notarization. Names avoid the source assets the draft flow already creates. The version is read from `VERSION` and must equal the workspace version. The job records `GITHUB_SHA` in its summary. The shared release workflow checks that the build run's commit equals the tagged commit.
 
 ## Order and commit
 
@@ -23,7 +23,7 @@ The archive links `libdbus-1` dynamically and needs the build runner's glibc. Th
 
 ## macOS waits for notarization
 
-The macOS job exists so the build is proven, but it runs only from `workflow_dispatch` when a maintainer sets the `macos` input, and the release notes list no macOS download. Nothing says the build is signed or notarized until a recorded run exists.
+`build.yml` has no macOS job yet; a comment marks where it goes. The release notes list no macOS download. Nothing says the build is signed or notarized until a recorded run exists.
 
 ## Smoke check
 

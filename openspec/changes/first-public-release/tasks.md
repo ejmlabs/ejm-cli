@@ -2,7 +2,7 @@
 
 ## 1. Build and smoke
 
-- [x] 1.1 Add `.github/workflows/release-binaries.yml` with Linux x86_64 and macOS Apple silicon jobs, `contents: read`, no secrets, `--locked`, the harness at `.github/harness-revision`, the archive, `SHA256SUMS` and a smoke step. Verify the YAML parses and no job has a write permission or secret.
+- [x] 1.1 Add `.github/workflows/build.yml` in the shape the shared build contract requires: a Linux x86_64 build and smoke job and a `collect` job that uploads `release-files` with one `build-sha256.txt`. The macOS job is left out until notarization. Verify the YAML parses and nothing holds a write permission or secret.
 - [x] 1.2 Build the Linux x86_64 release locally the same way and smoke it. Verify `--version` prints 0.1.0 and `--replay run "Hello"` exits 0.
 
 ## 2. Release notes and forms
@@ -17,4 +17,5 @@
 ## Workflow follow-up
 
 - Sync the delta spec to `openspec/specs/release-binaries` and archive after the release is published.
+- Adopting the native `release.yml` needs the merged shared pin; regenerate it with the shared standards script in the same PR that bumps the pin.
 - The shared attach workflow, tag, publication and site are separate owner-gated changes.

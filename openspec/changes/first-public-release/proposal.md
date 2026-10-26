@@ -6,8 +6,8 @@ ejm-cli can only be built from source. The lab's first public release plan (the 
 
 ## What Changes
 
-- Add a `Release binaries` workflow that builds `ejm-cli` with `cargo build --release --locked` on native Linux x86_64 and macOS Apple silicon runners. The jobs have `contents: read`, no secrets and no cache writes. Each job archives the binary with `LICENSE` and `THIRD_PARTY_NOTICES.md`, runs a smoke check on the archive, records the SHA-256 of every file and uploads one workflow artifact per target for the shared attach workflow in the `.github` repository.
-- Keep the macOS job manual-only and marked as waiting for notarization. The lab will not offer a macOS download until it has an Apple Developer membership and a notarization run for that exact release is recorded. The Linux job runs on `workflow_dispatch` and on pushes to main.
+- Add `.github/workflows/build.yml`, the shape the shared native build contract requires. A native Linux x86_64 job runs `cargo build --release --locked`, archives the binary with `LICENSE` and `THIRD_PARTY_NOTICES.md`, smoke-checks the archive and uploads it. A `collect` job writes one `build-sha256.txt` and uploads the single `release-files` artifact for the shared attach workflow in the `.github` repository. Workflow permissions are `contents: read` with no secrets.
+- Leave macOS Apple silicon out of `build.yml`, with a marked placeholder, until it is notarized. The lab will not offer a macOS download until it has an Apple Developer membership and a notarization run for that exact release is recorded. `build.yml` runs on `workflow_dispatch` and on pushes to main.
 - Record the Linux runtime baseline: the build runner's glibc floor and `libdbus-1`, plus a Secret Service for stored credentials.
 - Draft release notes for 0.1.0 in `docs/release-notes/0.1.0.md`, stating supported platforms, that builds are unsigned and not notarized, the checksum steps and the issue-form links.
 - Add `version` and `platform` fields to the bug and feedback issue forms, add a feedback form with the same fields, and keep `SECURITY.md` pointing at the private advisory.

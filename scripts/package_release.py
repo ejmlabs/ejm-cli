@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Archive a built ejm-cli binary, record SHA-256 digests and smoke the archive.
+"""Archive a built ejm-cli binary and smoke the archive.
 
 Usage: package_release.py TARGET BINARY OUT_DIR
 """
@@ -14,7 +14,7 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-TARGETS = {"x86_64-unknown-linux-gnu", "aarch64-apple-darwin"}
+TARGETS = {"linux-x86_64", "macos-arm64"}
 
 
 def fail(message):
@@ -87,9 +87,7 @@ def main():
     out_dir = Path(sys.argv[3])
     version, stem, archive_path = package(sys.argv[1], Path(sys.argv[2]), out_dir)
     smoke(version, stem, archive_path)
-    lines = [f"{sha256(path)}  {path.name}\n" for path in sorted(out_dir.iterdir()) if path.name != "SHA256SUMS"]
-    (out_dir / "SHA256SUMS").write_text("".join(lines))
-    print("".join(lines), end="")
+    print(f"{sha256(archive_path)}  {archive_path.name}")
 
 
 if __name__ == "__main__":

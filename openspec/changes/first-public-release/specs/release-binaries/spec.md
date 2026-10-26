@@ -7,11 +7,11 @@ Build, check and describe the ejm-cli release binaries without giving project co
 ## ADDED Requirements
 
 ### Requirement: Read-only reproducible build and smoke
-The release build SHALL run `cargo build --release --locked` on a native runner for each target at the harness revision in `.github/harness-revision`, with `contents: read` and no secrets. It SHALL archive the binary with `LICENSE` and `THIRD_PARTY_NOTICES.md`, record the SHA-256 of every uploaded file and upload nothing when the smoke check fails.
+The release build SHALL run `cargo build --release --locked` on a native runner for each target at the harness revision in `.github/harness-revision`, with `contents: read` and no secrets. It SHALL archive the binary with `LICENSE` and `THIRD_PARTY_NOTICES.md`, upload the archive as a build artifact, and a final collect job SHALL list the SHA-256 of every release file in one `build-sha256.txt` inside the single `release-files` artifact. It SHALL upload nothing when the smoke check fails.
 
 #### Scenario: Build succeeds
 - **WHEN** the workflow runs on a main commit
-- **THEN** each enabled target uploads one artifact holding the archive and a `SHA256SUMS` file naming every file
+- **THEN** `release-files` holds the archive and a `build-sha256.txt` naming every file once
 
 #### Scenario: Smoke fails
 - **WHEN** `ejm-cli --version` does not print the `VERSION` value or `--replay run "Hello"` exits non-zero
@@ -29,7 +29,7 @@ Release notes SHALL state the supported platforms, that builds are not signed wi
 
 #### Scenario: Linux release notes
 - **WHEN** a visitor reads the 0.1.0 notes
-- **THEN** they name Linux x86_64 with glibc 2.39 and `libdbus-1`, explain how to check `SHA256SUMS`, and claim no signature
+- **THEN** they name Linux x86_64 with glibc 2.39 and `libdbus-1`, explain how to check the release `SHA256SUMS`, and claim no signature
 
 ### Requirement: Intake forms carry version and platform
 The bug and feedback issue forms SHALL ask for the version and platform, and the security policy SHALL point at the private advisory.
