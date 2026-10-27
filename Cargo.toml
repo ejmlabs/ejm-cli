@@ -29,6 +29,7 @@ strip = true
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
+unused_must_use = "deny"
 warnings = "deny"
 
 [workspace.lints.clippy]
@@ -44,4 +45,5 @@ dbg_macro = "deny"
 exit = "deny"
 mem_forget = "deny"
 allow_attributes_without_reason = "deny"
+undocumented_unsafe_blocks = "deny"
 

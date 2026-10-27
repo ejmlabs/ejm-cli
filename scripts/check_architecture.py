@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Check ejm-cli package boundaries and project skill routing with the standard library."""
 
-from pathlib import Path
 import re
 import subprocess
 import sys
 import tomllib
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 ALLOWED_DEPENDENCIES = {
@@ -37,7 +37,7 @@ OPENSPEC_SKILLS = {
 }
 
 
-def require(condition: bool, message: str) -> None:
+def require(condition: bool, message: str) -> None:  # noqa: FBT001 -- the predicate under test, not a flag
     if not condition:
         raise SystemExit(message)
 
