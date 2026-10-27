@@ -12,11 +12,10 @@
 
 ## 3. Pin and verify
 
-- [x] 3.0 Pin `pr.yml` and the native `release.yml` to `091b6b7095de57b29344459ca690282cad73fa19`. Verify the shared standards check passes.
+- [x] 3.0 Pin `pr.yml` and the native `release.yml` to `451ef7d1ef46373b6018a1fbcacc331e15e1d093`. Verify the shared standards check passes.
 - [x] 3.1 Run `openspec validate first-public-release --strict` and the repository gate. Record checks left unrun.
 
 ## Workflow follow-up
 
 - Sync the delta spec to `openspec/specs/release-binaries` and archive after the release is published.
-- Re-pin to the merge SHA and regenerate `release.yml` if the shared pull request is squashed (see the design note on the shared pin).
 - The shared attach workflow, tag, publication and site are separate owner-gated changes.
