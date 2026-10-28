@@ -53,6 +53,8 @@ export EJM_CLI_BASE_URL=https://api.deepseek.com/v1
 ./target/release/ejm-cli
 ```
 
+`EJM_CLI_BASE_URL` must be `https`, except `http` on `localhost`, `127.0.0.0/8`, or `::1`. That `http` exception is refused while `HTTP_PROXY`, `HTTPS_PROXY`, or `ALL_PROXY` is set unless `NO_PROXY` contains that host exactly. A rejected URL exits 1 and the error does not print the URL or the proxy value. `ejm-cli doctor` marks a disallowed endpoint rejected.
+
 Native file tools are read only by default. Add `--allow-write` to grant writing
 and `--allow-shell` to grant shell execution. Grants stay visible in the TUI.
 Keys come from environment variables and are never accepted as command arguments.
