@@ -1,8 +1,10 @@
-use std::{collections::VecDeque, fmt::Write};
+use std::{collections::VecDeque, fmt::Write, time::Instant};
 
 use ejm_harness::{Event, EventKind, Session, ToolOutput};
 
-pub use crate::ejm_tui::BlockKind;
+pub use ejm_tui::ToolCallState as ToolState;
+use ejm_tui::compact_count;
+
 use crate::{
     commands::{self, CommandEntry, CommandPicker},
     render::safe_text,
@@ -17,6 +19,43 @@ pub struct TranscriptBlock {
     pub title: String,
     pub text: String,
     pub call_id: Option<String>,
+    /// Set for tool calls. `text` then holds only the tool output.
+    pub tool: Option<ToolView>,
+}
+
+/// What a transcript block is. Tool calls also carry a [`ToolView`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BlockKind {
+    User,
+    Assistant,
+    Tool,
+    Notice,
+    Error,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ToolDetail {
+    /// A few lines per call, with a count of the rest.
+    Preview,
+    /// Every retained line.
+    Full,
+}
+
+impl ToolDetail {
+    #[must_use]
+    pub fn toggled(self) -> Self {
+        match self {
+            Self::Preview => Self::Full,
+            Self::Full => Self::Preview,
+        }
+    }
+}
+
+pub struct ToolView {
+    pub name: String,
+    /// The most telling argument, such as a path, pattern or command.
+    pub detail: String,
+    pub state: ToolState,
 }
 
 pub enum Overlay {
@@ -57,6 +96,12 @@ pub struct App {
     pub commands: Vec<CommandEntry>,
     pub command_picker: CommandPicker,
     pub connection_ready: bool,
+    /// When the active run started, for the elapsed time beside the spinner.
+    pub run_started: Option<Instant>,
+    /// How much tool output the transcript shows. Toggled with Ctrl+O.
+    pub tool_detail: ToolDetail,
+    /// Set by Ctrl+C on an empty, idle composer. A second press soon after exits.
+    pub quit_armed: Option<Instant>,
     display_bytes: usize,
     received_text: bool,
 }
@@ -71,7 +116,7 @@ impl App {
             run_state: RunState::Idle,
             scroll_from_bottom: 0,
             last_sequence: 0,
-            status: "Ready. Ask a question or describe a change.".into(),
+            status: "Ready".into(),
             overlay: None,
             dirty: true,
             palette: None,
@@ -79,6 +124,9 @@ impl App {
             commands: commands::catalog(&[]),
             command_picker: CommandPicker::default(),
             connection_ready: true,
+            run_started: None,
+            tool_detail: ToolDetail::Preview,
+            quit_armed: None,
             display_bytes: 0,
             received_text: false,
         }
@@ -121,6 +169,7 @@ impl App {
         next.commands = std::mem::take(&mut self.commands);
         next.palette = self.palette;
         next.connection_ready = self.connection_ready;
+        next.tool_detail = self.tool_detail;
         next.widget_lines = std::mem::take(&mut self.widget_lines);
         next.composer = std::mem::take(&mut self.composer);
         *self = next;
@@ -143,6 +192,7 @@ impl App {
         match event.kind {
             EventKind::RunStarted { prompt } => {
                 self.run_state = RunState::Running;
+                self.run_started = Some(Instant::now());
                 self.received_text = false;
                 self.status = "Thinking".into();
                 self.push(BlockKind::User, "you", &prompt, None);
@@ -165,47 +215,46 @@ impl App {
                 self.status = "Responding".into();
             }
             EventKind::ToolQueued { call } => {
-                self.push(
-                    BlockKind::Tool,
-                    &format!("queued · {}", call.name),
-                    &brief_arguments(&call.arguments),
-                    Some(call.id),
-                );
+                self.push_tool(&call, ToolState::Queued);
                 self.status = "Waiting for tool capacity".into();
             }
             EventKind::ToolStarted { call } => {
-                if let Some(block) = self
+                if let Some(view) = self
                     .blocks
                     .iter_mut()
                     .rev()
                     .find(|block| block.call_id.as_deref() == Some(call.id.as_str()))
+                    .and_then(|block| block.tool.as_mut())
                 {
-                    block.title = format!("running · {}", safe_text(&call.name));
+                    view.state = ToolState::Running;
                 } else {
-                    self.push(
-                        BlockKind::Tool,
-                        &format!("running · {}", call.name),
-                        &brief_arguments(&call.arguments),
-                        Some(call.id),
-                    );
+                    self.push_tool(&call, ToolState::Running);
                 }
                 self.status = format!("Running {}", safe_text(&call.name));
             }
             EventKind::ToolFinished { call_id, output } => self.finish_tool(&call_id, output),
             EventKind::RunFinished { summary } => {
                 self.run_state = RunState::Idle;
+                let elapsed = self
+                    .run_started
+                    .take()
+                    .map(|started| started.elapsed().as_secs())
+                    .filter(|seconds| *seconds > 0)
+                    .map(|seconds| format!(" in {}", ejm_tui::elapsed_text(seconds)))
+                    .unwrap_or_default();
                 if !self.received_text && !summary.text.is_empty() {
                     self.push(BlockKind::Assistant, "ejm-cli", &summary.text, None);
                 }
                 self.status = format!(
-                    "{} · {} steps · {} in / {} out tokens",
+                    "{}{elapsed} · {} step{} · {} in / {} out tokens",
                     serde_json::to_value(&summary.status)
                         .ok()
                         .and_then(|value| value.as_str().map(str::to_owned))
                         .unwrap_or_else(|| "finished".into()),
                     summary.steps,
-                    summary.usage.input_tokens,
-                    summary.usage.output_tokens,
+                    if summary.steps == 1 { "" } else { "s" },
+                    compact_count(summary.usage.input_tokens),
+                    compact_count(summary.usage.output_tokens),
                 );
                 if let Some(error) = summary.error {
                     self.error(error);
@@ -250,13 +299,22 @@ impl App {
             .rev()
             .find(|block| block.call_id.as_deref() == Some(call_id))
         {
-            let tool = block.title.split(" · ").last().unwrap_or("tool");
-            block.title = format!("{status} · {tool}");
+            if let Some(view) = &mut block.tool {
+                view.state = if output.is_error {
+                    ToolState::Failed
+                } else {
+                    ToolState::Done
+                };
+            }
+            // Consumers that read the block kind still see the failure.
             if output.is_error {
                 block.kind = BlockKind::Error;
             }
-            self.display_bytes += content.len() + 1;
-            block.text.push('\n');
+            if !block.text.is_empty() {
+                block.text.push('\n');
+                self.display_bytes += 1;
+            }
+            self.display_bytes += content.len();
             block.text.push_str(&content);
             self.trim();
         } else {
@@ -282,9 +340,21 @@ impl App {
             title: safe_text(title),
             text,
             call_id,
+            tool: None,
         });
         self.dirty = true;
         self.trim();
+    }
+
+    fn push_tool(&mut self, call: &ejm_harness::ToolCall, state: ToolState) {
+        self.push(BlockKind::Tool, &call.name, "", Some(call.id.clone()));
+        if let Some(block) = self.blocks.back_mut() {
+            block.tool = Some(ToolView {
+                name: safe_text(&call.name),
+                detail: safe_text(&tool_detail(&call.arguments)),
+                state,
+            });
+        }
     }
 
     fn trim(&mut self) {
@@ -305,10 +375,30 @@ impl App {
     }
 }
 
-fn brief_arguments(arguments: &serde_json::Value) -> String {
-    let mut arguments = serde_json::to_string(arguments).unwrap_or_default();
-    truncate_end(&mut arguments, 4 * 1024);
-    arguments
+/// The argument a reader needs to recognize a call, such as `src/main.rs` or `"fn main" in src`.
+/// Falls back to compact JSON for tools without a familiar argument.
+fn tool_detail(arguments: &serde_json::Value) -> String {
+    let field = |name: &str| arguments.get(name).and_then(serde_json::Value::as_str);
+    let mut detail = match (field("pattern"), field("path")) {
+        (Some(pattern), Some(path)) => format!("\"{pattern}\" in {path}"),
+        (Some(pattern), None) => format!("\"{pattern}\""),
+        (None, Some(path)) => path.to_owned(),
+        (None, None) => ["command", "cmd", "file", "url", "query", "name"]
+            .into_iter()
+            .find_map(field)
+            .map_or_else(
+                || match arguments {
+                    serde_json::Value::Object(map) if map.is_empty() => String::new(),
+                    serde_json::Value::Null => String::new(),
+                    _ => serde_json::to_string(arguments).unwrap_or_default(),
+                },
+                str::to_owned,
+            ),
+    };
+    // One line keeps the call readable; the full arguments stay in the event store.
+    detail = detail.replace('\n', " ");
+    truncate_end(&mut detail, 512);
+    detail
 }
 
 pub fn truncate_start(text: &mut String, limit: usize) {
@@ -332,7 +422,7 @@ fn truncate_end(text: &mut String, limit: usize) {
         end -= 1;
     }
     text.truncate(end);
-    text.push_str("\n[…]");
+    text.push('…');
 }
 
 #[derive(Default)]
@@ -552,6 +642,32 @@ mod tests {
         assert_eq!(composer.text, "a");
         composer.history(false);
         assert_eq!(composer.text, "draft");
+    }
+
+    #[test]
+    fn failed_tool_marks_both_the_tool_state_and_the_block_kind() {
+        let mut app = app();
+        let event = |sequence: u64, mut kind: serde_json::Value| {
+            let fields = kind.as_object_mut().unwrap();
+            fields.insert("session_id".into(), "test".into());
+            fields.insert("sequence".into(), sequence.into());
+            fields.insert("timestamp_ms".into(), 0.into());
+            serde_json::from_value::<Event>(kind).unwrap()
+        };
+        app.apply(event(
+            1,
+            serde_json::json!({"type": "tool_started", "call": {
+                "id": "c1", "name": "shell", "arguments": {"command": "false"}
+            }}),
+        ));
+        app.apply(event(
+            2,
+            serde_json::json!({"type": "tool_finished", "call_id": "c1",
+            "output": {"content": "exit 1", "is_error": true}}),
+        ));
+        let block = app.blocks.back().unwrap();
+        assert_eq!(block.kind, BlockKind::Error);
+        assert_eq!(block.tool.as_ref().unwrap().state, ToolState::Failed);
     }
 
     #[test]

@@ -28,6 +28,9 @@ use crate::{
     terminal::{Modes, accepts_key},
 };
 
+/// How long the second Ctrl+C of an exit stays valid.
+const QUIT_CONFIRM: Duration = Duration::from_secs(2);
+
 pub async fn run(harness: Harness, args: &Args, extensions: &Extensions) -> Result<()> {
     let backend = LocalBackend::new(harness);
     let cancel = tokio_util::sync::CancellationToken::new();
@@ -142,7 +145,12 @@ pub(crate) async fn run_app(
                     }
                 }
                 harness.settle(crate::remote::now_ms()?).await?;
-                if app.dirty || (app.is_running() && last_status_draw.elapsed() >= Duration::from_millis(250)) {
+                if app.quit_armed.is_some_and(|armed| armed.elapsed() >= QUIT_CONFIRM) {
+                    app.quit_armed = None;
+                    app.dirty = true;
+                }
+                // Animate the spinner at 80 ms per frame while a run is active; idle draws only on change.
+                if app.dirty || (app.is_running() && last_status_draw.elapsed() >= Duration::from_millis(80)) {
                     draw_app(&mut terminal, &mut app, args, &remote, harness).await?;
                     last_status_draw = Instant::now();
                 }
@@ -224,22 +232,33 @@ async fn handle_input(
     match input {
         InputEvent::Key(key) if accepts_key(key) => {
             if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
-                if app.run_state == RunState::Running {
-                    harness.cancel(&app.session.id).await?;
-                    app.run_state = RunState::Stopping;
-                    app.status = "Stopping…".into();
-                    return Ok(false);
-                }
-                return Ok(true);
+                return interrupt(app, harness).await;
             }
+            app.quit_armed = None;
             if app.overlay.is_some() {
                 return handle_overlay_key(key, app, harness).await;
             }
             if handle_picker_key(key, app) {
                 return Ok(false);
             }
+            if key.code == KeyCode::Esc && key.modifiers.is_empty() {
+                if app.scroll_from_bottom == 0 && app.run_state == RunState::Running {
+                    stop_run(app, harness).await?;
+                } else {
+                    app.scroll_from_bottom = 0;
+                }
+                return Ok(false);
+            }
+            if key.code == KeyCode::Char('?')
+                && app.composer.text.is_empty()
+                && !key.modifiers.contains(KeyModifiers::CONTROL)
+            {
+                app.overlay = Some(Overlay::Help { selected: 0 });
+                return Ok(false);
+            }
             if key.modifiers.contains(KeyModifiers::CONTROL) {
                 match key.code {
+                    KeyCode::Char('o') => app.tool_detail = app.tool_detail.toggled(),
                     KeyCode::Char('d') if app.composer.text.is_empty() => return Ok(true),
                     KeyCode::Char('s') => open_sessions(app, harness).await?,
                     KeyCode::Char('k') => {
@@ -305,6 +324,40 @@ async fn handle_input(
         _ => {}
     }
     Ok(false)
+}
+
+/// Ctrl+C stops a run, then clears a draft, then asks for a second press before exiting.
+/// A second press while a run is stopping exits at once.
+async fn interrupt(app: &mut App, harness: &LocalBackend) -> Result<bool> {
+    if app.overlay.take().is_some() {
+        return Ok(false);
+    }
+    match app.run_state {
+        RunState::Running => {
+            stop_run(app, harness).await?;
+            Ok(false)
+        }
+        RunState::Stopping => Ok(true),
+        RunState::Idle if !app.composer.text.is_empty() => {
+            app.composer.replace("");
+            app.command_picker = commands::CommandPicker::default();
+            Ok(false)
+        }
+        RunState::Idle => {
+            if app.quit_armed.take().is_some() {
+                return Ok(true);
+            }
+            app.quit_armed = Some(Instant::now());
+            Ok(false)
+        }
+    }
+}
+
+async fn stop_run(app: &mut App, harness: &LocalBackend) -> Result<()> {
+    harness.cancel(&app.session.id).await?;
+    app.run_state = RunState::Stopping;
+    app.status = "Stopping".into();
+    Ok(())
 }
 
 pub(crate) fn handle_picker_key(key: KeyEvent, app: &mut App) -> bool {
@@ -454,7 +507,7 @@ async fn submit(
                 harness.cancel(&app.session.id).await?;
                 if app.is_running() {
                     app.run_state = RunState::Stopping;
-                    app.status = "Stopping…".into();
+                    app.status = "Stopping".into();
                 } else {
                     app.notice("No active run in this session.");
                 }
@@ -477,7 +530,8 @@ async fn submit(
     } else {
         harness.start(&app.session.id, text).await?;
         app.run_state = RunState::Running;
-        app.status = "Starting…".into();
+        app.run_started = Some(Instant::now());
+        app.status = "Starting".into();
         app.scroll_from_bottom = 0;
     }
     Ok(false)
@@ -966,7 +1020,6 @@ mod tests {
         ui.app.widget_lines = vec!["fixture widget".into()];
         ui.app.composer.replace("/help");
         ui.key(KeyCode::Enter).await.unwrap();
-        ui.key(KeyCode::Down).await.unwrap();
         ui.key(KeyCode::Down).await.unwrap();
         ui.key(KeyCode::Down).await.unwrap();
         ui.key(KeyCode::Enter).await.unwrap();

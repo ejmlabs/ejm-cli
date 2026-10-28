@@ -3,25 +3,7 @@ mod args;
 mod auth;
 mod browser;
 mod commands;
-// Copied from the ejmlabs design kit (design-kit/ui/rust). Never edit these two files; copy new versions in.
-#[rustfmt::skip]
-#[allow(
-    dead_code,
-    clippy::all,
-    clippy::pedantic,
-    reason = "Vendored design kit file, kept byte for byte so updates are a plain copy."
-)]
-mod ejm_theme;
-#[rustfmt::skip]
-#[allow(
-    dead_code,
-    clippy::all,
-    clippy::pedantic,
-    clippy::expect_used,
-    clippy::unwrap_used,
-    reason = "Vendored design kit file, kept byte for byte so updates are a plain copy."
-)]
-mod ejm_tui;
+mod endpoint;
 mod extensions;
 mod packages;
 mod remote;
@@ -43,7 +25,7 @@ use ejm_harness_auth::{CredentialSource, SecretString, StaticCredential};
 use ejm_harness_coding::{CodingConfig, tools};
 use tokio_util::sync::CancellationToken;
 
-use args::{Args, Command, ProviderKind};
+use args::{Args, CLEARTEXT_BASE_URL, Command, EndpointCheck, ProviderKind};
 
 fn main() -> std::process::ExitCode {
     let args = Args::parse();
@@ -205,6 +187,7 @@ async fn provider(args: &mut Args) -> Result<Arc<dyn Provider>> {
         args.reasoning_effort.is_none(),
         "--reasoning-effort requires --provider responses or --provider chatgpt"
     );
+    let base_url = args.api_base_url()?.to_string();
     let key = required_api_key(args)?;
     let model = args
         .model
@@ -214,13 +197,13 @@ async fn provider(args: &mut Args) -> Result<Arc<dyn Provider>> {
     args.model = Some(model.clone());
     if args.provider == ProviderKind::Anthropic {
         return Ok(Arc::new(AnthropicProvider::new(AnthropicConfig {
-            base_url: args.api_base_url().into(),
+            base_url,
             api_key: key,
             model,
         })?));
     }
     Ok(Arc::new(OpenAiProvider::new(OpenAiConfig {
-        base_url: args.api_base_url().into(),
+        base_url,
         api_key: key,
         model,
     })?))
@@ -422,15 +405,28 @@ fn doctor(args: &Args) -> Result<bool> {
     println!("Workspace: {}", cwd.display());
     println!("State: {}", args.state_dir().display());
     println!("Model: {}", render::safe_text(args.provider_label()));
-    println!(
-        "Endpoint: {}",
-        match args.provider {
-            ProviderKind::Chatgpt => "official ChatGPT Responses endpoint".into(),
-            ProviderKind::Responses => "official OpenAI Responses endpoint".into(),
-            ProviderKind::Openai | ProviderKind::Anthropic =>
-                render::safe_text(args.api_base_url()),
+    match args.provider {
+        ProviderKind::Chatgpt => println!("Endpoint: official ChatGPT Responses endpoint"),
+        ProviderKind::Responses => println!("Endpoint: official OpenAI Responses endpoint"),
+        ProviderKind::Openai | ProviderKind::Anthropic
+            if args.replay || args.replay_file.is_some() =>
+        {
+            println!("Endpoint: (not used: offline replay)");
         }
-    );
+        ProviderKind::Openai | ProviderKind::Anthropic => match args.endpoint_check()? {
+            EndpointCheck::Allowed(url) => println!(
+                "Endpoint: {}",
+                render::safe_text(&crate::endpoint::display_without_userinfo(url))
+            ),
+            EndpointCheck::Rejected(url) => {
+                println!(
+                    "Endpoint: {} (rejected). HTTPS is required except for loopback hosts.",
+                    render::safe_text(&url)
+                );
+                bail!("{CLEARTEXT_BASE_URL}");
+            }
+        },
+    }
     println!(
         "Provider credentials: {}",
         if args.replay || args.replay_file.is_some() {
