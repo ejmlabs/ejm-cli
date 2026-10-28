@@ -24,6 +24,8 @@ ejm-cli
 
 The provider key comes from `EJM_CLI_API_KEY`, falling back to `OPENAI_API_KEY`. `--api-key-env NAME` selects another variable. There is no API key argument. `--model` and `--base-url` override environment settings. The default `--provider openai` uses the OpenAI compatible Chat Completions interface and defaults to `gpt-4.1-mini`.
 
+`--base-url` and `EJM_CLI_BASE_URL` must use `https`. The exception is `http` on a loopback host: `localhost`, the `127.0.0.0/8` range, or `::1`. That exception is refused when `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, or the lowercase form is set and `NO_PROXY` does not contain that host exactly. `*` and a bracketed IPv6 entry such as `[::1]` do not count. The error names the proxy variable and does not print its value. A URL with a username, password, query, or fragment is rejected. On `run`, a rejected URL exits 1. The error names `--base-url` and `EJM_CLI_BASE_URL` and does not print the URL. `ejm-cli doctor` prints one endpoint line, without userinfo or raw line breaks, and marks a disallowed one rejected.
+
 Read tools are enabled by default. `--allow-write` registers file write tools. `--allow-shell` registers shell execution as the current user. Grants stay visible in the TUI header and remain fixed for the process. Native execution is not a security sandbox. `ejm-cli doctor` prints the executor's actual capability report.
 
 ## Provider accounts and models
@@ -75,23 +77,44 @@ ejm-cli login anthropic
 
 ## Interaction
 
+The screen is built from the shared ejmlabs terminal blocks in the sibling `ejm-ui`
+repository (`crates/ejm-tui`), the same blocks the Ink target offers JavaScript CLIs. It
+draws no boxes. A two-line header shows the version, model, session title and working
+directory. Each transcript line starts with a gutter glyph so it reads without color: `›` your
+message, `●` the assistant, a state glyph for a tool call (`○` queued, a spinner while
+running, `✓` done, `✗` failed), `!` a notice and `✗` an error. Assistant text gets light
+Markdown: headings, lists, quotes, rules, fenced code and inline bold, italic and code.
+Tool calls show their main argument, such as a path, pattern or command, and a short
+output preview. Ctrl+O shows complete tool output.
+
+While a run is active, the line above the counts shows a spinner, the current step, the
+elapsed time and how to stop. When idle it shows the last result and token use. Agent,
+model and tool counts stay visible on their own line. The composer sits under a hairline
+rule. The footer starts with the effective grants, which stay on screen at every width and
+turn the warning color when write or shell access is granted, then lists the keys that
+apply right now. The command menu opens above the composer, and the help and session
+panels replace the transcript until Escape.
+
 | Key | Action |
 | --- | --- |
 | Enter | Send a turn, or queue it while a run is active |
 | Alt+Enter, Shift+Enter, Ctrl+J | Insert a newline |
 | Ctrl+K | Steer the active run with the draft |
-| Ctrl+C | Stop the current run, or exit when idle |
+| Escape | Stop the current run; when scrolled up, follow current output instead |
+| Ctrl+C | Stop the current run, clear the draft, or press twice within two seconds to exit |
 | Ctrl+D | Exit when the composer is empty |
+| Ctrl+O | Show or hide complete tool output |
+| ? | Open shortcuts and commands when the composer is empty |
 | Ctrl+S | Choose a saved session |
 | Up, Down | Choose a command while the picker is open; otherwise recall sent messages |
 | Tab | Complete the selected command without running it |
 | Left, Right, Home, End | Move the text cursor |
 | PageUp, PageDown, mouse wheel | Scroll the transcript |
-| End, Escape | Follow current output |
+| End | Follow current output |
 | Escape | Close a panel or command picker without changing the draft |
 
 Type `/` at the beginning of an empty composer to see built-in and granted package
-commands. Keep typing to filter by command name. Up/Down chooses a result. Tab
+commands in a list under the composer. Keep typing to filter by command name. Up/Down chooses a result. Tab
 completes it; Enter completes an unfinished command name or runs an exact command.
 Completion never starts a run. Commands that need an argument leave a trailing
 space for it. Escape dismisses the picker and keeps the draft editable.
@@ -277,7 +300,7 @@ ejm-cli doctor
 ejm-cli --help
 ```
 
-Plain mode streams assistant text on stdout and tool status on stderr. JSON mode emits one durable event per line on stdout. Failed and cancelled runs return a nonzero exit code. Session inspection and doctor work without provider credentials.
+Plain mode streams assistant text on stdout and tool status on stderr. JSON mode emits one durable event per line on stdout. Failed and cancelled runs return a nonzero exit code. Session inspection works without provider credentials. Doctor also works without credentials when the provider endpoint is allowed.
 
 `--cwd` chooses the workspace. `--state-dir` or `EJM_CLI_STATE_DIR` chooses durable storage. The default is `$XDG_DATA_HOME/ejm-cli`, macOS `~/Library/Application Support/ejm-cli`, Windows `%LOCALAPPDATA%/ejm-cli`, or `~/.local/share/ejm-cli` on other systems. Never commit that directory or use a public directory for private sessions.
 

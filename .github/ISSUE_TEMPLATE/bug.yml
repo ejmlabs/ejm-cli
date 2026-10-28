@@ -1,11 +1,25 @@
 name: Bug report
 description: Report a reproducible problem.
 body:
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of ejm-cli --version, or the commit if you built from source.
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      description: Operating system, version and CPU, for example Ubuntu 24.04 x86_64.
+    validations:
+      required: true
   - type: textarea
     id: reproduction
     attributes:
       label: Steps and result
-      description: Include the version or commit, OS, minimal steps, expected result, and actual result. Remove private data.
+      description: Include minimal steps, expected result, and actual result. Remove private data.
     validations:
       required: true
   - type: textarea
