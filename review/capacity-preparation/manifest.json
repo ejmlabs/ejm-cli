@@ -1,0 +1,52 @@
+[
+  {
+    "source": "review/capacity-preparation/crates/ejm-cli/src/capacity.rs",
+    "activation_path": "crates/ejm-cli/src/capacity.rs",
+    "sha256": "3ada3ef145055a71a976b8976d6ff6099863c5f852b362138b26e3c0bd2e9056"
+  },
+  {
+    "source": "review/capacity-preparation/crates/ejm-cli/src/interaction.rs",
+    "activation_path": "crates/ejm-cli/src/interaction.rs",
+    "sha256": "2db2ff812fb95934480d4f3a0c73a06df57e9359b8546b8d92a66d91483dd638"
+  },
+  {
+    "source": "review/capacity-preparation/crates/ejm-cli/src/models.rs",
+    "activation_path": "crates/ejm-cli/src/models.rs",
+    "sha256": "ebbe7e687ef816bac29cad63503a9160be54af880a3568fa9936da1975021b3c"
+  },
+  {
+    "source": "review/capacity-preparation/crates/ejm-cli/src/remote/native_roundtrip.rs",
+    "activation_path": "crates/ejm-cli/src/remote/native_roundtrip.rs",
+    "sha256": "75b54c5dfdbef418a771eccac55afb5e475bcf12ea2df58bc85d809aeb785992"
+  },
+  {
+    "source": "review/capacity-preparation/crates/ejm-cli/src/remote/transport_fixture.rs",
+    "activation_path": "crates/ejm-cli/src/remote/transport_fixture.rs",
+    "sha256": "fca02b13163b944d1b7ae0c4d9e109e52fce68caf220c03d1bc2372341420d8b"
+  },
+  {
+    "source": "review/capacity-preparation/crates/ejm-cli/src/remote/transport_tls_fixture.rs",
+    "activation_path": "crates/ejm-cli/src/remote/transport_tls_fixture.rs",
+    "sha256": "b2cf7d1631535259d2d85a446b1d181e4912783c54d321d64ba87db394772af6"
+  },
+  {
+    "source": "review/capacity-preparation/crates/ejm-cli/src/sessions.rs",
+    "activation_path": "crates/ejm-cli/src/sessions.rs",
+    "sha256": "bd7cc286ca735a620e168dc1575c234cc1db064dabef4c32f9502030719419b1"
+  },
+  {
+    "source": "review/capacity-preparation/crates/ejm-cli/src/ui/capacity_fixture.rs",
+    "activation_path": "crates/ejm-cli/src/ui/capacity_fixture.rs",
+    "sha256": "7db3266937dd6451bbc8a123898708c22bb24ba00764af4a234ab952bc8ec985"
+  },
+  {
+    "source": "review/capacity-preparation/crates/ejm-cli/src/ui/terminal_fixture.rs",
+    "activation_path": "crates/ejm-cli/src/ui/terminal_fixture.rs",
+    "sha256": "a7b6bd509d620364ec851c27e08d8943fa7780f37a946c0ac02026e79d0f2569"
+  },
+  {
+    "source": "review/capacity-preparation/crates/ejm-cli/src/views.rs",
+    "activation_path": "crates/ejm-cli/src/views.rs",
+    "sha256": "9cf93c54dd529edb82279ac90ba95968edfacf047fd92f9983b14d888e38a484"
+  }
+]
