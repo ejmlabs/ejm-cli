@@ -25,6 +25,8 @@ ALLOWED_DEPENDENCIES = {
     "termwiz", "zeroize", "rustix", "crossterm_winapi", "winsafe",
     # Reusable package installation/runtime ports and validated, portable manifests.
     "ejm-harness-packages", "ejm-harness-package-spec", "serde",
+    # The shared ejmlabs terminal blocks (sibling ejm-ui, MIT), so every CLI draws from one contract.
+    "ejm-tui",
 }
 REQUIRED_SKILLS = {
     "ejm-cli-change", "ejm-cli-review", "ejm-cli-terminal", "ejm-cli-theme", "ejm-cli-auth",

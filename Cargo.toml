@@ -21,6 +21,7 @@ ejm-harness-exec = { version = "0.1.0", path = "../ejm-harness/crates/ejm-harnes
 ejm-harness-auth = { version = "0.1.0", path = "../ejm-harness/crates/ejm-harness-auth" }
 ejm-harness-packages = { version = "0.1.0", path = "../ejm-harness/crates/ejm-harness-packages" }
 ejm-harness-package-spec = { version = "0.1.0", path = "../ejm-harness/crates/ejm-harness-package-spec" }
+ejm-tui = { version = "0.1.0", path = "../ejm-ui/crates/ejm-tui" }
 
 [profile.release]
 lto = "thin"
