@@ -1,0 +1,24 @@
+name: Feedback
+description: Tell the lab what worked, what did not, or what is confusing.
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of ejm-cli --version, or the commit if you built from source.
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      description: Operating system, version and CPU, for example Ubuntu 24.04 x86_64.
+    validations:
+      required: true
+  - type: textarea
+    id: feedback
+    attributes:
+      label: Feedback
+      description: What you tried, what you expected and what happened. Remove private data.
+    validations:
+      required: true
