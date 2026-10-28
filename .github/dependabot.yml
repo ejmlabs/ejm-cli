@@ -11,14 +11,7 @@ updates:
     groups:
       compatible-updates:
         update-types: [minor, patch]
-  - package-ecosystem: "cargo"
-    directory: "/"
-    schedule:
-      interval: weekly
-      day: monday
-    open-pull-requests-limit: 3
-    cooldown:
-      default-days: 7
-    groups:
-      compatible-updates:
-        update-types: [minor, patch]
+  # The cargo ecosystem is not configured. Dependabot checks out this
+  # repository alone, and the workspace depends on ../ejm-harness by path, so
+  # every cargo job stops at file fetching ("path based dependencies could not
+  # be retrieved"). Cargo.lock is refreshed by hand with the harness checkout.
