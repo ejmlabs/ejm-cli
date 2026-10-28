@@ -246,7 +246,7 @@ def check(binary: Path, terminate: bool, remote_case: str | None = None, remote_
                 os.write(master, b"ejm-cli-pty-check\r")
                 repaint_until(b"Demo: ejm-cli-pty-check")
                 os.write(master, b"/help\r")
-                repaint_until(b"Conversation")
+                repaint_until(b"Shortcuts")
                 os.write(master, b"\x1b")
                 repaint_until(b"completed")
                 os.write(master, b"/agents\r")

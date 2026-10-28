@@ -404,7 +404,7 @@ async fn handle_overlay_key(key: KeyEvent, app: &mut App, harness: &LocalBackend
             let selection = match &mut app.overlay {
                 Some(Overlay::Sessions { sessions, selected }) => Some((selected, sessions.len())),
                 Some(Overlay::Help { selected }) => Some((selected, app.commands.len())),
-                None => None,
+                Some(Overlay::Status { .. }) | None => None,
             };
             if let Some((selected, count)) = selection {
                 let step = if matches!(key.code, KeyCode::PageUp | KeyCode::PageDown) {
@@ -490,6 +490,7 @@ async fn submit(
                 }
             }
             "queue" if !value.is_empty() => {
+                ensure_connected(args)?;
                 if app.is_running() {
                     harness.enqueue(&app.session.id, value.into()).await?;
                 } else {
@@ -505,6 +506,7 @@ async fn submit(
     } else if app.is_running() {
         harness.enqueue(&app.session.id, text).await?;
     } else {
+        ensure_connected(args)?;
         harness.start(&app.session.id, text).await?;
         app.run_state = RunState::Running;
         app.run_started = Some(Instant::now());
@@ -514,15 +516,52 @@ async fn submit(
     Ok(false)
 }
 
+/// Fails before any run starts when no provider is configured, so the draft stays.
+fn ensure_connected(args: &Args) -> Result<()> {
+    anyhow::ensure!(
+        args.setup_needed.is_none(),
+        "Not connected. Connect a model with one of the steps above, then restart ejm-cli."
+    );
+    Ok(())
+}
+
 async fn show_status(app: &mut App, harness: &LocalBackend, args: &Args) {
     let status = harness.status().await;
-    app.notice(format!(
-        "Connection: {}\nModel: {}\nAccount: {}\nSession: {}\nGrants: {}\nAgents: {} active\nModels: {} active, {} queued\nTools: {} active, {} queued",
-        if app.connection_ready { "ready" } else { "not connected" },
-        args.provider_label(), args.account.as_deref().unwrap_or("environment or none"),
-        app.session.id, args.grants(), status.active_agents, status.model_requests,
-        status.waiting_model_requests, status.tools.running, status.tools.queued,
-    ));
+    let connection = match &args.setup_needed {
+        Some(reason) => format!("not connected: {reason}"),
+        None if app.connection_ready => "ready".into(),
+        None => "not connected".into(),
+    };
+    app.overlay = Some(Overlay::Status {
+        rows: vec![
+            ("Connection", connection),
+            ("Model", args.provider_label().into()),
+            (
+                "Account",
+                args.account
+                    .as_deref()
+                    .unwrap_or("environment or none")
+                    .into(),
+            ),
+            ("Session", app.session.id.clone()),
+            ("Grants", args.grants()),
+            ("Agents", format!("{} active", status.active_agents)),
+            (
+                "Models",
+                format!(
+                    "{} active, {} queued",
+                    status.model_requests, status.waiting_model_requests
+                ),
+            ),
+            (
+                "Tools",
+                format!(
+                    "{} active, {} queued",
+                    status.tools.running, status.tools.queued
+                ),
+            ),
+        ],
+    });
 }
 
 #[derive(Default)]
@@ -666,8 +705,18 @@ async fn extension_command(
     Ok(())
 }
 
+/// Saved sessions titled by their first prompt, so sessions in one folder read apart. Sessions
+/// with no turns are left out, other than the current one.
 async fn open_sessions(app: &mut App, harness: &LocalBackend) -> Result<()> {
-    let sessions = harness.list_sessions().await?;
+    let mut sessions = Vec::new();
+    for mut session in harness.list_sessions().await? {
+        match shown_title(harness, &session).await? {
+            Some(title) => session.title = title,
+            None if session.id != app.session.id => continue,
+            None => {}
+        }
+        sessions.push(session);
+    }
     let selected = sessions
         .iter()
         .position(|session| session.id == app.session.id)
@@ -690,6 +739,27 @@ async fn find_session(harness: &LocalBackend, id: &str) -> Result<Session> {
         .into_iter()
         .next()
         .with_context(|| format!("session {id} does not exist"))
+}
+
+/// The title a session list shows: the first prompt on one line, unless the session was named
+/// with `/new TITLE`. `None` while the session has no turns.
+pub(crate) async fn shown_title(harness: &Harness, session: &Session) -> Result<Option<String>> {
+    // The first run starts within a session's first few events.
+    let prompt = harness
+        .events(&session.id, 0, 4)
+        .await?
+        .into_iter()
+        .find_map(|event| match event.kind {
+            ejm_harness::EventKind::RunStarted { prompt } => Some(prompt),
+            _ => None,
+        });
+    Ok(prompt.map(|prompt| {
+        if session.title == workspace_title(&session.cwd) {
+            prompt.split_whitespace().collect::<Vec<_>>().join(" ")
+        } else {
+            session.title.clone()
+        }
+    }))
 }
 
 fn workspace_title(cwd: &std::path::Path) -> String {
@@ -1019,5 +1089,64 @@ mod tests {
             catalog
         );
         assert_eq!(ui.app.composer.text, "");
+    }
+
+    #[tokio::test]
+    async fn prompts_keep_the_draft_and_start_nothing_while_not_connected() {
+        let mut ui = TestUi::new().await;
+        ui.args.setup_needed = Some("set EJM_CLI_API_KEY".into());
+        for draft in ["Fix the parser", "/queue Fix the parser"] {
+            ui.app.composer.replace(draft);
+            let error = ui.key(KeyCode::Enter).await.unwrap_err();
+            assert!(error.to_string().starts_with("Not connected."), "{error}");
+            assert_eq!(ui.app.composer.text, draft);
+        }
+        assert!(
+            ui.harness
+                .events(&ui.app.session.id, 0, 100)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        ui.app.composer.replace("/status");
+        ui.key(KeyCode::Enter).await.unwrap();
+        let connection = match &ui.app.overlay {
+            Some(Overlay::Status { rows }) => rows.first().map(|row| row.1.clone()),
+            _ => None,
+        };
+        assert_eq!(
+            connection.as_deref(),
+            Some("not connected: set EJM_CLI_API_KEY")
+        );
+    }
+
+    #[tokio::test]
+    async fn sessions_read_apart_by_first_prompt_and_empty_ones_are_hidden() {
+        let mut ui = TestUi::new().await;
+        let cwd = ui.args.cwd().unwrap();
+        let options = || SessionOptions {
+            title: workspace_title(&cwd),
+            cwd: cwd.clone(),
+        };
+        let asked = ui.harness.create_session(options()).await.unwrap();
+        ui.harness.create_session(options()).await.unwrap();
+        ui.harness
+            .start(&asked.id, "Tidy   the\nparser".into())
+            .await
+            .unwrap()
+            .wait()
+            .await
+            .unwrap();
+        open_sessions(&mut ui.app, &ui.harness).await.unwrap();
+        let mut titles = match &ui.app.overlay {
+            Some(Overlay::Sessions { sessions, .. }) => sessions
+                .iter()
+                .map(|session| session.title.as_str())
+                .collect::<Vec<_>>(),
+            _ => Vec::new(),
+        };
+        titles.sort_unstable();
+        // The current session stays though it has no turns; the other empty one is hidden.
+        assert_eq!(titles, ["Tidy the parser", "fixture"]);
     }
 }

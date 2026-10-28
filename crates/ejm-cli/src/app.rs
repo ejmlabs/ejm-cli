@@ -1,9 +1,9 @@
 use std::{collections::VecDeque, fmt::Write, time::Instant};
 
-use ejm_harness::{Event, EventKind, Session, ToolOutput};
+use ejm_harness::{Event, EventKind, RunStatus, Session, ToolOutput};
 
 pub use ejm_tui::ToolCallState as ToolState;
-use ejm_tui::compact_count;
+use ejm_tui::{StatusLevel, compact_count};
 
 use crate::{
     commands::{self, CommandEntry, CommandPicker},
@@ -31,6 +31,8 @@ pub enum BlockKind {
     Tool,
     Notice,
     Error,
+    /// The line a finished run leaves: its result word as the title, then steps and time.
+    Summary(StatusLevel),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -65,6 +67,10 @@ pub enum Overlay {
     Sessions {
         sessions: Vec<Session>,
         selected: usize,
+    },
+    /// `/status`: label and value rows.
+    Status {
+        rows: Vec<(&'static str, String)>,
     },
 }
 
@@ -233,33 +239,7 @@ impl App {
                 self.status = format!("Running {}", safe_text(&call.name));
             }
             EventKind::ToolFinished { call_id, output } => self.finish_tool(&call_id, output),
-            EventKind::RunFinished { summary } => {
-                self.run_state = RunState::Idle;
-                let elapsed = self
-                    .run_started
-                    .take()
-                    .map(|started| started.elapsed().as_secs())
-                    .filter(|seconds| *seconds > 0)
-                    .map(|seconds| format!(" in {}", ejm_tui::elapsed_text(seconds)))
-                    .unwrap_or_default();
-                if !self.received_text && !summary.text.is_empty() {
-                    self.push(BlockKind::Assistant, "ejm-cli", &summary.text, None);
-                }
-                self.status = format!(
-                    "{}{elapsed} · {} step{} · {} in / {} out tokens",
-                    serde_json::to_value(&summary.status)
-                        .ok()
-                        .and_then(|value| value.as_str().map(str::to_owned))
-                        .unwrap_or_else(|| "finished".into()),
-                    summary.steps,
-                    if summary.steps == 1 { "" } else { "s" },
-                    compact_count(summary.usage.input_tokens),
-                    compact_count(summary.usage.output_tokens),
-                );
-                if let Some(error) = summary.error {
-                    self.error(error);
-                }
-            }
+            EventKind::RunFinished { summary } => self.finish_run(summary),
             EventKind::Steered { text } => {
                 self.push(BlockKind::Notice, "steering", &text, None);
             }
@@ -279,6 +259,48 @@ impl App {
             }
             EventKind::Usage { .. } => {}
         }
+    }
+
+    /// A finished run leaves its summary line, and the working line goes quiet.
+    fn finish_run(&mut self, summary: ejm_harness::RunSummary) {
+        self.run_state = RunState::Idle;
+        self.status = "Ready".into();
+        if !self.received_text && !summary.text.is_empty() {
+            self.push(BlockKind::Assistant, "ejm-cli", &summary.text, None);
+        }
+        if let Some(error) = summary.error {
+            self.error(error);
+        }
+        let mut details = vec![format!(
+            "{} step{}",
+            summary.steps,
+            if summary.steps == 1 { "" } else { "s" }
+        )];
+        details.extend(
+            self.run_started
+                .take()
+                .map(|started| started.elapsed().as_secs())
+                .filter(|seconds| *seconds > 0)
+                .map(ejm_tui::elapsed_text),
+        );
+        let usage = summary.usage;
+        if usage.input_tokens + usage.output_tokens > 0 {
+            details.push(format!(
+                "{} in / {} out tokens",
+                compact_count(usage.input_tokens),
+                compact_count(usage.output_tokens)
+            ));
+        }
+        let level = match summary.status {
+            RunStatus::Completed => StatusLevel::Ok,
+            RunStatus::Cancelled | RunStatus::Interrupted => StatusLevel::Warn,
+            RunStatus::Failed | RunStatus::BudgetExhausted => StatusLevel::Error,
+        };
+        let word = serde_json::to_value(&summary.status)
+            .ok()
+            .and_then(|value| value.as_str().map(|word| word.replace('_', " ")))
+            .unwrap_or_else(|| "finished".into());
+        self.push(BlockKind::Summary(level), &word, &details.join(" · "), None);
     }
 
     fn finish_tool(&mut self, call_id: &str, output: ToolOutput) {

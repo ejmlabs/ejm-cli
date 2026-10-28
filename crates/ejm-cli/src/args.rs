@@ -241,6 +241,10 @@ pub struct Args {
         help = "Show a granted package widget: @publisher/package:widget (at most four)"
     )]
     pub widget: Vec<String>,
+
+    /// Why the TUI opened without a model provider. Set at startup, never from the command line.
+    #[arg(skip)]
+    pub setup_needed: Option<String>,
 }
 
 #[derive(Debug, Subcommand)]

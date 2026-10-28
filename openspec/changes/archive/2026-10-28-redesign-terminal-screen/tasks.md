@@ -15,4 +15,4 @@
 
 ## Workflow follow-up
 
-- Update the ejmlabs design kit's `ui/TUI.md` to match, then sync and archive this change.
+- The design kit's guide moved to ejm-ui's `packages/tokens/rust/TUI.md`, updated with ejm-ui's workspace recipes. Synced into `openspec/specs/terminal-screen` and archived on 2026-10-28.

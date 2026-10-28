@@ -7,7 +7,7 @@
 
 use ratatui::{
     Frame,
-    layout::Rect,
+    layout::{Alignment, Constraint, Layout, Margin, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Clear, Paragraph},
@@ -16,7 +16,7 @@ use unicode_width::UnicodeWidthChar;
 
 use ejm_tui::{
     ActivityLine, CommandMenu, Markdown, Message, MessageKind, ResourceCount, ResourceLine, Row,
-    RowState, Rule, SessionHeader, Text, TextVariant, Theme, ToolCall, WorkspaceLayout,
+    RowState, Rule, SessionHeader, Status, Text, TextVariant, Theme, ToolCall, WorkspaceLayout,
     elapsed_text, truncate, workspace_controls,
 };
 
@@ -31,6 +31,8 @@ const MIN_WIDTH: u16 = 20;
 const MIN_HEIGHT: u16 = 8;
 /// The key that shows complete tool output, named in collapsed previews.
 const EXPAND_KEY: &str = "Ctrl+O";
+/// Columns left blank on each side, so every region shares one left and one right edge.
+const MARGIN: u16 = 2;
 
 /// A package theme (`--theme`) replaces the shared colors for the roles it names.
 fn themed(base: &Theme, palette: Palette) -> Theme {
@@ -78,6 +80,7 @@ fn draw_screen(
         );
         return;
     }
+    let area = area.inner(Margin::new(MARGIN, 0));
     let spin =
         app.run_started
             .filter(|_| app.is_running())
@@ -91,20 +94,20 @@ fn draw_screen(
     let layout = WorkspaceLayout::new(area, draft.0.len(), false, true, app.widget_lines.len());
 
     frame.render_widget(
-        Paragraph::new(header_lines(app, args, theme, layout.header.width).to_vec()),
+        Paragraph::new(header_line(app, args, theme, layout.header.width)),
         layout.header,
     );
     let transcript = layout.transcript;
     if let Some(overlay) = &app.overlay {
         draw_overlay(frame, app, overlay, theme, transcript);
     } else {
-        draw_transcript(frame, app, theme, spin, transcript);
+        let setup = args
+            .setup_needed
+            .as_deref()
+            .map(|reason| (reason, args.api_key_env.as_str()));
+        draw_transcript(frame, app, theme, spin, setup, transcript);
         draw_commands(frame, app, theme, transcript);
     }
-    frame.render_widget(
-        Paragraph::new(activity(app, theme, spin, layout.activity.width)),
-        layout.activity,
-    );
     let resources = ResourceLine {
         agents: snapshot.active_agents,
         models: ResourceCount {
@@ -116,9 +119,19 @@ fn draw_screen(
             queued: snapshot.tools.queued,
         },
     };
+    // Counts share the working line, right aligned, and only while something is active or queued.
+    let counts = resources.line(theme, layout.activity.width / 2);
+    let counts_width = match counts.width() {
+        0 => 0,
+        columns => u16::try_from(columns + 2).unwrap_or(0),
+    };
+    let [work, count_area] =
+        Layout::horizontal([Constraint::Min(0), Constraint::Length(counts_width)])
+            .areas(layout.activity);
+    frame.render_widget(Paragraph::new(activity(app, theme, spin, work.width)), work);
     frame.render_widget(
-        Paragraph::new(resources.line(theme, layout.resources.width)),
-        layout.resources,
+        Paragraph::new(counts).alignment(Alignment::Right),
+        count_area,
     );
     frame.render_widget(
         Paragraph::new(
@@ -153,20 +166,16 @@ fn grants(app: &App, args: &Args) -> (String, bool) {
     }
 }
 
-fn header_lines(app: &App, args: &Args, theme: &Theme, width: u16) -> [Line<'static>; 2] {
+fn header_line(app: &App, args: &Args, theme: &Theme, width: u16) -> Line<'static> {
     let sep = theme.glyphs.separator;
     let provider = if is_controller(app) {
         "remote session"
-    } else if app.connection_ready {
+    } else if app.connection_ready && args.setup_needed.is_none() {
         args.provider_label()
     } else {
         "not connected"
     };
-    let mut connection = format!(
-        "{} {sep} {}",
-        safe_text(provider),
-        safe_text(&app.session.title)
-    );
+    let mut connection = safe_text(provider);
     if let Some(remote) = &app.remote {
         connection = format!("{} {sep} {connection}", safe_text(&remote.label));
     }
@@ -176,7 +185,7 @@ fn header_lines(app: &App, args: &Args, theme: &Theme, width: u16) -> [Line<'sta
         connection: &connection,
         directory: &safe_text(&display_path(&app.session.cwd)),
     }
-    .lines(theme, width)
+    .line(theme, width)
 }
 
 /// Home directory shown as `~`, so the part of the path that matters fits.
@@ -206,7 +215,21 @@ fn block_lines(
     spin: &str,
     width: u16,
 ) -> Vec<Line<'static>> {
-    let mut lines = if let Some(view) = &block.tool {
+    let mut lines = if let BlockKind::Summary(level) = block.kind {
+        // `✓ completed · 3 steps · 4s` under the reply's text column: the result glyph and
+        // word, then muted details.
+        let mut line = Status::new(theme, level)
+            .label(&block.title)
+            .line(width.saturating_sub(2));
+        line.spans.insert(0, Span::raw("  "));
+        let room = usize::from(width).saturating_sub(line.width());
+        let details = format!(" {} {}", theme.glyphs.separator, block.text);
+        line.spans.push(Span::styled(
+            truncate(&details, room, theme.glyphs.ellipsis),
+            theme.muted,
+        ));
+        vec![line]
+    } else if let Some(view) = &block.tool {
         ToolCall::new(theme, view.state, &view.name)
             .detail(&view.detail)
             .output(&block.text)
@@ -218,7 +241,7 @@ fn block_lines(
         let kind = match block.kind {
             BlockKind::User => MessageKind::User,
             BlockKind::Assistant => MessageKind::Assistant,
-            BlockKind::Notice | BlockKind::Tool => MessageKind::Notice,
+            BlockKind::Notice | BlockKind::Tool | BlockKind::Summary(_) => MessageKind::Notice,
             BlockKind::Error => MessageKind::Error,
         };
         let message = Message::new(theme, kind, &block.text);
@@ -232,29 +255,51 @@ fn block_lines(
     lines
 }
 
-fn empty_state(theme: &Theme, width: u16) -> Vec<Line<'static>> {
-    let mut lines = vec![Line::default()];
+/// The welcome, or while no provider is configured, the reason and the ways to connect.
+/// `setup` is the reason and the API key variable.
+fn empty_state(theme: &Theme, setup: Option<(&str, &str)>, width: u16) -> Vec<Line<'static>> {
+    let (title, body, note) = match setup {
+        Some((reason, key)) => (
+            "Connect a model to start",
+            format!(
+                "- Sign in with ChatGPT: `ejm-cli login chatgpt`, then `ejm-cli --provider chatgpt`\n\
+                 - Use an API key: set `{key}`, plus `EJM_CLI_MODEL` and `EJM_CLI_BASE_URL` for \
+                 other providers, then restart\n\
+                 - Try it offline: `ejm-cli --replay`"
+            ),
+            format!("Reason: {}", safe_text(reason)),
+        ),
+        None => (
+            "What shall we build?",
+            "Ask about this repository, investigate a bug, or describe a change.".into(),
+            "Ctrl+S opens saved sessions. --allow-write and --allow-shell set what tools may do."
+                .into(),
+        ),
+    };
+    let mut lines = Text::new(theme, title)
+        .variant(TextVariant::Strong)
+        .lines(width);
+    lines.push(Line::default());
+    lines.extend(Markdown::new(theme, &body).lines(width));
+    lines.push(Line::default());
     lines.extend(
-        Text::new(theme, "What shall we build?")
-            .variant(TextVariant::Strong)
+        Text::new(theme, &note)
+            .variant(TextVariant::Muted)
             .lines(width),
     );
     lines.push(Line::default());
-    let tips = "- Ask about this repository, investigate a bug, or describe a change.\n\
-        - Type / for commands, ? for shortcuts and Ctrl+S for saved sessions.\n\
-        - Read tools are ready. Write and shell access need --allow-write and --allow-shell.";
-    lines.extend(Markdown::new(theme, tips).lines(width));
     lines
 }
 
-fn draw_transcript(frame: &mut Frame<'_>, app: &mut App, theme: &Theme, spin: &str, area: Rect) {
-    // One column of padding on each side.
-    let inner = Rect::new(
-        area.x + 1,
-        area.y,
-        area.width.saturating_sub(2),
-        area.height,
-    );
+fn draw_transcript(
+    frame: &mut Frame<'_>,
+    app: &mut App,
+    theme: &Theme,
+    spin: &str,
+    setup: Option<(&str, &str)>,
+    area: Rect,
+) {
+    let inner = area;
     let available = usize::from(inner.height);
     // Wrap from the newest block back, only as far as the screen and scroll offset need, so a
     // long transcript costs no more per frame than a short one.
@@ -270,8 +315,9 @@ fn draw_transcript(frame: &mut Frame<'_>, app: &mut App, theme: &Theme, spin: &s
         }
     }
     if total < wanted {
-        if app.blocks.is_empty() {
-            let lines = empty_state(theme, inner.width);
+        // While not connected the steps stay above any notices, since no run can push them away.
+        if app.blocks.is_empty() || setup.is_some() {
+            let lines = empty_state(theme, setup, inner.width);
             total += lines.len();
             chunks.push(lines);
         }
@@ -302,13 +348,14 @@ fn draw_commands(frame: &mut Frame<'_>, app: &App, theme: &Theme, area: Rect) {
         .map(|(entry, usage)| (usage.as_str(), entry.description.as_str()))
         .collect::<Vec<_>>();
     let menu = CommandMenu::new(theme, &items).selected(app.command_picker.selected);
-    let height = menu.height().min(8).min(area.height.saturating_sub(1));
+    // One cleared row above the menu sets it apart from the transcript it covers.
+    let height = menu.height().min(8).min(area.height.saturating_sub(2));
     if height == 0 {
         return;
     }
-    let menu_area = Rect::new(area.x, area.bottom() - height, area.width, height);
-    frame.render_widget(Clear, menu_area);
-    frame.render_widget(menu, menu_area);
+    let cleared = Rect::new(area.x, area.bottom() - height - 1, area.width, height + 1);
+    frame.render_widget(Clear, cleared);
+    frame.render_widget(menu, Rect::new(area.x, cleared.y + 1, area.width, height));
 }
 
 /// The working line: spinner, step, elapsed time and the stop key while a run is active; the
@@ -362,35 +409,28 @@ fn activity(app: &App, theme: &Theme, spin: &str, width: u16) -> Line<'static> {
     }
 }
 
-/// Grants first, then the keys that apply right now.
+/// Grants at the left, then the few keys that apply right now at the right edge.
 fn controls(app: &App, args: &Args, theme: &Theme, width: u16) -> Line<'static> {
-    let details = if app.tool_detail == ToolDetail::Full {
-        "hide details"
+    let arrows = if ejm_tui::is_ascii(theme.glyphs) {
+        "Up/Down"
     } else {
-        "details"
+        "\u{2191}/\u{2193}"
     };
+    let picker = [(arrows, "choose"), ("Tab", "complete"), ("Esc", "close")];
     let hints: &[(&str, &str)] = if app.quit_armed.is_some() {
         &[("Ctrl+C", "again to quit")]
+    } else if app.command_query().is_some() {
+        &picker
     } else if app.is_running() {
-        &[
-            ("Enter", "queue"),
-            ("Ctrl+K", "steer"),
-            ("Esc", "stop"),
-            (EXPAND_KEY, details),
-        ]
+        &[("Esc", "stop"), ("Ctrl+K", "steer"), ("Enter", "queue")]
     } else if !app.composer.text.is_empty() {
-        &[
-            ("Enter", "send"),
-            ("Alt+Enter", "new line"),
-            ("Ctrl+C", "clear"),
-        ]
+        &[("Enter", "send"), ("Alt+Enter", "new line")]
+    } else if app.tool_detail == ToolDetail::Full {
+        // Full output is a mode, so its way back stays named.
+        &[(EXPAND_KEY, "hide details"), ("?", "shortcuts")]
     } else {
-        &[
-            ("/", "commands"),
-            ("?", "shortcuts"),
-            ("Ctrl+S", "sessions"),
-            (EXPAND_KEY, details),
-        ]
+        // Collapsed previews name Ctrl+O and the welcome names Ctrl+S; ? lists every key.
+        &[("/", "commands"), ("?", "shortcuts")]
     };
     let (mode, elevated) = grants(app, args);
     workspace_controls(theme, &format!("grants: {mode}"), elevated, hints, width)
@@ -501,7 +541,7 @@ fn draw_overlay(frame: &mut Frame<'_>, app: &App, overlay: &Overlay, theme: &The
             lines.push(
                 Rule::new(theme)
                     .label(&format!(
-                        "Conversation {sep} {arrows} choose {sep} Enter insert {sep} Esc close"
+                        "Shortcuts {sep} {arrows} choose a command {sep} Enter use {sep} Esc close"
                     ))
                     .line(width),
             );
@@ -544,7 +584,17 @@ fn draw_overlay(frame: &mut Frame<'_>, app: &App, overlay: &Overlay, theme: &The
                     ))
                     .line(width),
             );
+            lines.push(Line::default());
             *selected
+        }
+        Overlay::Status { .. } => {
+            lines.push(
+                Rule::new(theme)
+                    .label(&format!("Status {sep} Esc close"))
+                    .line(width),
+            );
+            lines.push(Line::default());
+            0
         }
     };
     let header = lines.len();
@@ -581,12 +631,22 @@ fn overlay_rows(
                 .selected(selected)
                 .lines(width)
         }
+        Overlay::Status { rows } => rows
+            .iter()
+            .map(|(label, value)| {
+                Row::new(theme, label)
+                    .label_width(12)
+                    .value(&safe_text(value))
+                    .line(width)
+            })
+            .collect(),
         Overlay::Sessions { sessions, .. } => sessions
             .iter()
             .enumerate()
             .map(|(index, session)| {
+                // Idle is the usual state, so only the others are named.
                 let status = match session.status {
-                    ejm_harness::SessionStatus::Idle => "idle",
+                    ejm_harness::SessionStatus::Idle => "",
                     ejm_harness::SessionStatus::Running => "running",
                     ejm_harness::SessionStatus::Interrupted => "interrupted",
                 };
@@ -596,10 +656,15 @@ fn overlay_rows(
                     ""
                 };
                 let title = format!("{}{current}", safe_text(&session.title));
+                let meta = [status, &age(session.created_at_ms)]
+                    .into_iter()
+                    .filter(|part| !part.is_empty())
+                    .collect::<Vec<_>>()
+                    .join(&format!(" {sep} ", sep = theme.glyphs.separator));
                 Row::new(theme, session.id.get(..8).unwrap_or(&session.id))
                     .label_width(8)
-                    .value(&format!("{status:<11} {title}"))
-                    .meta(&age(session.created_at_ms))
+                    .value(&title)
+                    .meta(&meta)
                     .state(if index == selected {
                         RowState::Selected
                     } else {
@@ -774,18 +839,16 @@ mod tests {
             let text = text(&render_app(&args, &unicode(), width, height, app()));
             if width == 100 {
                 assert!(text.contains("ejm-cli 0.1.0"), "{text}");
-                assert!(text.contains("offline replay · test"), "{text}");
+                assert!(text.contains("offline replay"), "{text}");
+                assert!(text.contains("/tmp"), "{text}");
                 assert!(text.contains("grants: read + write"), "{text}");
                 assert!(text.contains("What shall we build?"));
                 assert!(
-                    text.contains("12 agents · models 2+3q · tools 0+0q"),
+                    text.contains("12 agents · 2 model calls, 3 waiting · 0 tools"),
                     "{text}"
                 );
                 assert!(text.contains("› Describe a task…"));
-                assert!(
-                    text.contains("/ commands · ? shortcuts · Ctrl+S sessions"),
-                    "{text}"
-                );
+                assert!(text.contains("/ commands · ? shortcuts"), "{text}");
                 assert!(!text.contains('╭'), "no boxes: {text}");
             }
             if width == 40 {
@@ -839,7 +902,7 @@ mod tests {
             "{text}"
         );
         assert!(
-            text.contains("Enter queue · Ctrl+K steer · Esc stop"),
+            text.contains("Esc stop · Ctrl+K steer · Enter queue"),
             "{text}"
         );
         assert!(text.contains("Queue a follow-up"), "{text}");
@@ -915,5 +978,72 @@ mod tests {
                 assert!(text.is_ascii(), "{text}");
             }
         }
+    }
+
+    fn event(app: &App, sequence: u64, mut kind: serde_json::Value) -> ejm_harness::Event {
+        let fields = kind.as_object_mut().unwrap();
+        fields.insert("session_id".into(), app.session.id.clone().into());
+        fields.insert("sequence".into(), sequence.into());
+        fields.insert("timestamp_ms".into(), 0.into());
+        fields.insert("run_id".into(), "run".into());
+        serde_json::from_value(kind).unwrap()
+    }
+
+    #[test]
+    fn finished_run_leaves_a_summary_and_a_quiet_working_line() {
+        let args = Args::try_parse_from(["ejm-cli", "--replay"]).unwrap();
+        let mut app = app();
+        for (sequence, kind) in [
+            serde_json::json!({"type": "run_started", "prompt": "Fix the parser"}),
+            serde_json::json!({"type": "text_delta", "text": "Done."}),
+            serde_json::json!({"type": "run_finished", "summary": {
+                "run_id": "run", "status": "completed", "steps": 3, "text": "Done.",
+                "usage": {"input_tokens": 0, "output_tokens": 0}, "error": null
+            }}),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let event = event(&app, u64::try_from(sequence).unwrap() + 1, kind);
+            app.apply(event);
+        }
+        let text = text(&render_app(&args, &unicode(), 100, 30, app));
+        assert!(text.contains("✓ completed · 3 steps "), "{text}");
+        assert!(!text.contains("tokens"), "zero usage is not shown: {text}");
+        assert!(!text.contains("Ready"), "{text}");
+    }
+
+    #[test]
+    fn unconfigured_provider_shows_how_to_connect() {
+        let mut args = Args::try_parse_from(["ejm-cli"]).unwrap();
+        args.setup_needed = Some("set EJM_CLI_API_KEY".into());
+        let mut app = app();
+        app.error("Not connected.");
+        let text = text(&render_app(&args, &unicode(), 100, 30, app));
+        assert!(text.contains("not connected"), "{text}");
+        assert!(text.contains("Connect a model to start"), "{text}");
+        assert!(text.contains("ejm-cli login chatgpt"), "{text}");
+        assert!(text.contains("Reason: set EJM_CLI_API_KEY"), "{text}");
+        assert!(text.contains("✗ Not connected."), "{text}");
+    }
+
+    #[test]
+    fn picker_names_its_keys_and_status_opens_as_rows() {
+        let args = Args::try_parse_from(["ejm-cli", "--replay"]).unwrap();
+        let mut app = app();
+        app.composer.insert("/");
+        let picker = text(&render_app(&args, &unicode(), 100, 30, app));
+        assert!(
+            picker.contains("↑/↓ choose · Tab complete · Esc close"),
+            "{picker}"
+        );
+        let mut app = super::tests::app();
+        app.overlay = Some(Overlay::Status {
+            rows: vec![("Connection", "ready".into()), ("Grants", "read".into())],
+        });
+        let status = text(&render_app(&args, &unicode(), 100, 30, app));
+        assert!(status.contains("Status · Esc close"), "{status}");
+        assert!(status.contains("  Connection    ready"), "{status}");
+        assert!(!status.contains('!'), "{status}");
     }
 }

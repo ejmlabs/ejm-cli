@@ -98,7 +98,21 @@ async fn run_agent(
     let provider = if let Some(name) = &args.package_provider {
         extensions.provider(name)?
     } else {
-        provider(args).await?
+        match provider(args).await {
+            Ok(provider) => provider,
+            // The TUI opens anyway and explains how to connect. Submits are refused before a run
+            // starts, and an empty replay fails any other request, so nothing answers in its place.
+            Err(error)
+                if matches!(mode, AgentMode::Interactive)
+                    && args.command.is_none()
+                    && std::io::stdin().is_terminal()
+                    && std::io::stdout().is_terminal() =>
+            {
+                args.setup_needed = Some(format!("{error:#}"));
+                Arc::new(ReplayProvider::new(Vec::new()))
+            }
+            Err(error) => return Err(error),
+        }
     };
     let config = HarnessConfig {
         state_dir: state_dir.clone(),
@@ -126,13 +140,16 @@ async fn run_agent(
             } else {
                 println!("{:<36}  {:<14}  TITLE", "SESSION", "STATUS");
                 for session in sessions {
+                    let title = ui::shown_title(&harness, &session)
+                        .await?
+                        .unwrap_or_else(|| session.title.clone());
                     println!(
                         "{:<36}  {:<14}  {}",
                         session.id,
                         serde_json::to_value(&session.status)?
                             .as_str()
                             .unwrap_or("unknown"),
-                        render::safe_text(&session.title).replace('\n', " ")
+                        render::safe_text(&title).replace('\n', " ")
                     );
                 }
             }
