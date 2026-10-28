@@ -122,6 +122,10 @@ Worker layer integrates those checks without replacing the accepted terminal
 supervisor or its seventeen PTY sessions. Its test-only transport fixtures reuse
 the real accepted native host and offline harness; no provider calls are needed.
 
+## Release binaries
+
+`.github/workflows/build.yml` builds `ejm-cli` with `cargo build --release --locked` at the harness revision in `.github/harness-revision`. Its jobs have `contents: read` and no secrets. `scripts/package_release.py` archives the binary with `LICENSE`, `THIRD_PARTY_NOTICES.md` and `HARNESS_REVISION`, runs `--version` and `--replay run "Hello"` against the unpacked archive, and prints the archive digest. A `collect` job uploads the one `release-files` artifact, with a combined `build-sha256.txt`, for the shared native release workflow, which holds the only write permission. `build.yml` runs on main and on dispatch. It has no macOS job because macOS Apple silicon is not offered until it is notarized. The build runner's glibc sets the Linux minimum (2.39 on `ubuntu-24.04`) and `libdbus-1` is a runtime requirement. Release notes live in `docs/release-notes/`.
+
 ## Project skills
 
 The skills in `.agents/skills` route implementation, review, terminal and theme work, sign-in, packages, performance, testing, dependencies, the sibling harness, docs and claims, the marketing site, and releases. The six `openspec-*` skills handle exploration, proposals, plan updates, implementation, spec sync and archival. All feature and bugfix work follows OpenSpec because this project has an `openspec/` directory. `AGENTS.md` lists which skill fits each task. The gate checks each skill's frontmatter and references, that the exact set matches `scripts/check_architecture.py`, and that `AGENTS.md` routes to every skill. Keep them concise and specific to this project. Read only the skill that matches the task, and update the owning reference when a convention changes. When you add a skill, add it to the check script and to the table in `AGENTS.md`.

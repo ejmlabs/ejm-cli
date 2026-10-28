@@ -75,6 +75,7 @@ def full() -> None:
     with tempfile.TemporaryDirectory(prefix="ejm-cli-check-") as temporary:
         messages = Path(temporary) / "cargo-tests.jsonl"
         run([sys.executable, "scripts/check_architecture.py"])
+        run([sys.executable, "-B", "-m", "unittest", "discover", "-s", "scripts", "-p", "test_*.py"])
         run(["cargo", "fmt", "--all", "--", "--check"])
         run(["cargo", "clippy", "--workspace", "--all-targets", "--locked", "--", "-D", "warnings"])
         native_tests(messages)
