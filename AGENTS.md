@@ -31,7 +31,7 @@ ejm-cli is the Rust terminal app for ejm-harness, made by ejmlabs. The harness l
 
 | Path | Holds |
 | --- | --- |
-| `crates/ejm-cli/src` | `args`, `auth`, `browser`, `app`, `ui`, `render`, `extensions`, `packages`, `main`, plus the kit modules `ejm_theme` (generated, never hand edited) and `ejm_tui` |
+| `crates/ejm-cli/src` | `args`, `auth`, `browser`, `app`, `ui`, `render`, `extensions`, `packages`, `main`. Terminal blocks, theme and glyphs come from the `ejm-tui` crate in `../ejm-ui/crates/ejm-tui` |
 | `crates/ejm-cli/tests/cli.rs` | Integration tests that run the real binary against `--replay` |
 | `docs/` | `ejm-cli.md` reference, `benchmarks.md` evidence, `contributing.md` gates and ownership |
 | `scripts/` | `check` (the one gate), `check_architecture.py`, `check_terminal.py`, `install-hooks`, `sync-design-kit.sh` |

@@ -1,15 +1,16 @@
 ---
 name: ejm-cli-theme
-description: Change or review ejm-cli colors, light and dark appearance, glyphs, NO_COLOR behavior, or use of the ejmlabs design kit in the terminal.
+description: Change or review ejm-cli colors, light and dark appearance, glyphs, NO_COLOR behavior, or use of the shared ejm-tui terminal blocks.
 ---
 
 # ejm-cli theme and appearance
 
-Read [the theme module](../../../crates/ejm-cli/src/ejm_theme.rs), `crates/ejm-cli/src/ejm_tui.rs` and `crates/ejm-cli/src/render.rs`. The visual rules live in the ejmlabs design kit's terminal guide at `../ejmlabs/design-kit/ui/TUI.md`, and this repo follows it.
+Read `crates/ejm-cli/src/render.rs` and the shared crate at `../ejm-ui/crates/ejm-tui` (its README, `src/style.rs`, `src/conversation.rs` and `src/workspace.rs`). The rules and states come from `../ejm-ui/packages/core/contract.json`, which the Ink and web targets share.
 
-- `ejm_theme.rs` is generated from the kit's `ui/theme.json`. Never edit it by hand. Update it by copying the kit's `ui/rust/ejm_theme.rs`. `ejm_tui.rs` is the hand written widget layer from the same kit. A new color needs a new role in the kit, not a one-off in the app.
-- Never paint a background. Colors are text colors that stay readable on the user's own terminal. The only filled surface is the reversed selected row.
-- Choose colors in this order: `--no-color` or `NO_COLOR` first, then truecolor (`COLORTERM` contains `truecolor` or `24bit`) with the dark or light palette, then the named 16 color set. Pick light or dark from `--appearance`, then `COLORFGBG`, and default to dark.
+- Build screens from ejm-tui blocks. When ejm-cli needs a block or state the crate lacks, add it to the contract and to both terminal targets in ejm-ui (Rust and Ink) so every CLI gains it, rather than drawing a one-off here. A new color needs a new role in `packages/tokens`, not a one-off in the app.
+- No boxes or frames. Group with space and one hairline `Rule`.
+- Never paint a background. Colors are text colors that stay readable on the user's own terminal. Selection is the `›` mark and bold, not a filled row.
+- `ejm_tui::Theme::from_env` chooses colors: `--no-color`, `NO_COLOR` or `TERM=dumb` first, then truecolor, then 256 colors, then the named 16 color set. Light or dark comes from `--appearance`, then `COLORFGBG`, and defaults to dark.
 - Color is never the only signal. Every state also has a word or a glyph, and the app stays fully usable under `NO_COLOR`. Use ASCII glyphs when the locale is not UTF-8.
 - Keep motion calm. One spinner while work runs and nothing when idle.
 - New text roles must keep 4.5:1 contrast on both light and dark grounds. Check with the kit's contrast data before adding one.
