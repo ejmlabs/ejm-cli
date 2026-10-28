@@ -35,7 +35,7 @@ jobs:
       contents: write
       pull-requests: read
       statuses: read
-    uses: ejmlabs/.github/.github/workflows/draft-release.yml@451ef7d1ef46373b6018a1fbcacc331e15e1d093
+    uses: ejmlabs/.github/.github/workflows/draft-release.yml@395c4836236fa7c9a03f4d2bf5cb16d2240c2f8b
     with:
       commit: ${{ inputs.commit }}
       version: ${{ inputs.version }}
