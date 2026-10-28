@@ -247,7 +247,7 @@ Update installs a new exact registry version and clears trust and grants. Inspec
 
 ### Registry and publishing
 
-Registry commands use `https://harness.meetgerry.ai`. The endpoint and live service have their own availability and release requirements. These commands make network requests:
+This source still contains a legacy registry endpoint outside the public ejmlabs project. A supported public registry is not provided by this release. Use reviewed local packages or exact npm, PyPI and Git sources. The following commands make network requests to that legacy service; they are retained here for existing credential recovery and are not public setup instructions:
 
 ```sh
 ejm-cli package search QUERY
