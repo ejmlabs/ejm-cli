@@ -77,23 +77,44 @@ ejm-cli login anthropic
 
 ## Interaction
 
+The screen is built from the shared ejmlabs terminal blocks in the sibling `ejm-ui`
+repository (`crates/ejm-tui`), the same blocks the Ink target offers JavaScript CLIs. It
+draws no boxes. A two-line header shows the version, model, session title and working
+directory. Each transcript line starts with a gutter glyph so it reads without color: `›` your
+message, `●` the assistant, a state glyph for a tool call (`○` queued, a spinner while
+running, `✓` done, `✗` failed), `!` a notice and `✗` an error. Assistant text gets light
+Markdown: headings, lists, quotes, rules, fenced code and inline bold, italic and code.
+Tool calls show their main argument, such as a path, pattern or command, and a short
+output preview. Ctrl+O shows complete tool output.
+
+While a run is active, the line above the counts shows a spinner, the current step, the
+elapsed time and how to stop. When idle it shows the last result and token use. Agent,
+model and tool counts stay visible on their own line. The composer sits under a hairline
+rule. The footer starts with the effective grants, which stay on screen at every width and
+turn the warning color when write or shell access is granted, then lists the keys that
+apply right now. The command menu opens above the composer, and the help and session
+panels replace the transcript until Escape.
+
 | Key | Action |
 | --- | --- |
 | Enter | Send a turn, or queue it while a run is active |
 | Alt+Enter, Shift+Enter, Ctrl+J | Insert a newline |
 | Ctrl+K | Steer the active run with the draft |
-| Ctrl+C | Stop the current run, or exit when idle |
+| Escape | Stop the current run; when scrolled up, follow current output instead |
+| Ctrl+C | Stop the current run, clear the draft, or press twice within two seconds to exit |
 | Ctrl+D | Exit when the composer is empty |
+| Ctrl+O | Show or hide complete tool output |
+| ? | Open shortcuts and commands when the composer is empty |
 | Ctrl+S | Choose a saved session |
 | Up, Down | Choose a command while the picker is open; otherwise recall sent messages |
 | Tab | Complete the selected command without running it |
 | Left, Right, Home, End | Move the text cursor |
 | PageUp, PageDown, mouse wheel | Scroll the transcript |
-| End, Escape | Follow current output |
+| End | Follow current output |
 | Escape | Close a panel or command picker without changing the draft |
 
 Type `/` at the beginning of an empty composer to see built-in and granted package
-commands. Keep typing to filter by command name. Up/Down chooses a result. Tab
+commands in a list under the composer. Keep typing to filter by command name. Up/Down chooses a result. Tab
 completes it; Enter completes an unfinished command name or runs an exact command.
 Completion never starts a run. Commands that need an argument leave a trailing
 space for it. Escape dismisses the picker and keeps the draft editable.

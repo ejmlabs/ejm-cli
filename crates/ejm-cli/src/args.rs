@@ -39,7 +39,7 @@ pub enum Appearance {
     Dark,
 }
 
-impl From<Appearance> for crate::ejm_tui::Appearance {
+impl From<Appearance> for ejm_tui::Appearance {
     fn from(value: Appearance) -> Self {
         match value {
             Appearance::Auto => Self::Auto,

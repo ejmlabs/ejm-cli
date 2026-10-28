@@ -16,7 +16,7 @@ distribution. See [the release policy](RELEASING.md) for version and release gat
 ## Requirements
 
 - Rust 1.99.1, selected by `rust-toolchain.toml`.
-- Git and sibling checkouts of `ejm-cli` and `ejm-harness`.
+- Git and sibling checkouts of `ejm-cli`, `ejm-harness` and `ejm-ui`.
 - A terminal for the TUI. Use `run` for pipes and automation.
 - Provider credentials for hosted models. Offline replay needs none.
 
@@ -30,6 +30,7 @@ Clone both repositories into the same parent directory:
 
 ```sh
 git clone https://github.com/ejmlabs/ejm-harness.git
+git clone https://github.com/ejmlabs/ejm-ui.git
 git clone https://github.com/ejmlabs/ejm-cli.git
 cd ejm-cli
 cargo build --release --locked
@@ -62,18 +63,23 @@ Native execution runs as the current user and is not a security sandbox.
 ### Terminal experience
 
 - Unicode composer, multiline input, bracketed paste, and sent-message history.
-- Streaming transcript with code, Markdown, and diff styling.
+- Streaming transcript with gutter glyphs, light Markdown, diff styling, and
+  collapsible tool calls that show their main argument.
+- A working line with a spinner, step and elapsed time, and a footer with the
+  effective grants and the keys that apply right now.
+- Built from the shared ejmlabs terminal blocks in `ejm-ui/crates/ejm-tui`, so
+  the clone of `ejm-ui` must sit beside this repository to build.
 - Visible run state and separate agent, model, and local tool counts.
 - Saved sessions, steering, queued turns, and cancellation.
 - Bounded rendering and scrollback, with durable history in the harness.
 - Plain and JSON modes for pipes and automation.
 - Terminal restoration on errors, panic, and handled signals.
 
-Type `/` to filter commands. Up/Down chooses a command, Tab completes it, and
-Escape closes the picker without changing the draft. `/help` also lists granted
+Type `/` to filter commands, or `?` for shortcuts. Up/Down chooses a command, Tab
+completes it, and Escape closes the picker without changing the draft. `/help` also lists granted
 package commands; Enter copies the selected command into the composer. Enter
-sends or queues a complete command or prompt, Ctrl+K steers, Ctrl+C stops, and
-Ctrl+S opens sessions. `/agents` shows managed sessions.
+sends or queues a complete command or prompt, Ctrl+K steers, Escape or Ctrl+C stops, Ctrl+O shows
+complete tool output, Ctrl+S opens sessions, and Ctrl+C twice exits. `/agents` shows managed sessions.
 
 ```sh
 ejm-cli run "Explain the parser" --json
