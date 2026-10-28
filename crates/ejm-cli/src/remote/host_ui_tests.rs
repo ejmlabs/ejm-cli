@@ -539,7 +539,7 @@ async fn queued_observer(
     Ok((target, observer))
 }
 
-async fn terminal_observer_loop() -> Result<()> {
+async fn terminal_observer_loop(signal: bool) -> Result<()> {
     let directory = tempfile::tempdir()?;
     let (ended, mut ends) = mpsc::channel(1);
     let gate = Arc::new(ObserverGate {
@@ -568,21 +568,44 @@ async fn terminal_observer_loop() -> Result<()> {
         .begin_share(&session.id, "observer".into(), ShareRole::Control, u64::MAX)
         .await?;
     let (mut target, observer) = queued_observer(&backend, &session, &gate, &mut ends).await?;
-    let (mut task, _sender, _release) = held_task("observer");
-    task.expires_at_ms = u64::MAX;
+    let shutdown = CancellationToken::new();
+    let cancel = shutdown.child_token();
+    let task_cancel = cancel.clone();
+    let (_sender, notices) = mpsc::channel(4);
+    let task = HostTask {
+        epoch: "observer".into(),
+        expires_at_ms: u64::MAX,
+        notices,
+        join: tokio::spawn(async move { task_cancel.cancelled().await }),
+    };
     let mut sharing = host(&session, task);
+    sharing.shutdown = shutdown.clone();
+    sharing.cancel = cancel;
     sharing.panel = None;
     let mut app = App::new(session.clone());
     app.notice("Observer blocked");
     let args = Args::try_parse_from(["ejm-cli", "--replay"])?;
     let extensions = crate::extensions::Extensions::empty()?;
     let terminal = crate::ui::TerminalGuard::enter()?;
-    crate::ui::with_shutdown(
-        &backend,
-        CancellationToken::new(),
-        crate::ui::run_app(&backend, &args, &extensions, sharing, app, terminal),
-    )
+    let mut operation_completed = false;
+    crate::ui::with_shutdown(&backend, shutdown.clone(), async {
+        if signal {
+            backend
+                .with_authority_held(async {
+                    eprintln!("Observer blocked");
+                    shutdown.cancelled().await;
+                })
+                .await;
+        }
+        crate::ui::run_app(&backend, &args, &extensions, sharing, app, terminal).await?;
+        operation_completed = true;
+        Ok(())
+    })
     .await?;
+    anyhow::ensure!(
+        !signal || operation_completed,
+        "signal dropped the suspended UI operation before cleanup"
+    );
     anyhow::ensure!(
         !observer.is_cancelled(),
         "local input waited for observer release or timeout"
@@ -691,7 +714,7 @@ async fn remote_terminal_interaction_fixture() -> Result<()> {
         return backend.shutdown().await;
     }
     if mode.starts_with("observer-") {
-        return terminal_observer_loop().await;
+        return terminal_observer_loop(mode == "observer-signal").await;
     }
     if mode == "pairing-replacement" {
         return terminal_pairing_replacement().await;

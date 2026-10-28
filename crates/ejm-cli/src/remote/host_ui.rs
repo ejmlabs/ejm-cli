@@ -70,6 +70,31 @@ impl HostUi {
         })
     }
 
+    #[cfg(test)]
+    pub(super) fn worker_fixture(
+        session: &str,
+        invitation: &Invitation,
+        cancel: CancellationToken,
+        join: JoinHandle<()>,
+    ) -> Self {
+        let (_, notices) = mpsc::channel(1);
+        Self {
+            account: None,
+            session: Some(session.into()),
+            role: invitation.role(),
+            connected: false,
+            panel: None,
+            shutdown: cancel.clone(),
+            cancel,
+            task: Some(HostTask {
+                epoch: invitation.routing_id().into(),
+                expires_at_ms: invitation.share_expires_at_ms(),
+                notices,
+                join,
+            }),
+        }
+    }
+
     pub async fn share(
         &mut self,
         backend: &LocalBackend,
@@ -340,16 +365,28 @@ impl HostUi {
             .is_some_and(|current| current != session)
     }
 
+    pub fn shutdown_requested(&self) -> bool {
+        self.shutdown.is_cancelled()
+    }
+
     pub async fn stop(&mut self, backend: &LocalBackend) {
         self.cancel.cancel();
-        if let Some(task) = self.task.take() {
-            backend.stop_share_if(&task.epoch).await;
-            task.join.abort();
-            let _ = task.join.await;
-        }
         self.panel = None;
         self.session = None;
         self.connected = false;
+        if let Some(task) = self.task.as_mut() {
+            backend.stop_share_if(&task.epoch).await;
+            // Keep ownership through the drain so cancellation of this caller
+            // still reaches Drop's abort fallback.
+            if tokio::time::timeout(std::time::Duration::from_secs(5), &mut task.join)
+                .await
+                .is_err()
+            {
+                task.join.abort();
+                let _ = (&mut task.join).await;
+            }
+        }
+        self.task = None;
     }
 }
 

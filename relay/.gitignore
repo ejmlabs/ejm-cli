@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.wrangler/
+.dev.vars
+web/.fixture-dist/
+web/.ui-proof/
+web/test-results/
+playwright-report/

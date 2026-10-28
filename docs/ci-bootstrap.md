@@ -10,9 +10,12 @@ view state. `ejm-harness` owns provider transport, authentication mechanics,
 tools, and run policy through its public APIs. The
 [accepted native remote source](native-remote-publication.md) adds host and controller
 interaction through those APIs in protected CLI PR #21, following PR #20's
-docs/UI prerequisite. The current slice prepares only inert UI and Relay install
-review inputs on that protected native parent. Worker/browser source and provider or account switching inside
-the TUI belong to later source layers.
+docs/UI prerequisite. The inert UI/Relay input successor is accepted through
+protected PR #22 merge 78810826. The current Worker source starts on that actual
+parent, with public UI consumption, browser WASM and fixture/gate adapters.
+Its [local stage checks](relay-publication.md#current-local-checks) are recorded
+separately; hosted adoption and deployment remain pending. Provider or account
+switching inside the TUI remains outside this layer.
 
 Use the reviewed harness revision in `.github/harness-revision` and the locked
 dependency graph. Review any dependency or lock change with its owning source;
@@ -29,6 +32,10 @@ From the repository root, run the existing product gate:
 
 It checks architecture, format, strict Clippy, workspace tests, a release build,
 Rust documentation, dependencies, and real PTY interaction and restoration.
+The Worker integration adds the [complete Relay phase](../relay/README.md#local-checks):
+source-bound UI installation, debug/production WASM, Worker/schema checks and
+native/browser fixtures. Preserve the accepted fourteen native PTY cases across
+seventeen sessions. Its results remain pending for this new combined source.
 For command-parser diagnosis, use
 `cargo test -p ejm-cli --locked commands::`, followed by the affected App,
 render, or UI test filters. Local replay and fixtures need no paid provider,
@@ -111,12 +118,14 @@ The existing persistent-account integration test checks the store contract.
 Fresh hosted Linux results must verify this setup; local macOS results cannot.
 
 The admitted workflow exports the CLI source under `product/`. When
-`product/relay/package.json` exists, the action runs `npm ci --ignore-scripts`
+`product/relay/package.json` exists, the action runs `npm ci --ignore-scripts --install-links`
 and the locked Playwright command `npm exec --no -- playwright install
---with-deps chrome` from the relay directory. The current inert prerequisite
-includes `relay/package-lock.json` but no runnable `relay/package.json`, so that
-step remains skipped. Its copied review manifest is outside the runnable package.
-A runnable relay manifest without its lockfile fails installation.
+--with-deps chrome` from the relay directory. Accepted inert PR #22 had only
+`relay/package-lock.json`, so its run skipped that step. The Worker layer activates
+the matching runnable manifest and therefore requires installation and Chrome
+setup. Its copied review manifest remains inert outside the runnable package.
+The product gate uses `npm ci --ignore-scripts --install-links` to materialize
+selected public local UI packages. A runnable manifest without its lock fails.
 Tool installation needs network access and the hosted runner's package manager.
 
 The prior `5fae851502c2e3c31d4df9a44f8d56c2cb49e098` caller did not invoke
@@ -353,6 +362,19 @@ migration remains pending.
 
 ### Current inert shared UI and Relay inputs
 
+This section retains PR #22's historical preparation scope. Corrected head
+`f44c57396bc220562a8dae83767e188977e2c2ce` passed
+[run 39520822069](https://github.com/ejmlabs/ejm-cli/actions/runs/39520822069):
+Linux/macOS quality, registry, standards and both complete reviews with no findings.
+[Human approval 6305211216](https://github.com/ejmlabs/ejm-cli/pull/22#issuecomment-6305211216)
+preceded the normal protected squash merge at 2026-10-21 00:51:27 UTC,
+`78810826cd376588d3303f13bc237309fb5170a8`, tree
+`dca23befbbe5bf065807f8ed06a98aa5b4c7a159`, equal to the reviewed tree.
+It proves inert-input adoption, not installation, runtime or deployment. The
+[complete Worker layer](relay-publication.md) now starts on that actual protected
+parent. Preparation instructions below describe the accepted prerequisite;
+they do not undo that receipt or claim the new layer is accepted.
+
 Prepare this prerequisite on actual protected native merge
 `71d0f47f8b05c6314eca4dc0750ffaad833d6afb`, tree
 `3adf3701aec18883b2aabd710e72fa3c513c7fdf`. Select protected UI PR #11 merge
@@ -409,14 +431,13 @@ root gate, Cargo, harness or workflow change. Preserve native lock SHA-256
 protected harness 42e and installed 40d callers. The Relay install step stays
 skipped because the runnable manifest is absent.
 
-The successor still requires the normal full gate, new exact-head human readiness,
-two complete configured paid reviews, separate final approval and protected
-merge within 200 paths, 12,000 changed lines and 1,000,000 diff bytes. It proves
-no installation, deployment or site publication. The later Worker PR must inherit
-the new pin from protected BASE and verify the exact full UI archive,
-lifecycle-disabled installed proof and full native/WASM/Worker/browser gate before
-closed deployment. There is no runtime or CLI flag change in this prerequisite;
-all eleven aggregate release tasks stay open.
+That successor passed its required exact-head gates and protected adoption as
+recorded above. Its original limits remain 200 paths, 12,000 changed lines and
+1,000,000 diff bytes. It proves no installation, deployment or site publication.
+The current Worker source inherits the new pin from protected BASE and must
+verify the exact full UI archive, lifecycle-disabled installed proof and full
+native/WASM/Worker/browser gate before closed deployment. The inert prerequisite
+changed no runtime or CLI flag; all eleven whole release tasks remain open.
 
 ## Native source acceptance
 

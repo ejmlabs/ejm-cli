@@ -110,9 +110,21 @@ both screens, then confirm pairing on the host. The host's tool grants still app
 
 See [remote setup and recovery](docs/remote-control.md),
 [dependency choices](docs/remote-dependencies.md) and the
-[source acceptance and remaining release gates](docs/native-remote-publication.md). This native layer
-contains no Worker, browser UI or deployment. It claims no formal crypto audit
-or performance improvement.
+[source acceptance and remaining release gates](docs/native-remote-publication.md).
+That accepted native layer claims no formal crypto audit or performance improvement.
+
+### Relay dashboard and browser control
+
+The new Worker source adds an account/device dashboard and protected browser
+controller using public ejm-ui components, tokens and Relay artwork. It builds
+on accepted native PR #21 and inert UI prerequisite PR #22. The UI source
+installation and local native, WASM, Worker and browser stages passed. The normal
+full gate, hosted adoption and updated UI deployment remain separate release
+requirements. The existing hosted relay stays closed; billing and
+commercial collection remain off. See [browser setup and trust](docs/relay-web.md),
+[relay operations](relay/README.md) and [current release gates](docs/relay-publication.md).
+A local visual preview uses sample data with actions disabled; it does not verify
+live authentication or control.
 
 ### Resource limits
 
@@ -144,12 +156,16 @@ dependency policy, release builds, and real PTY checks run through one command:
 
 ### Native remote guides
 
-These guides describe the accepted native source. Worker/browser adoption,
-binary distribution and live acceptance remain pending:
+These guides describe the accepted native source. The following Worker layer,
+binary distribution and live acceptance retain separate gates:
 
 - [Remote control](docs/remote-control.md): setup, controls, trust and recovery.
 - [Remote dependencies](docs/remote-dependencies.md): package choices and dependency review.
-- [Native remote source and review inputs](docs/native-remote-publication.md): native acceptance, the following inert UI/Relay prerequisite and remaining release gates.
+- [Native remote source and review inputs](docs/native-remote-publication.md): native acceptance and dependency history.
+- [Browser controller](docs/relay-web.md): pairing, actions, shared UI, build and trust limits.
+- [Relay operations](relay/README.md): account/API setup, quotas, cleanup, errors and rollback.
+- [Relay publication](docs/relay-publication.md) and [deployment status](docs/remote-deployment.md): exact accepted inputs and remaining release checks.
+- [Data choices and rights](docs/relay-privacy.md), [approved notice](docs/relay-notice.md) and [approved terms](docs/relay-service-terms.md): policy content remains unpublished with effective dates pending.
 
 ## Contributing
 

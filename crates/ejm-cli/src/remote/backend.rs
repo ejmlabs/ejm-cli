@@ -207,6 +207,15 @@ impl LocalBackend {
         self.authority.lock().await.share = None;
     }
 
+    #[cfg(test)]
+    pub(super) async fn with_authority_held(
+        &self,
+        operation: impl std::future::Future<Output = ()>,
+    ) {
+        let _guard = self.authority.lock().await;
+        operation.await;
+    }
+
     pub async fn shared_session(&self) -> Option<String> {
         self.authority
             .lock()

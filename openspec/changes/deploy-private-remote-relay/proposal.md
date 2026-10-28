@@ -2,7 +2,7 @@
 
 ## Why
 
-The original proposal followed a local relay/browser pass and requested hosted CI and a closed Cloudflare deployment, with free-tier hosting where possible. Native PR #21 is now protected and accepted. This following slice prepares inert shared UI and Relay install inputs on that actual protected native parent. Its exact parent receipt, source bindings and remaining gates are in the [current inert prerequisite](design.md#current-inert-prerequisite). Consumer restack, authenticated live acceptance, deployment and docs publication remain separate.
+The original proposal followed a local relay/browser pass and requested hosted CI and a closed Cloudflare deployment, with free-tier hosting where possible. Native PR #21 and the inert shared UI prerequisite PR #22 are now protected and accepted. The current slice adds the complete Worker, protected browser controller and their build and verification paths on actual protected parent `78810826cd376588d3303f13bc237309fb5170a8`. Its exact receipt and source boundaries are in the [Worker integration](design.md#current-worker-integration). Authenticated live acceptance, deployment and docs publication require their own evidence.
 
 CLI PR #20 merged as protected docs/UI prerequisite P
 `9e3f8ef11dc083c31b651b9dae15a98e086e3359`, retaining C8 runtime, the working
@@ -19,12 +19,13 @@ the failed-head receipt and exact source boundary are in the design.
 ## What Changes
 
 The native correction bullets retain adopted history and required behavior.
-The current slice changes only static review inputs: select protected UI 79a1,
-bind all thirteen complete readable metadata files with verified fixture reuse,
-add the complete changed-owner source supplement beside the supplied M archive,
-and include the inert Relay lock, notice, complete 51-line candidate manifest
-and provenance. The supplement stays read-only reviewer data; production
-continues to use public owner exports. It adds no runtime requirement or spec delta.
+The current slice inherits protected UI 79a1, complete readable source and install
+bindings, and the reviewed Relay lock from PR #22. It activates the matching
+manifest and adds the provisional Worker/browser source selectively, preserving
+the accepted native source, terminal supervisor and patched TLS graph. Production
+screens use only public ejm-ui exports and shared Relay artwork. Review fixtures
+remain inert. Build and test the exact owner tree and installed public packages,
+then require fresh protected review of the complete release source.
 
 - Keep relay account metadata, credentials and the current-account index in one public vault transaction; retire normal plaintext cache writes and preserve newer logins during logout.
 - Publish reviewable CLI and dependency revisions through existing protected workflows, repair the scoped shared CI prerequisite hook, and record hosted results for exact revisions. Combine the bounded bootstrap, terminal and command foundations in one prelude that retains the current reviewed harness pin and callers; adopt the hook before the new harness API pin and its native consumers.
@@ -33,6 +34,18 @@ continues to use public owner exports. It adds no runtime requirement or spec de
 - Configure one Cloudflare Worker for the relay and protected browser UI, a dedicated D1 database, SQLite Durable Objects, the exact HTTPS origin, and safe production assets.
 - Keep payments and commercial collection disabled. Keep account admission closed until dedicated OAuth credentials and reviewed operational notices are configured, then start with two accounts.
 - Bound scheduled database work to the provider's free per-invocation limits and retain retryable work across scheduled invocations.
+- Correct the complete Worker reviews' connection replacement, field-level usage consent, aggregate expiry, held-record deletion and dashboard closure tracking. Reuse existing socket attachments, privacy authority, rights workflow and public UI components without a new service or schema.
+- Preserve room ownership and its original share deadline after disconnection. Permit account-authorized dashboard stop, retain failed closure targets until acknowledgement or their original authority expiry, and recheck included usage records at disclosure commit. Repair the PowerShell shortcut through the existing Python gate. Keep these follow-up corrections within the existing Room, quota and privacy authorities, without a D1 migration or new dependency.
+- Persist closure for verified identities that have not accepted terms. Give Checkout creation a fixed provider-valid deadline, bounded retry headroom and recovery from a definitive no-session rejection while retaining uncertain request identity. Reuse the account schema and maintained Stripe client; billing stays disabled.
+- Keep every active device visible within the bounded dashboard list. Deliver complete retained device history through durable private-key export pages, using the existing queue and privacy authority plus one additive paging index. Reject frames larger than a renewed partial quota reservation. Preserve closed admission and the existing release gates.
+- Commit device revocation and credential deletion through one existing D1 batch, and share the registration label validator with export validation so every accepted Unicode label remains exportable. Extend the two affected regression cases before the normal gate and fresh protected review.
+- Await existing native relay retirement after immediate local share revocation during ordinary stop and graceful shutdown, polling in-flight UI work with revocation inside the existing five-second drain. Apply the existing browser snapshot barrier after Events gaps, preserving uncertain actions and avoiding Snapshot-gap loops. Extend the two existing regressions, then run the unchanged normal gate once before fresh exact-head review. Keep reconnect reservations, public APIs, dependencies and owner pins unchanged.
+- Advance bounded profile eligibility scans through a durable primary-key cursor, including unchanged subjects. Preserve the earliest current deletion deadline on repeated withdrawal and later opt-out or GPC suppression. Keep these corrections in the existing privacy authority transaction, extend the existing retention regressions and retain approved policy periods, disabled commercial collection and unchanged owner pins.
+- Honor active operational legal holds while pruning identities that have not accepted terms. Reuse the existing indexed hold exclusion and bounded delete; retain automatic cleanup after hold expiry without a new API, schema or dependency.
+- Make withdrawal atomically queue bounded recipient-only follow-up for prior matching disclosures, without changing relay access or relying on a later deletion request. Reuse rights progress and completion, preserve pending work and prevent repeated withdrawal from duplicating it. Reject expired profiles at both cohort reads and final disclosure commit through shared eligibility. Extend only the two existing cases and run the normal gate once before fresh admission.
+- Revoke account authority before acknowledging deletion, and show fresh unchecked consent choices after confirmed rejoin while retaining solicitation suppression. Reuse the existing revocation helper and renderer, extend only the two affected cases and preserve release controls.
+- Carry validated device OS family and CLI major through the existing authenticated quota lookup and lease to consent-filtered usage collection, without another database read. Extend the existing forwarding/eviction case; retain closed commercial collection and the normal release gates.
+- Recheck live operational holds within destructive retention and scheduled billing-event/session expiry statements. Reuse the existing index and extend the current retention and populated scheduled cases without a new lookup, schema or dependency.
 - Verify live TLS, authentication, protected assets, device approval, pairing, reconnect and revocation. Publish setup, limits, recovery and actual release evidence in the affected docs.
 - Correct accepted remote queue admission to wait for the harness's exact-run completion barrier, including internally queued local successors. Retain revocation ownership, discard dependent prompts if the target atomically handed off to a local successor, and reject prompt text above 16 KiB before queue acknowledgement.
 - Correct the complete f66 reviews' pairing display/input boundary, cancelled vault waits, authoritative recovery after server event gaps and enrolled-controller restart after the initial pairing deadline. Reuse current terminal cleanup, vault cancellation, snapshots and host key enrollment; retain the share deadline and pinned identities.
@@ -43,13 +56,14 @@ continues to use public owner exports. It adds no runtime requirement or spec de
 
 ### New Capabilities
 
-None. This change releases the implemented relay rather than adding another remote-control product.
+- `cloudflare-relay`: Account-gated opaque forwarding, bounded hosting and protected browser admission. These contracts existed in provisional local source but have not been adopted into main specs.
+- `relay-accounts-and-plans`: Verified accounts, explicit device login, independent credentials and server-owned access. Billing remains disabled in this beta.
+- `commercial-data-controls`: Default-off collection, bounded rights handling and fail-closed release gates. Commercial participation and exports remain disabled in this beta.
 
 ### Modified Capabilities
 
-- `cloudflare-relay`: Make the bounded free-launch contract explicit for per-invocation database work and conservative production admission.
 - `private-remote-control`: Bind queued admission to the exact completed run and enforce the selected harness's prompt byte limit before acknowledgement.
 
 ## Impact
 
-The full release affects relay cleanup, deployment configuration, CI setup, dependency pins, release evidence and public docs. Its native successor adopted the protected 42e harness API after PR #20 retained the working 4a source and the central hook supplied Linux prerequisites. The current slice adds only static UI source and Relay install review inputs. Existing maintainer readiness, approval, branch protection and paid-review gates remain in force. No repository visibility change, Cloudflare plan upgrade, payment activation or commercial activation is included. Concurrent site, cross-platform and model-selection work must be preserved.
+The full release affects relay cleanup, deployment configuration, the additive browser WASM crate, gate composition, release evidence and public docs. Its native successor adopted protected 42e harness APIs; the Worker slice preserves those native contracts and installed 40d callers. Shared visuals remain owned by ejm-ui, consumed through its public packages. Existing maintainer readiness, approval, branch protection and paid-review gates remain in force. No repository visibility change, Cloudflare plan upgrade, payment activation or commercial activation is included. Concurrent site, cross-platform and model-selection work must be preserved.
