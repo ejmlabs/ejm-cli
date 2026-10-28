@@ -306,6 +306,10 @@ impl App {
                     ToolState::Done
                 };
             }
+            // Consumers that read the block kind still see the failure.
+            if output.is_error {
+                block.kind = BlockKind::Error;
+            }
             if !block.text.is_empty() {
                 block.text.push('\n');
                 self.display_bytes += 1;
@@ -638,6 +642,32 @@ mod tests {
         assert_eq!(composer.text, "a");
         composer.history(false);
         assert_eq!(composer.text, "draft");
+    }
+
+    #[test]
+    fn failed_tool_marks_both_the_tool_state_and_the_block_kind() {
+        let mut app = app();
+        let event = |sequence: u64, mut kind: serde_json::Value| {
+            let fields = kind.as_object_mut().unwrap();
+            fields.insert("session_id".into(), "test".into());
+            fields.insert("sequence".into(), sequence.into());
+            fields.insert("timestamp_ms".into(), 0.into());
+            serde_json::from_value::<Event>(kind).unwrap()
+        };
+        app.apply(event(
+            1,
+            serde_json::json!({"type": "tool_started", "call": {
+                "id": "c1", "name": "shell", "arguments": {"command": "false"}
+            }}),
+        ));
+        app.apply(event(
+            2,
+            serde_json::json!({"type": "tool_finished", "call_id": "c1",
+            "output": {"content": "exit 1", "is_error": true}}),
+        ));
+        let block = app.blocks.back().unwrap();
+        assert_eq!(block.kind, BlockKind::Error);
+        assert_eq!(block.tool.as_ref().unwrap().state, ToolState::Failed);
     }
 
     #[test]
