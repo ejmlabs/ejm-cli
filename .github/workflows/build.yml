@@ -1,0 +1,111 @@
+name: Build release files
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+env:
+  CARGO_BUILD_JOBS: 2
+  CARGO_INCREMENTAL: 0
+jobs:
+  linux-x86_64:
+    name: Build and smoke Linux x86_64
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          path: work/ejm-cli
+          persist-credentials: false
+      - name: Read the reviewed harness revision
+        id: harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          revision="$(tr -d '\n' < work/ejm-cli/.github/harness-revision)"
+          [[ "$revision" =~ ^[0-9a-f]{40}$ ]] || { echo "harness revision is not a full SHA" >&2; exit 1; }
+          echo "revision=$revision" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: ejmlabs/ejm-harness
+          ref: ${{ steps.harness.outputs.revision }}
+          path: work/ejm-harness
+          persist-credentials: false
+      - name: Read the reviewed UI revision
+        id: ui
+        shell: bash
+        run: |
+          set -euo pipefail
+          revision="$(python3 -I -c 'import json, sys; print(json.load(open(sys.argv[1]))["revision"])' work/ejm-cli/.github/ui-source.json)"
+          [[ "$revision" =~ ^[0-9a-f]{40}$ ]] || { echo "UI revision is not a full SHA" >&2; exit 1; }
+          echo "revision=$revision" >> "$GITHUB_OUTPUT"
+      # The TUI builds from the shared ejm-tui crate at ../ejm-ui.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: ejmlabs/ejm-ui
+          ref: ${{ steps.ui.outputs.revision }}
+          path: work/ejm-ui
+          persist-credentials: false
+      - name: Install build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends pkg-config libdbus-1-dev
+          rustup toolchain install 1.99.1 --profile minimal
+          rustup default 1.99.1
+      - name: Build
+        working-directory: work/ejm-cli
+        run: cargo build --release --locked -p ejm-cli
+      - name: Archive and smoke
+        working-directory: work/ejm-cli
+        run: python3 -I scripts/package_release.py linux-x86_64 target/release/ejm-cli "$RUNNER_TEMP/out"
+      - name: Check the glibc floor
+        run: |
+          highest="$(objdump -T work/ejm-cli/target/release/ejm-cli | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -n 1)"
+          echo "highest glibc symbol: $highest"
+          [ "$(printf '%s\n' "$highest" GLIBC_2.39 | sort -V | tail -n 1)" = GLIBC_2.39 ]
+      - name: Record provenance
+        run: |
+          {
+            echo "commit: $GITHUB_SHA"
+            echo "harness: ${{ steps.harness.outputs.revision }}"
+            echo "ui: ${{ steps.ui.outputs.revision }}"
+            echo "runner glibc: $(ldd --version | head -n 1)"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: build-linux-x86_64
+          path: ${{ runner.temp }}/out/*
+          if-no-files-found: error
+          retention-days: 14
+  # macOS Apple silicon is waiting for notarization. Add its build and smoke
+  # job here, and list it in collect, only after a notarization run for the
+  # exact release is recorded. Until then no macOS file is offered and nothing
+  # is described as signed or notarized.
+  collect:
+    name: Collect release files
+    needs:
+      - linux-x86_64
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: build-*
+          merge-multiple: true
+          path: release-files
+      - name: Write the combined digest list
+        working-directory: release-files
+        shell: bash
+        run: |
+          set -euo pipefail
+          find . -mindepth 1 ! -type f -print -quit | grep -q . && { echo "only regular files are allowed" >&2; exit 1; }
+          sha256sum -- * > ../build-sha256.txt
+          mv ../build-sha256.txt build-sha256.txt
+          cat build-sha256.txt >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-files
+          path: release-files/*
+          if-no-files-found: error
+          retention-days: 14

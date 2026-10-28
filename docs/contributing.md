@@ -136,6 +136,9 @@ wrangler deploy --config site/wrangler.jsonc --dry-run
 Keep `workers_dev` and `preview_urls` explicitly false and preserve custom-domain zone protections. After publication, verify the provider mapping and both flags, canonical home/docs/reference routes, a missing route, security/cache headers and activated playback assets. Bind the deployed bytes and Worker version to the product commit, UI commit and lockfiles. Check that the former alternate hostname does not serve the site. A request from one network does not prove worldwide reachability.
 
 For recovery, restore the last verified compatible build on the canonical Worker, retain both disabled alternate origins and verify the restored routes and headers. Site publication is separate from native binary, package or source-version release. Follow [RELEASING.md](../RELEASING.md) for those gates.
+## Release binaries
+
+`.github/workflows/build.yml` builds `ejm-cli` with `cargo build --release --locked` at the harness revision in `.github/harness-revision`. Its jobs have `contents: read` and no secrets. `scripts/package_release.py` archives the binary with `LICENSE`, `THIRD_PARTY_NOTICES.md` and `HARNESS_REVISION`, runs `--version` and `--replay run "Hello"` against the unpacked archive, and prints the archive digest. A `collect` job uploads the one `release-files` artifact, with a combined `build-sha256.txt`, for the shared native release workflow, which holds the only write permission. `build.yml` runs on main and on dispatch. It has no macOS job because macOS Apple silicon is not offered until it is notarized. The build runner's glibc sets the Linux minimum (2.39 on `ubuntu-24.04`) and `libdbus-1` is a runtime requirement. Release notes live in `docs/release-notes/`.
 
 ## Project skills
 
