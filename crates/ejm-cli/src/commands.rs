@@ -36,13 +36,6 @@ struct Builtin {
 
 const BUILTINS: &[Builtin] = &[
     Builtin {
-        name: "remote",
-        arguments: "share [view|control]|status|stop",
-        description: "Share this session, inspect sharing or stop remote access",
-        minimum: 1,
-        maximum: 2,
-    },
-    Builtin {
         name: "help",
         arguments: "",
         description: "Show commands and keyboard shortcuts",
@@ -104,6 +97,13 @@ const BUILTINS: &[Builtin] = &[
         description: "Cancel work in the selected session",
         minimum: 0,
         maximum: 0,
+    },
+    Builtin {
+        name: "remote",
+        arguments: "share [view|control]|status|stop",
+        description: "Share this session, inspect sharing or stop remote access",
+        minimum: 1,
+        maximum: 2,
     },
     Builtin {
         name: "extensions",
