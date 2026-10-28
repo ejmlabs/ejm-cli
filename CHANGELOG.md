@@ -4,6 +4,10 @@ Changes follow [Semantic Versioning](https://semver.org/). Each repository is ve
 
 ## [Unreleased]
 
+### Fixed
+
+- Reject a provider base URL that is not https, except http on a loopback host (`localhost`, `127.0.0.0/8`, or `::1`). The CLI checks this before it reads the API key. A rejected `run` exits 1 and the error does not print the URL. `doctor` marks a disallowed endpoint rejected. Userinfo, a query, or a fragment is rejected, and an endpoint line cannot carry a raw line break. An http loopback URL is also refused when `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, or the lowercase form is set and `NO_PROXY` does not contain that host exactly. `*` and a bracketed IPv6 entry are not coverage. The error names the variable that was set and not its value. `.github/harness-revision` stays `42e4f9cf33bd3525aec344cfdffabc251271f782`. This change does not protect other ejm-harness callers. The pin bump waits until the harness https check is on main, and this note does not assign that harness release number.
+
 ## [0.1.0] - 2026-10-27
 
 First packaged build of ejm-cli, the terminal app for ejm-harness. See the [0.1.0 release notes](docs/release-notes/0.1.0.md) for install steps.
