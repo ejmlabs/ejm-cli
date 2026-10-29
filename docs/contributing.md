@@ -127,10 +127,10 @@ The trusted workflow reads `.github/ui-source.json` from protected main. Merge a
 
 ### Cloudflare site hosting
 
-The `ejmlabs-cli` Worker serves `site/dist` at `https://cli.ejmlabs.com` through `site/wrangler.jsonc`. Run the site gate and an installed Wrangler dry run before authorized deployment:
+The `ejmlabs-cli` Worker serves `site/dist` at `https://cli.ejmlabs.com` through `site/wrangler.jsonc`. `site/package.json` pins Wrangler. Run the site gate and a dry run with that Wrangler from `site/` before authorized deployment:
 
 ```sh
-wrangler deploy --config site/wrangler.jsonc --dry-run
+npx wrangler deploy --config wrangler.jsonc --dry-run
 ```
 
 Keep `workers_dev` and `preview_urls` explicitly false and preserve custom-domain zone protections. After publication, verify the provider mapping and both flags, canonical home/docs/reference routes, a missing route, security/cache headers and activated playback assets. Bind the deployed bytes and Worker version to the product commit, UI commit and lockfiles. Check that the former alternate hostname does not serve the site. A request from one network does not prove worldwide reachability.

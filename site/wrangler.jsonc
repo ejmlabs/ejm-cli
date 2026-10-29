@@ -1,4 +1,5 @@
 {
+  "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "ejmlabs-cli",
   "account_id": "478a0db3a110d8503c16abbc1db27af4",
   "compatibility_date": "2026-10-18",
