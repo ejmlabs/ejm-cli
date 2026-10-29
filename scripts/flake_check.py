@@ -65,16 +65,25 @@ def check_counts(element: ET.Element, statuses: Iterable[str]) -> None:
 
 
 def mixed_tests(first: Path, second: Path) -> list[tuple[str, str]]:
-    """Compare complete reports; missing, skipped and execution errors are not passes."""
+    """Compare results present and comparable in both reports."""
     a, b = outcomes(first), outcomes(second)
-    if a.keys() != b.keys():
-        raise ValueError("the two runs did not report the same tests")
-    if any(
-        a[key] == "error" or b[key] == "error" or (a[key] == "skipped") != (b[key] == "skipped")
-        for key in a
-    ):
-        raise ValueError("test execution or skip status is incomplete")
-    return sorted(key for key in a if {a[key], b[key]} == {"passed", "failure"})
+    return sorted(key for key in a.keys() & b.keys() if {a[key], b[key]} == {"passed", "failure"})
+
+
+def inventory(path: Path) -> set[tuple[str, str]]:
+    """Read the platform's full nextest test list."""
+    data = json.loads(path.read_text(encoding="utf-8"))
+    results = set()
+    for suite_id, suite in data["rust-suites"].items():
+        if suite["binary-id"] != suite_id or suite["status"] != "listed":
+            raise ValueError("test inventory contains an unlisted suite")
+        for name, case in suite["testcases"].items():
+            if case["filter-match"]["status"] != "matches":
+                raise ValueError("test inventory contains a filtered test")
+            results.add((suite_id, name))
+    if not results or len(results) != data["test-count"]:
+        raise ValueError("test inventory count does not match listed tests")
+    return results
 
 
 def run(command: list[str], log: Path) -> int | None:
@@ -104,6 +113,24 @@ def main() -> int:
         raise SystemExit("usage: python3 scripts/flake_check.py OUTPUT_DIRECTORY")
     output = Path(sys.argv[1]).resolve()
     output.mkdir()
+    with (output / "inventory.json").open("w", encoding="utf-8") as listing, (
+        output / "inventory.log"
+    ).open("w", encoding="utf-8") as log:
+        try:
+            inventory_code = subprocess.run(
+                [
+                    "cargo", "nextest", "list", "--locked", "--workspace",
+                    "--run-ignored", "all", "--ignore-default-filter",
+                    "--message-format", "json",
+                    "--user-config-file", "none",
+                ],
+                stdout=listing,
+                stderr=log,
+                check=False,
+            ).returncode
+        except OSError as error:
+            print(f"Could not list tests: {error}", file=log)
+            inventory_code = None
     baseline = []
     attempts = []
     for number in (1, 2):
@@ -117,6 +144,8 @@ def main() -> int:
                     "--no-fail-fast",
                     "--color",
                     "never",
+                    "--",
+                    "--include-ignored",
                 ],
                 output / f"cargo-test-{number}.log",
             )
@@ -137,6 +166,9 @@ def main() -> int:
                     "run",
                     "--locked",
                     "--workspace",
+                    "--run-ignored",
+                    "all",
+                    "--ignore-default-filter",
                     "--no-fail-fast",
                     "--retries",
                     "0",
@@ -154,27 +186,37 @@ def main() -> int:
                 output / f"attempt-{number}.log",
             )
         )
-    incomplete = any(code is None for code in baseline) or any(
+    incomplete = inventory_code != 0 or any(code is None for code in baseline) or any(
         code not in (0, 100) for code in attempts
     )
     mixed = []
     try:
-        if any(code not in (0, 100) for code in attempts):
-            raise ValueError("nextest did not complete both test runs")
-        mixed = mixed_tests(output / "attempt-1.xml", output / "attempt-2.xml")
+        first = outcomes(output / "attempt-1.xml")
+        second = outcomes(output / "attempt-2.xml")
+        mixed = sorted(
+            key for key in first.keys() & second.keys()
+            if {first[key], second[key]} == {"passed", "failure"}
+        )
+        expected = inventory(output / "inventory.json")
+        if any(
+            results.keys() != expected
+            or any(status in ("skipped", "error") for status in results.values())
+            for results in (first, second)
+        ):
+            raise ValueError("test results are skipped, missing, or differ from the inventory")
         for number, code in enumerate(attempts, 1):
             has_failures = "failure" in outcomes(output / f"attempt-{number}.xml").values()
             if has_failures != (code == 100):
                 raise ValueError("nextest exit code does not match its report")
-    except (OSError, ET.ParseError, ValueError) as error:
+    except (OSError, ET.ParseError, ValueError, KeyError, TypeError) as error:
         print(f"Cannot compare test results: {error}", file=sys.stderr)
         incomplete = True
-        mixed = []
     baseline_differed = all(code is not None for code in baseline) and (baseline[0] == 0) != (
         baseline[1] == 0
     )
     summary = {
         "cargo_test_exit_codes": baseline,
+        "inventory_exit_code": inventory_code,
         "cargo_test_inconsistent": baseline_differed,
         "exit_codes": attempts,
         "doctests": "not_applicable",

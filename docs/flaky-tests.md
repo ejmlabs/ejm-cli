@@ -15,9 +15,11 @@ days. Nextest runs individual
 tests in separate processes, so it does not replace the existing Cargo gate or
 cover interference between tests in one process. Logs are available in CI.
 
-The pinned nextest release omits ignored tests from its JUnit reports. Tests reported in
-only one attempt make the comparison incomplete; tests omitted from both
-are not classified or counted as passes.
+Nextest lists the workspace tests on the host before the attempts and retains that
+per-platform inventory with the evidence. Cargo and nextest attempts include ignored tests and
+must report every inventoried identity. Missing, skipped or errored results make the
+run incomplete. Comparable tests with a pass and a failure are still reported even
+when other results are incomplete.
 
 The version and Linux x86-64 archive digest in `tools.toml` are the source
 of truth for the workflow. Update both together after reviewing the upstream

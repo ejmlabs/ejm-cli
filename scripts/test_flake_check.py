@@ -27,6 +27,54 @@ def report(cases: list[tuple[str, str]]) -> str:
 
 
 class FlakeCheckTests(unittest.TestCase):
+    def test_inventory_and_comparison_through_command(self) -> None:
+        cases = {
+            "complete": ([('x', ''), ('y', '')], [('x', ''), ('y', '')], False, []),
+            "skipped": ([('x', '<failure/>'), ('y', '<skipped/>')], [('x', ''), ('y', '<skipped/>')], True, [['pkg::suite', 'x']]),
+            "omitted": ([('x', '<failure/>')], [('x', '')], True, [['pkg::suite', 'x']]),
+            "invalid": ([('x', '<failure/>'), ('y', '')], [('x', ''), ('y', '')], True, [['pkg::suite', 'x']]),
+        }
+        for name, (first, second, incomplete, mixed) in cases.items():
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                cargo = root / "cargo"
+                cargo.write_text(
+                    '''#!/usr/bin/env python3
+import json, os, sys, tomllib
+from pathlib import Path
+if sys.argv[1:3] == ["nextest", "list"]:
+    print(os.environ["LISTING"])
+elif sys.argv[1:3] == ["nextest", "run"]:
+    marker = Path("ran")
+    first = not marker.exists()
+    marker.touch()
+    config = Path(sys.argv[sys.argv.index("--config-file") + 1])
+    output = Path(tomllib.loads(config.read_text())["profile"]["ci"]["junit"]["path"])
+    output.write_text(os.environ["FIRST" if first else "SECOND"])
+    raise SystemExit(100 if first and "<failure" in os.environ["FIRST"] else 0)
+''', encoding="utf-8"
+                )
+                cargo.chmod(0o755)
+                listing = {
+                    "test-count": 3 if name == "invalid" else 2,
+                    "rust-suites": {"pkg::suite": {
+                        "binary-id": "pkg::suite", "status": "listed",
+                        "testcases": {item: {"filter-match": {"status": "matches"}} for item in ("x", "y")},
+                    }},
+                }
+                env = {
+                    **os.environ, "PATH": str(root) + os.pathsep + os.environ.get("PATH", ""),
+                    "LISTING": json.dumps(listing), "FIRST": report(first), "SECOND": report(second),
+                }
+                result = subprocess.run(
+                    [sys.executable, str(Path(__file__).with_name("flake_check.py")), str(root / "evidence")],
+                    cwd=root, env=env, capture_output=True, text=True,
+                )
+                summary = json.loads((root / "evidence/summary.json").read_text())
+                self.assertEqual(summary["incomplete"], incomplete)
+                self.assertEqual(summary["mixed"], mixed)
+                self.assertEqual(result.returncode, 0 if name == "complete" else 1)
+
     def write_reports(self, root: Path, first: str, second: str) -> tuple[Path, Path]:
         a, b = root / "first.xml", root / "second.xml"
         a.write_text(first, encoding="utf-8")
@@ -52,6 +100,10 @@ class FlakeCheckTests(unittest.TestCase):
                 report([("x", "<skipped/>"), ("ignored", "<skipped/>")]),
                 report([("x", "<error/>"), ("ignored", "<skipped/>")]),
                 report([("x", "<failure/>")]),
+            ]:
+                paths = self.write_reports(root, good, other)
+                self.assertEqual(mixed_tests(*paths), [("pkg::suite", "x")] if "<failure" in other else [])
+            for other in [
                 report([("x", ""), ("x", "<failure/>")]),
                 good.replace('tests="2"', 'tests="3"', 1),
                 "<testsuites />",
@@ -84,8 +136,11 @@ class FlakeCheckTests(unittest.TestCase):
             cargo = root / "cargo"
             cargo.write_text(
                 """#!/usr/bin/env python3
-import sys, tomllib
+import json, sys, tomllib
 from pathlib import Path
+if sys.argv[1:3] == ["nextest", "list"]:
+    print(json.dumps({"test-count": 1, "rust-suites": {"pkg::suite": {"binary-id": "pkg::suite", "status": "listed", "testcases": {"write": {"filter-match": {"status": "matches"}}}}}}))
+    raise SystemExit(0)
 if sys.argv[1] == "nextest":
     marker = Path("ran")
     first = not marker.exists()
@@ -130,8 +185,11 @@ raise SystemExit(0)
             cargo = root / "cargo"
             cargo.write_text(
                 """#!/usr/bin/env python3
-import sys, tomllib
+import json, sys, tomllib
 from pathlib import Path
+if sys.argv[1:3] == ["nextest", "list"]:
+    print(json.dumps({"test-count": 1, "rust-suites": {"pkg::suite": {"binary-id": "pkg::suite", "status": "listed", "testcases": {"write": {"filter-match": {"status": "matches"}}}}}}))
+    raise SystemExit(0)
 if sys.argv[1] == "nextest":
     config = Path(sys.argv[sys.argv.index("--config-file") + 1])
     output = Path(tomllib.loads(config.read_text())["profile"]["ci"]["junit"]["path"])
@@ -216,8 +274,7 @@ if not marker.exists():
             with self.assertRaises(ValueError):
                 mixed_tests(a, b)
             b.write_text(report([("y", "")]).replace(' skipped="0"', ""))
-            with self.assertRaises(ValueError):
-                mixed_tests(a, b)
+            self.assertEqual(mixed_tests(a, b), [])
 
 
 if __name__ == "__main__":

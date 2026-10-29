@@ -666,6 +666,18 @@ fn terminal_panic_fixture() -> ! {
 #[tokio::test]
 #[ignore = "PTY supervisor drives private input, pairing panels and terminal restoration"]
 async fn remote_terminal_interaction_fixture() -> Result<()> {
+    if std::env::var_os("EJM_REMOTE_TERMINAL_CASE").is_none() {
+        let status = std::process::Command::new("python3")
+            .arg(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../../scripts/check_terminal.py"
+            ))
+            .arg("--remote-fixture")
+            .arg(std::env::current_exe()?)
+            .status()?;
+        anyhow::ensure!(status.success(), "remote terminal supervisor failed");
+        return Ok(());
+    }
     let config = terminal_config()?;
     let mode = std::env::var("EJM_REMOTE_TERMINAL_CASE")
         .context("remote terminal fixture case missing")?;
