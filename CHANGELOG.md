@@ -4,6 +4,10 @@ Changes follow [Semantic Versioning](https://semver.org/). Each repository is ve
 
 ## [Unreleased]
 
+### CI
+
+- Install the pinned wasm-bindgen CLI from its checksum-verified release archive instead of compiling it on every gate run.
+
 ### Website
 
 - Include the unchanged approved Relay privacy notice and service terms with
