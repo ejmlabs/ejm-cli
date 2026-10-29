@@ -6,6 +6,7 @@
 - [x] 1.2 Add the main and daily workflow without bypassing PR admission.
 - [x] 1.3 Run the detector locally against the reviewed dependency snapshots.
 - [ ] 1.4 Verify the hosted workflow after admission.
+- [x] 1.5 Verify single-threaded Cargo reporting and supervisor failure diagnostics.
 
 ## Workflow follow-up
 
