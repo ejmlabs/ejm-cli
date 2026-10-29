@@ -130,7 +130,7 @@ Check phone and desktop widths in both themes, keyboard focus and skip navigatio
 
 The home contains one labelled local recording. The public shared player owns its frame, lazy loading and Pause/Resume/Restart controls. No model runs in the browser; the recording does not prove current native setup or hosted inference. Keep useful completed output available without scripts.
 
-Publishing uses only the `ejmlabs-cli` Worker and `site/wrangler.jsonc`. Keep `workers_dev` and `preview_urls` false, preserve zone protections and verify canonical routes, assets, headers and provider settings after authorized deployment. Read [hosting and recovery](/docs/reference/contributing/#cloudflare-site-hosting).
+Publishing uses only the `ejmlabs-cli` Worker, its `ejmlabs-cli-staging` staging Worker and `site/wrangler.jsonc`. Each merge to main deploys staging; production waits for owner approval in the GitHub `production` environment. Keep `workers_dev` and `preview_urls` false, preserve zone protections and verify canonical routes, assets, headers and provider settings on staging after each merge and on production after approval. Read [hosting and recovery](/docs/reference/contributing/#cloudflare-site-hosting).
 
 ## Contribute and release {#review}
 

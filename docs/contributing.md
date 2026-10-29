@@ -127,15 +127,20 @@ The trusted workflow reads `.github/ui-source.json` from protected main. Merge a
 
 ### Cloudflare site hosting
 
-The `ejmlabs-cli` Worker serves `site/dist` at `https://cli.ejmlabs.com` through `site/wrangler.jsonc`. `site/package.json` pins Wrangler. Run the site gate and a dry run with that Wrangler from `site/` before authorized deployment. `--env ""` names production; the config also defines `staging`:
+The `ejmlabs-cli` Worker serves `site/dist` at `https://cli.ejmlabs.com` through `site/wrangler.jsonc`. Its `env.staging` block serves the same build as the `ejmlabs-cli-staging` Worker at `https://cli-staging.ejmlabs.com`, which is publicly reachable and serves the latest main.
+
+A push to main runs `.github/workflows/deploy.yml`, the canonical caller of the shared `ejmlabs/.github` workflow `deploy-site.yml`. A build job with `contents: read` and no secrets builds the site from that main commit, with `ejm-ui` checked out at the `.github/ui-source.json` pin. A staging job then runs `wrangler deploy --env staging` automatically. A production job deploys the same built files with the top-level config only after the required reviewer (@everettmorgan) approves the run in the GitHub `production` environment. Deploy jobs run Wrangler 4.151.3 pinned in the shared repository, not this repository's dependencies, with the `CLOUDFLARE_API_TOKEN` secret of the `staging` and `production` GitHub environments.
+
+Approving the production job is the owner's deploy authorization. A manual `wrangler deploy` from a workstation is no longer the procedure. A newer merge cancels an older production deploy that is still waiting. Local dry runs are still fine. `site/package.json` pins Wrangler. Before merging, run the site gate and a dry run with that Wrangler from `site/`. `--env ""` names production, and `--env staging` checks staging:
 
 ```sh
 npx wrangler deploy --config wrangler.jsonc --env "" --dry-run
+npx wrangler deploy --config wrangler.jsonc --env staging --dry-run
 ```
 
-Keep `workers_dev` and `preview_urls` explicitly false and preserve custom-domain zone protections. After publication, verify the provider mapping and both flags, canonical home/docs/reference routes, a missing route, security/cache headers and activated playback assets. Bind the deployed bytes and Worker version to the product commit, UI commit and lockfiles. Check that the former alternate hostname does not serve the site. A request from one network does not prove worldwide reachability.
+Keep `workers_dev` and `preview_urls` explicitly false and preserve custom-domain zone protections. Run these checks on staging after each merge, and on production after approval: verify the provider mapping and both flags, canonical home/docs/reference routes, a missing route, security/cache headers and activated playback assets. Bind the deployed bytes and Worker version to the product commit, UI commit and lockfiles. Check that the former alternate hostname does not serve the site. A request from one network does not prove worldwide reachability.
 
-For recovery, restore the last verified compatible build on the canonical Worker, retain both disabled alternate origins and verify the restored routes and headers. Site publication is separate from native binary, package or source-version release. Follow [RELEASING.md](../RELEASING.md) for those gates.
+For recovery, redeploy an earlier verified Worker version in Cloudflare, or approve an earlier run's production job while it is still available. Retain both disabled alternate origins and verify the restored routes and headers. Site publication is separate from native binary, package or source-version release. Follow [RELEASING.md](../RELEASING.md) for those gates.
 ## Release binaries
 
 `.github/workflows/build.yml` builds `ejm-cli` with `cargo build --release --locked` at the harness revision in `.github/harness-revision`. Its jobs have `contents: read` and no secrets. `scripts/package_release.py` archives the binary with `LICENSE`, `THIRD_PARTY_NOTICES.md` and `HARNESS_REVISION`, runs `--version` and `--replay run "Hello"` against the unpacked archive, and prints the archive digest. A `collect` job uploads the one `release-files` artifact, with a combined `build-sha256.txt`, for the shared native release workflow, which holds the only write permission. `build.yml` runs on main and on dispatch. It has no macOS job because macOS Apple silicon is not offered until it is notarized. The build runner's glibc sets the Linux minimum (2.39 on `ubuntu-24.04`) and `libdbus-1` is a runtime requirement. Release notes live in `docs/release-notes/`.
