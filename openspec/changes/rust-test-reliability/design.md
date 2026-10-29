@@ -10,7 +10,7 @@ Detect inconsistent Rust outcomes without rerunning an unsafe build gate or maki
 
 ## Decisions
 
-Run Cargo twice to retain shared-process behavior, and pinned cargo-nextest twice for its structured per-test JUnit results. Run doctests separately. Keep errors and incomplete evidence failing.
+Run Cargo twice to retain shared-process behavior, and pinned cargo-nextest twice for its structured per-test JUnit results. The workspace has no library doctest target, so doctests are reported as not applicable. Keep errors and incomplete evidence failing.
 
 ## Risks / Trade-offs
 

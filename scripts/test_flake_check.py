@@ -139,12 +139,11 @@ if sys.argv[1] == "nextest":
     output.write_text("<testsuites" + attrs + "><testsuite name='pkg::suite'" + attrs
                       + "><testcase classname='pkg::suite' name='write'/></testsuite></testsuites>")
     raise SystemExit(0)
-if "--doc" not in sys.argv:
-    marker = Path("cargo-ran")
-    if not marker.exists():
-        marker.touch()
-        print("shared-process test failed")
-        raise SystemExit(101)
+marker = Path("cargo-ran")
+if not marker.exists():
+    marker.touch()
+    print("shared-process test failed")
+    raise SystemExit(101)
 """,
                 encoding="utf-8",
             )
