@@ -4,33 +4,44 @@ Changes follow [Semantic Versioning](https://semver.org/). Each repository is ve
 
 ## [Unreleased]
 
-### Added
+### Website
 
-- Build and smoke Linux x86_64 release files in the shared build contract shape with read-only jobs, leave macOS Apple silicon out until it is notarized, draft the [0.1.0 release notes](docs/release-notes/0.1.0.md), and add version and platform fields to the bug form plus a feedback form. No release, tag or download exists yet.
-- Shared repository standards, explicit human admission, protected merge gates, two-pass Codex review, and a draft source release pipeline.
-- Adopt native remote hosting and control with Noise pairing, protected invitations, exact-run authority and a shared credential vault through protected CLI PR #21. Its [source acceptance](docs/native-remote-publication.md) covers Linux/macOS; live acceptance remains pending.
+- Include the unchanged approved Relay privacy notice and service terms with
+  explicit pending publication status and effective date.
 
-### Fixed
-
-- Publish relay account metadata and credentials atomically in the shared vault; stop normal JSON cache writes and preserve newer logins during logout. Protected PR #21 includes the correction and its exact-source acceptance.
-- Correct the TLS advisory lock and native WSS root loading, reusing the existing certificate loader. Extend untrusted-peer coverage to WSS tickets; the patched native graph passed PR #21's gates.
-- Correct snapshot authority through its delivered cursor and fresh expiry checks after mutation waits. The complete 061 review found both defects; d8's local macOS result remains historical alongside PR #21's later source acceptance.
-- Require fresh approval after each displayed pairing confirmation, cancel vault lock waits, recover snapshots after server gaps and permit enrolled-controller restarts until share expiry. Both earlier f66 reviews blocked adoption on these defects; protected PR #21 contains the corrections.
-- Retain responsive local revocation during completion observers, signal cleanup before protected startup, trusted local stop and real-command SIGTERM restoration. The f66 normal and Linux/macOS quality gates remain earlier evidence; PR #21 records the accepted successor.
-- Adopt the retained 40d shared reviewer source context and isolated Linux CI Secret Service through protected PR #9. Its baseline Linux/macOS gates passed; installed 40d readable harness review and the native vault gate remain separate.
-- Keep display recovery ordered through acknowledged journal catch-up, suppressing newer live events until recovery completes.
-- Adopt immutable exact-run completion waits for accepted remote prompts, discard local-successor handoffs and reject text above 16 KiB of UTF-8 before acknowledgement. Protected PR #21 binds the selected 42e API and tested native graph.
-- Adopt the shared review-completion guard through protected PR #4 while preserving the CLI setup hook and harness pin; retain its dated evidence in the CI guide.
-- Adopt the retained shared harness selector and canonical C4/b2 source context through protected PR #7. The later native dependency pair has its separate PR #21 acceptance record.
+- Rebuild the public CLI site and guides on shared UI exports, with direct source/contribution links, a labelled local recording, static documentation and unchanged route budgets. Keep the guides aligned with the accepted native runtime and preserve separate service and installer release gates.
 
 ### Changed
 
-- Package commands default to `https://registry.ejmlabs.com`. `--registry` and `EJM_CLI_REGISTRY_URL` select another plain origin. `https` is required except on loopback. `doctor` shows a rejected registry value without userinfo, a query, a fragment, or control characters, and uses `(invalid registry URL)` when the value does not parse. The harness pin is unchanged. `discard-retired-session` is not a user instruction until it ships in the same release as the pin bump to the merged harness pull requests 18 and 19.
+- **Breaking:** Package commands default to `https://registry.ejmlabs.com`. `--registry` and `EJM_CLI_REGISTRY_URL` select another plain origin. `https` is required except on loopback. `doctor` shows a rejected registry value without userinfo, a query, a fragment, or control characters, and uses `(invalid registry URL)` when the value does not parse. The harness pin is unchanged. `discard-retired-session` is not a user instruction until it ships in the same release as the pin bump to the merged harness pull requests 18 and 19.
 - Refuse HTTP loopback registry access on the current harness pin when any uppercase or lowercase `HTTP_PROXY`, `HTTPS_PROXY`, or `ALL_PROXY` variable is nonempty. `NO_PROXY` does not override this temporary guard. Unset those variables for that invocation or use HTTPS. Rejection happens before account-token lookup and prints no proxy value. `doctor` keeps the rest of its report; model commands and local discard remain usable.
-- Adopt the planned native remote-control guides and protected shared UI pin `24935aa85355ea99f49bdbecc4186a5e95049393` with complete install review context through CLI PR #20. That historical prerequisite retains C8's runtime; native PR #21 followed it. Hosted UI consumer acceptance and release remain separate.
-- Prepare the [inert UI and Relay input prerequisite](docs/ci-bootstrap.md#current-inert-shared-ui-and-relay-inputs) on protected native merge `71d0f47f8b05c6314eca4dc0750ffaad833d6afb`, selecting protected UI `79a1aa8b1075f834717bc0c0299dc2c41a22b966`. Keep thirteen complete readable metadata bindings, reuse twelve verified fixtures, add the separate complete 28-path owner source supplement, and include the inert Relay lock with a complete candidate manifest and provenance. The earlier metadata-only head received two incomplete reviews; the successor still needs its own gates and protected adoption. No runnable Relay package or deployment is included.
-- Consolidate source setup, local checks, and site-migration limits in the CI guide, replacing the obsolete publication prelude note and its inbound links.
 
-## [0.1.0] - 2026-10-18
+### Fixed
 
-- Initial development baseline. This entry documents source version metadata; it does not assert a published release or production readiness.
+- Reject a provider base URL that is not https, except http on a loopback host (`localhost`, `127.0.0.0/8`, or `::1`). The CLI checks this before it reads the API key. A rejected `run` exits 1 and the error does not print the URL. `doctor` marks a disallowed endpoint rejected. Userinfo, a query, or a fragment is rejected, and an endpoint line cannot carry a raw line break. An http loopback URL is also refused when `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, or the lowercase form is set and `NO_PROXY` does not contain that host exactly. `*` and a bracketed IPv6 entry are not coverage. The error names the variable that was set and not its value. `.github/harness-revision` stays `42e4f9cf33bd3525aec344cfdffabc251271f782`. This change does not protect other ejm-harness callers. The pin bump waits until the harness https check is on main, and this note does not assign that harness release number.
+
+## [0.1.0] - 2026-10-27
+
+First packaged build of ejm-cli, the terminal app for ejm-harness. See the [0.1.0 release notes](docs/release-notes/0.1.0.md) for install steps.
+
+### Added
+
+- Linux x86_64 release archive with `SHA256SUMS`, built from the pinned ejm-harness revision recorded in `HARNESS_REVISION`. It needs glibc 2.39 or later and `libdbus-1`; stored sign-in needs an unlocked Secret Service, and `ejm-cli --replay` works without one.
+- Native remote hosting and control with Noise pairing, protected invitations, exact-run authority and a shared credential vault. Source acceptance covers Linux and macOS (see [native remote publication](docs/native-remote-publication.md)); live remote-control acceptance is still pending.
+- Version and platform fields in the bug form, and a feedback form.
+
+### Fixed
+
+- Relay account metadata and credentials are published atomically in the shared vault, normal JSON cache writes stop, and newer logins survive logout.
+- TLS advisory locking and native WSS root loading are corrected, and untrusted-peer coverage now includes WSS tickets.
+- Snapshot authority follows its delivered cursor and checks expiry again after mutation waits.
+- Each displayed pairing confirmation needs fresh approval, vault lock waits can be cancelled, snapshots recover after server gaps, and enrolled controllers can restart until the share expires.
+- Local revocation stays responsive during completion observers, and SIGTERM restores the terminal.
+- Display recovery stays ordered through journal catch-up, and newer live events wait until recovery completes.
+- Accepted remote prompts wait for an exact-run completion, local-successor handoffs are discarded, and text above 16 KiB of UTF-8 is rejected before acknowledgement.
+
+### Known limits
+
+- The Linux build is not signed. A checksum shows the file matches what was published, not who built it.
+- No macOS file is offered yet; the Apple silicon build waits for notarization. macOS Intel and Windows are not built.
+- Native Linux acceptance for the shared process and credential code in ejm-harness is still open.

@@ -9,14 +9,14 @@ account or server. Hosted models need provider access.
 
 ## Status
 
-The project is being prepared for public use. Build from source with access to
-both repositories. There is no supported binary installer or package-manager
+The CLI and harness source repositories are public. Build from compatible
+sibling checkouts. There is no supported binary installer or package-manager
 distribution. See [the release policy](RELEASING.md) for version and release gates.
 
 ## Requirements
 
 - Rust 1.99.1, selected by `rust-toolchain.toml`.
-- Git and sibling checkouts of `ejm-cli` and `ejm-harness`.
+- Git and sibling checkouts of `ejm-cli`, `ejm-harness` and `ejm-ui`.
 - A terminal for the TUI. Use `run` for pipes and automation.
 - Provider credentials for hosted models. Offline replay needs none.
 
@@ -30,8 +30,10 @@ Clone both repositories into the same parent directory:
 
 ```sh
 git clone https://github.com/ejmlabs/ejm-harness.git
+git clone https://github.com/ejmlabs/ejm-ui.git
 git clone https://github.com/ejmlabs/ejm-cli.git
 cd ejm-cli
+git -C ../ejm-harness checkout --detach "$(cat .github/harness-revision)"
 cargo build --release --locked
 ./target/release/ejm-cli --replay
 ./target/release/ejm-cli --replay run "Hello"
@@ -52,6 +54,8 @@ export EJM_CLI_BASE_URL=https://api.deepseek.com/v1
 ./target/release/ejm-cli
 ```
 
+`EJM_CLI_BASE_URL` must be `https`, except `http` on `localhost`, `127.0.0.0/8`, or `::1`. That `http` exception is refused while `HTTP_PROXY`, `HTTPS_PROXY`, or `ALL_PROXY` is set unless `NO_PROXY` contains that host exactly. A rejected URL exits 1 and the error does not print the URL or the proxy value. `ejm-cli doctor` marks a disallowed endpoint rejected.
+
 Native file tools are read only by default. Add `--allow-write` to grant writing
 and `--allow-shell` to grant shell execution. Grants stay visible in the TUI.
 Keys come from environment variables and are never accepted as command arguments.
@@ -60,18 +64,24 @@ Native execution runs as the current user and is not a security sandbox.
 ### Terminal experience
 
 - Unicode composer, multiline input, bracketed paste, and sent-message history.
-- Streaming transcript with code, Markdown, and diff styling.
+  Up and Down recall sent messages outside the command picker.
+- Streaming transcript with gutter glyphs, light Markdown, diff styling, and
+  collapsible tool calls that show their main argument.
+- A working line with a spinner, step and elapsed time, and a footer with the
+  effective grants and the keys that apply right now.
+- Built from the shared ejmlabs terminal blocks in `ejm-ui/crates/ejm-tui`, so
+  the clone of `ejm-ui` must sit beside this repository to build.
 - Visible run state and separate agent, model, and local tool counts.
 - Saved sessions, steering, queued turns, and cancellation.
 - Bounded rendering and scrollback, with durable history in the harness.
 - Plain and JSON modes for pipes and automation.
 - Terminal restoration on errors, panic, and handled signals.
 
-Type `/` to filter commands. Up/Down chooses a command, Tab completes it, and
-Escape closes the picker without changing the draft. `/help` also lists granted
+Type `/` to filter commands, or `?` for shortcuts. Up/Down chooses a command, Tab
+completes it, and Escape closes the picker without changing the draft. `/help` also lists granted
 package commands; Enter copies the selected command into the composer. Enter
-sends or queues a complete command or prompt, Ctrl+K steers, Ctrl+C stops, and
-Ctrl+S opens sessions. `/agents` shows managed sessions.
+sends or queues a complete command or prompt, Ctrl+K steers, Escape or Ctrl+C stops, Ctrl+O shows
+complete tool output, Ctrl+S opens sessions, and Ctrl+C twice exits. `/agents` shows managed sessions.
 
 ```sh
 ejm-cli run "Explain the parser" --json
@@ -137,6 +147,8 @@ dependency policy, release builds, and real PTY checks run through one command:
 
 ## Documentation
 
+- [User guide](https://cli.ejmlabs.com/docs/user-guide/): source setup, providers, grants and recovery.
+- [Developer guide](https://cli.ejmlabs.com/docs/developer-guide/): changes, ownership and site checks.
 - [CLI reference](docs/ejm-cli.md): controls, providers, sessions, packages and trust.
 - [Performance evidence](docs/benchmarks.md): measurements, method and limits.
 - [Development guide](docs/contributing.md): tools, ownership and the required gate.

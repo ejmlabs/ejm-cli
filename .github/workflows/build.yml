@@ -32,6 +32,21 @@ jobs:
           ref: ${{ steps.harness.outputs.revision }}
           path: work/ejm-harness
           persist-credentials: false
+      - name: Read the reviewed UI revision
+        id: ui
+        shell: bash
+        run: |
+          set -euo pipefail
+          revision="$(python3 -I -c 'import json, sys; print(json.load(open(sys.argv[1]))["revision"])' work/ejm-cli/.github/ui-source.json)"
+          [[ "$revision" =~ ^[0-9a-f]{40}$ ]] || { echo "UI revision is not a full SHA" >&2; exit 1; }
+          echo "revision=$revision" >> "$GITHUB_OUTPUT"
+      # The TUI builds from the shared ejm-tui crate at ../ejm-ui.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: ejmlabs/ejm-ui
+          ref: ${{ steps.ui.outputs.revision }}
+          path: work/ejm-ui
+          persist-credentials: false
       - name: Install build prerequisites
         run: |
           sudo apt-get update
@@ -54,6 +69,7 @@ jobs:
           {
             echo "commit: $GITHUB_SHA"
             echo "harness: ${{ steps.harness.outputs.revision }}"
+            echo "ui: ${{ steps.ui.outputs.revision }}"
             echo "runner glibc: $(ldd --version | head -n 1)"
           } >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

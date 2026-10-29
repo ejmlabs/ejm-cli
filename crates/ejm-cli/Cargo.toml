@@ -24,6 +24,8 @@ ejm-harness-exec.workspace = true
 ejm-harness-auth.workspace = true
 ejm-harness-packages.workspace = true
 ejm-harness-package-spec.workspace = true
+# The shared ejmlabs terminal blocks, from the sibling ejm-ui repository.
+ejm-tui.workspace = true
 serde.workspace = true
 clap = { version = "4.5", features = ["derive", "env"] }
 ratatui = { version = "0.30.2", default-features = false, features = ["crossterm_0_29", "layout-cache"] }
