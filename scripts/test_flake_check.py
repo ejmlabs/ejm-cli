@@ -1,9 +1,12 @@
 import json
 import os
+import select
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -25,6 +28,63 @@ def report(cases: list[tuple[str, str]]) -> str:
 
 
 class FlakeCheckTests(unittest.TestCase):
+    def test_hung_attempt_preserves_incremental_diagnostics(self) -> None:
+        for phase in ("cargo-1", "nextest-1", "cargo-2", "nextest-2"):
+            with self.subTest(phase=phase), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                cargo = root / "cargo"
+                cargo.write_text(
+                    '''#!/usr/bin/env python3
+import os, sys, time, tomllib
+from pathlib import Path
+if sys.argv[1:3] == ["nextest", "list"]:
+    print("{}")
+    raise SystemExit(0)
+kind = "nextest" if sys.argv[1] == "nextest" else "cargo"
+counter = Path(kind + "-count")
+number = int(counter.read_text()) + 1 if counter.exists() else 1
+counter.write_text(str(number))
+phase = f"{kind}-{number}"
+if kind == "nextest":
+    config = Path(sys.argv[sys.argv.index("--config-file") + 1])
+    report = Path(tomllib.loads(config.read_text())["profile"]["ci"]["junit"]["path"])
+    report.write_text(os.environ["FAILURE_REPORT"])
+print("diagnostic " + phase, end="", flush=True)
+if phase == os.environ["HANG_PHASE"]:
+    time.sleep(60)
+raise SystemExit(100 if kind == "nextest" else 101)
+''', encoding="utf-8"
+                )
+                cargo.chmod(0o755)
+                env = {**os.environ, "PATH": str(root) + os.pathsep + os.environ.get("PATH", ""),
+                       "HANG_PHASE": phase, "FAILURE_REPORT": report([("x", "<failure/>")])}
+                process = subprocess.Popen(
+                    [sys.executable, str(Path(__file__).with_name("flake_check.py")), str(root / "evidence")],
+                    cwd=root, env=env, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                    start_new_session=True,
+                )
+                try:
+                    output = b""
+                    deadline = time.monotonic() + 10
+                    while f"diagnostic {phase}".encode() not in output:
+                        remaining = deadline - time.monotonic()
+                        self.assertGreater(remaining, 0, "detector did not reach hanging attempt")
+                        ready, _, _ = select.select([process.stdout], [], [], remaining)
+                        self.assertTrue(ready, "detector did not emit diagnostic")
+                        chunk = os.read(process.stdout.fileno(), 8192)
+                        self.assertTrue(chunk, "detector exited before hanging attempt")
+                        output += chunk
+                finally:
+                    os.killpg(process.pid, signal.SIGKILL)
+                    process.wait(timeout=10)
+                    process.stdout.close()
+                kind, number = phase.split("-")
+                log = root / "evidence" / (f"cargo-test-{number}.log" if kind == "cargo" else f"attempt-{number}.log")
+                self.assertIn(f"diagnostic {phase}", log.read_text())
+                if phase in ("cargo-2", "nextest-2"):
+                    self.assertEqual((root / "evidence/attempt-1.xml").read_text(), env["FAILURE_REPORT"])
+                    self.assertIn("diagnostic nextest-1", (root / "evidence/attempt-1.log").read_text())
+
     def test_cargo_success_without_finishing_all_tests_is_incomplete(self) -> None:
         with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parent.parent) as directory:
             root = Path(directory)

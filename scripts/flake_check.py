@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Compare independent nextest reports without turning a failure green."""
 
+import codecs
 import json
 import re
 import subprocess
@@ -122,18 +123,21 @@ def run(command: list[str], log: Path) -> int | None:
                 command,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
             )
         except OSError as error:
             print(f"Could not start {command[0]}: {error}", file=stream)
             return None
         assert process.stdout is not None
-        for line in process.stdout:
-            sys.stdout.write(line)
+        decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+        for chunk in iter(lambda: process.stdout.read1(8192), b""):
+            text = decoder.decode(chunk)
+            stream.write(text)
+            stream.flush()
+            sys.stdout.write(text)
             sys.stdout.flush()
-            stream.write(line)
+        text = decoder.decode(b"", final=True)
+        stream.write(text)
+        sys.stdout.write(text)
         return process.wait()
 
 
