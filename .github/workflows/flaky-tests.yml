@@ -1,0 +1,73 @@
+name: Test reliability
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '53 11 * * *'
+permissions:
+  contents: read
+env:
+  CARGO_BUILD_JOBS: 2
+  CARGO_INCREMENTAL: 0
+jobs:
+  reliability:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: work/ejm-cli
+          persist-credentials: false
+      - name: Read the reviewed dependency revisions
+        id: revisions
+        shell: bash
+        run: |
+          set -euo pipefail
+          harness="$(tr -d '\n' < work/ejm-cli/.github/harness-revision)"
+          ui="$(python3 -I -c 'import json, sys; print(json.load(open(sys.argv[1]))["revision"])' work/ejm-cli/.github/ui-source.json)"
+          [[ "$harness" =~ ^[0-9a-f]{40}$ && "$ui" =~ ^[0-9a-f]{40}$ ]] || exit 1
+          echo "harness=$harness" >> "$GITHUB_OUTPUT"
+          echo "ui=$ui" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: ejmlabs/ejm-harness
+          ref: ${{ steps.revisions.outputs.harness }}
+          path: work/ejm-harness
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: ejmlabs/ejm-ui
+          ref: ${{ steps.revisions.outputs.ui }}
+          path: work/ejm-ui
+          persist-credentials: false
+      - name: Install native test prerequisites
+        run: sudo apt-get update && sudo apt-get install --yes --no-install-recommends pkg-config libdbus-1-dev
+      - run: rustup toolchain install 1.99.1 --profile minimal
+      - name: Install verified cargo-nextest
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/cargo-nextest.tar.gz"
+          bindir="$RUNNER_TEMP/nextest-bin"
+          curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' \
+            https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.124/cargo-nextest-0.9.124-x86_64-unknown-linux-gnu.tar.gz \
+            --output "$archive"
+          printf '%s  %s\n' cf3694155011e6e19a7306448b7984e5d0d781417a31478996a9018b7ec78e25 "$archive" | shasum -a 256 --check --status
+          mkdir "$bindir"
+          tar -xzf "$archive" -C "$bindir" cargo-nextest
+          "$bindir/cargo-nextest" --version
+          echo "$bindir" >> "$GITHUB_PATH"
+      - name: Test the detector
+        working-directory: work/ejm-cli
+        run: python3 -B -m unittest discover -s scripts -p 'test_flake_check.py'
+      - name: Compare two independent Rust test runs
+        working-directory: work/ejm-cli
+        run: python3 scripts/flake_check.py "$RUNNER_TEMP/cli-flakes"
+      - name: Preserve test evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: cli-test-reliability
+          path: ${{ runner.temp }}/cli-flakes/
+          if-no-files-found: warn
+          retention-days: 7
