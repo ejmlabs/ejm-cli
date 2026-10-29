@@ -2,6 +2,7 @@
 """Compare independent nextest reports without turning a failure green."""
 
 import json
+import re
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
@@ -84,6 +85,40 @@ def inventory(path: Path) -> set[tuple[str, str]]:
     if not results or len(results) != data["test-count"]:
         raise ValueError("test inventory count does not match listed tests")
     return results
+
+
+def cargo_complete(log: Path, listing: Path) -> None:
+    suites = json.loads(listing.read_text(encoding="utf-8"))["rust-suites"]
+    binaries = {str(Path(suite["binary-path"]).resolve()): suite_id for suite_id, suite in suites.items()}
+    if len(binaries) != len(suites):
+        raise ValueError("test inventory contains duplicate binary paths")
+    expected = inventory(listing)
+    results = set()
+    seen = set()
+    active = None
+    for line in log.read_text(encoding="utf-8").splitlines():
+        header = re.fullmatch(r"\s*Running .+ \((.+)\)", line)
+        if header:
+            if active is not None:
+                raise ValueError("Cargo test binary did not finish")
+            active = binaries.get(str(Path(header[1]).resolve()))
+            if active is None or active in seen:
+                raise ValueError("unexpected or repeated Cargo test binary")
+            seen.add(active)
+        elif line.lstrip().startswith("Doc-tests "):
+            if active is not None:
+                raise ValueError("Cargo test binary did not finish")
+        elif active is not None:
+            case = re.fullmatch(r"test (.+) \.\.\. (ok|FAILED|ignored)", line)
+            if case:
+                key = (active, case[1])
+                if case[2] == "ignored" or key in results:
+                    raise ValueError("Cargo test was ignored or repeated")
+                results.add(key)
+            elif line.startswith("test result: "):
+                active = None
+    if active is not None or results != expected or seen != set(suites):
+        raise ValueError("Cargo test results are missing or differ from the inventory")
 
 
 def run(command: list[str], log: Path) -> int | None:
@@ -211,6 +246,12 @@ def main() -> int:
     except (OSError, ET.ParseError, ValueError, KeyError, TypeError) as error:
         print(f"Cannot compare test results: {error}", file=sys.stderr)
         incomplete = True
+    for number in (1, 2):
+        try:
+            cargo_complete(output / f"cargo-test-{number}.log", output / "inventory.json")
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            print(f"Cannot verify Cargo attempt {number}: {error}", file=sys.stderr)
+            incomplete = True
     baseline_differed = all(code is not None for code in baseline) and (baseline[0] == 0) != (
         baseline[1] == 0
     )

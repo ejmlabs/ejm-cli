@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -27,12 +28,70 @@ def report(cases: list[tuple[str, str]]) -> str:
 
 
 class FlakeCheckTests(unittest.TestCase):
+    def test_cargo_success_without_finishing_all_tests_is_incomplete(self) -> None:
+        with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parent.parent) as directory:
+            root = Path(directory)
+            (root / "src").mkdir()
+            (root / "Cargo.toml").write_text(
+                '[package]\nname = "fixture"\nversion = "0.1.0"\nedition = "2021"\n[workspace]\n',
+                encoding="utf-8",
+            )
+            (root / "src/lib.rs").write_text(
+                '#[test] fn a_exit() { std::process::exit(0); }\n'
+                '#[test] #[ignore] fn z_never_runs() {}\n', encoding="utf-8"
+            )
+            real_cargo = shutil.which("cargo")
+            self.assertIsNotNone(real_cargo)
+            subprocess.run([real_cargo, "generate-lockfile"], cwd=root, check=True, capture_output=True)
+            cargo = root / "cargo"
+            cargo.write_text(
+                '''#!/usr/bin/env python3
+import json, os, subprocess, sys, tomllib
+from pathlib import Path
+if sys.argv[1:3] == ["nextest", "list"]:
+    build = subprocess.run([os.environ["REAL_CARGO"], "test", "--locked", "--no-run", "--message-format=json"], capture_output=True, text=True, check=True)
+    artifact = next(json.loads(line) for line in build.stdout.splitlines() if json.loads(line).get("profile", {}).get("test") and json.loads(line).get("executable"))
+    suite = {"binary-id": "fixture", "binary-path": artifact["executable"], "status": "listed", "testcases": {name: {"filter-match": {"status": "matches"}} for name in ("a_exit", "z_never_runs")}}
+    print(json.dumps({"test-count": 2, "rust-suites": {"fixture": suite}}))
+elif sys.argv[1:3] == ["nextest", "run"]:
+    config = Path(sys.argv[sys.argv.index("--config-file") + 1])
+    output = Path(tomllib.loads(config.read_text())["profile"]["ci"]["junit"]["path"])
+    attrs = " tests='2' failures='0' errors='0' skipped='0'"
+    output.write_text("<testsuites" + attrs + "><testsuite name='fixture'" + attrs + "><testcase classname='fixture' name='a_exit'/><testcase classname='fixture' name='z_never_runs'/></testsuite></testsuites>")
+else:
+    os.execv(os.environ["REAL_CARGO"], [os.environ["REAL_CARGO"], *sys.argv[1:]])
+''', encoding="utf-8"
+            )
+            cargo.chmod(0o755)
+            env = {**os.environ, "PATH": str(root) + os.pathsep + os.environ.get("PATH", ""),
+                   "REAL_CARGO": real_cargo, "RUST_TEST_THREADS": "1", "CARGO_BUILD_JOBS": "2"}
+            result = subprocess.run(
+                [sys.executable, str(Path(__file__).with_name("flake_check.py")), str(root / "evidence")],
+                cwd=root, env=env, capture_output=True, text=True,
+            )
+            summary = json.loads((root / "evidence/summary.json").read_text())
+            self.assertEqual(summary["cargo_test_exit_codes"], [0, 0])
+            self.assertTrue(summary["incomplete"])
+            self.assertEqual(result.returncode, 1)
+            (root / "src/lib.rs").write_text(
+                '#[test] fn a_exit() {}\n#[test] #[ignore] fn z_never_runs() {}\n', encoding="utf-8"
+            )
+            result = subprocess.run(
+                [sys.executable, str(Path(__file__).with_name("flake_check.py")), str(root / "complete")],
+                cwd=root, env=env, capture_output=True, text=True,
+            )
+            summary = json.loads((root / "complete/summary.json").read_text())
+            self.assertFalse(summary["incomplete"], result.stderr)
+            self.assertEqual(result.returncode, 0)
+
     def test_inventory_and_comparison_through_command(self) -> None:
         cases = {
             "complete": ([('x', ''), ('y', '')], [('x', ''), ('y', '')], False, []),
             "skipped": ([('x', '<failure/>'), ('y', '<skipped/>')], [('x', ''), ('y', '<skipped/>')], True, [['pkg::suite', 'x']]),
             "omitted": ([('x', '<failure/>')], [('x', '')], True, [['pkg::suite', 'x']]),
             "invalid": ([('x', '<failure/>'), ('y', '')], [('x', ''), ('y', '')], True, [['pkg::suite', 'x']]),
+            "cargo_omitted": ([('x', '<failure/>'), ('y', '')], [('x', ''), ('y', '')], True, [['pkg::suite', 'x']]),
+            "cargo_wrong_name": ([('x', ''), ('y', '')], [('x', ''), ('y', '')], True, []),
         }
         for name, (first, second, incomplete, mixed) in cases.items():
             with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
@@ -52,19 +111,26 @@ elif sys.argv[1:3] == ["nextest", "run"]:
     output = Path(tomllib.loads(config.read_text())["profile"]["ci"]["junit"]["path"])
     output.write_text(os.environ["FIRST" if first else "SECOND"])
     raise SystemExit(100 if first and "<failure" in os.environ["FIRST"] else 0)
+else:
+    print("     Running unittests src/lib.rs (fake)")
+    print("running 2 tests\\ntest x ... ok")
+    if not os.environ.get("OMIT_CARGO"):
+        print("test " + ("z" if os.environ.get("WRONG_CARGO") else "y") + " ... ok\\ntest result: ok.")
 ''', encoding="utf-8"
                 )
                 cargo.chmod(0o755)
                 listing = {
                     "test-count": 3 if name == "invalid" else 2,
                     "rust-suites": {"pkg::suite": {
-                        "binary-id": "pkg::suite", "status": "listed",
+                        "binary-id": "pkg::suite", "binary-path": "fake", "status": "listed",
                         "testcases": {item: {"filter-match": {"status": "matches"}} for item in ("x", "y")},
                     }},
                 }
                 env = {
                     **os.environ, "PATH": str(root) + os.pathsep + os.environ.get("PATH", ""),
                     "LISTING": json.dumps(listing), "FIRST": report(first), "SECOND": report(second),
+                    "OMIT_CARGO": "1" if name == "cargo_omitted" else "",
+                    "WRONG_CARGO": "1" if name == "cargo_wrong_name" else "",
                 }
                 result = subprocess.run(
                     [sys.executable, str(Path(__file__).with_name("flake_check.py")), str(root / "evidence")],
@@ -139,7 +205,7 @@ elif sys.argv[1:3] == ["nextest", "run"]:
 import json, sys, tomllib
 from pathlib import Path
 if sys.argv[1:3] == ["nextest", "list"]:
-    print(json.dumps({"test-count": 1, "rust-suites": {"pkg::suite": {"binary-id": "pkg::suite", "status": "listed", "testcases": {"write": {"filter-match": {"status": "matches"}}}}}}))
+    print(json.dumps({"test-count": 1, "rust-suites": {"pkg::suite": {"binary-id": "pkg::suite", "binary-path": "fake", "status": "listed", "testcases": {"write": {"filter-match": {"status": "matches"}}}}}}))
     raise SystemExit(0)
 if sys.argv[1] == "nextest":
     marker = Path("ran")
@@ -154,6 +220,8 @@ if sys.argv[1] == "nextest":
                       + "><testcase classname='pkg::suite' name='write'>" + state
                       + "</testcase></testsuite></testsuites>")
     raise SystemExit(100 if first else 0)
+print("     Running unittests src/lib.rs (fake)")
+print("running 1 test\\ntest write ... ok\\ntest result: ok.")
 raise SystemExit(0)
 """,
                 encoding="utf-8",
@@ -188,7 +256,7 @@ raise SystemExit(0)
 import json, sys, tomllib
 from pathlib import Path
 if sys.argv[1:3] == ["nextest", "list"]:
-    print(json.dumps({"test-count": 1, "rust-suites": {"pkg::suite": {"binary-id": "pkg::suite", "status": "listed", "testcases": {"write": {"filter-match": {"status": "matches"}}}}}}))
+    print(json.dumps({"test-count": 1, "rust-suites": {"pkg::suite": {"binary-id": "pkg::suite", "binary-path": "fake", "status": "listed", "testcases": {"write": {"filter-match": {"status": "matches"}}}}}}))
     raise SystemExit(0)
 if sys.argv[1] == "nextest":
     config = Path(sys.argv[sys.argv.index("--config-file") + 1])
@@ -202,6 +270,8 @@ if not marker.exists():
     marker.touch()
     print("shared-process test failed")
     raise SystemExit(101)
+print("     Running unittests src/lib.rs (fake)")
+print("running 1 test\\ntest write ... ok\\ntest result: ok.")
 """,
                 encoding="utf-8",
             )
