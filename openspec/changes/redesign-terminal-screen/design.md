@@ -2,7 +2,7 @@
 
 ## Layout
 
-`ejm_tui::WorkspaceLayout` places the regions, top to bottom: the two-line `SessionHeader`, the transcript, the `ActivityLine`, the `ResourceLine` (counts stay visible while idle), up to four extension widget lines, a hairline rule with the draft under it, and the `workspace_controls` footer with grants first. The command menu opens at the bottom of the transcript, above the composer. Help and sessions replace the transcript area under a labelled rule.
+See the [CLI reference](../../../docs/ejm-cli.md#interaction) for the current screen layout.
 
 ## Transcript
 

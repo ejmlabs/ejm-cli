@@ -338,8 +338,9 @@ if __name__ == "__main__":
         check(Path(sys.argv[2]).resolve(strict=True), terminate=True, remote_entry=True)
         print("ejm-cli remote command SIGTERM restoration passed.")
         raise SystemExit(0)
-    if len(sys.argv) == 3 and sys.argv[1] == "--remote-only":
-        fixture = native_fixture(Path(sys.argv[2]))
+    if len(sys.argv) == 3 and sys.argv[1] in {"--remote-only", "--remote-fixture"}:
+        fixture = (native_fixture(Path(sys.argv[2])) if sys.argv[1] == "--remote-only"
+                   else Path(sys.argv[2]).resolve(strict=True))
         for case in REMOTE_CASES:
             check(fixture, terminate=False, remote_case=case)
         print("ejm-cli remote PTY privacy, lifecycle and restoration passed.")

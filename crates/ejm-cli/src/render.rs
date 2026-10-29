@@ -91,7 +91,7 @@ fn draw_screen(
     let layout = WorkspaceLayout::new(area, draft.0.len(), false, true, app.widget_lines.len());
 
     frame.render_widget(
-        Paragraph::new(header_lines(app, args, theme, layout.header.width).to_vec()),
+        Paragraph::new(header_line(app, args, theme, layout.header.width)),
         layout.header,
     );
     let transcript = layout.transcript;
@@ -101,10 +101,6 @@ fn draw_screen(
         draw_transcript(frame, app, theme, spin, transcript);
         draw_commands(frame, app, theme, transcript);
     }
-    frame.render_widget(
-        Paragraph::new(activity(app, theme, spin, layout.activity.width)),
-        layout.activity,
-    );
     let resources = ResourceLine {
         agents: snapshot.active_agents,
         models: ResourceCount {
@@ -116,9 +112,26 @@ fn draw_screen(
             queued: snapshot.tools.queued,
         },
     };
+    let resource_line = resources.line(theme, layout.activity.width);
+    let resource_width = u16::try_from(resource_line.width()).unwrap_or(layout.activity.width);
+    let activity_width = layout
+        .activity
+        .width
+        .saturating_sub(resource_width.saturating_add(u16::from(resource_width > 0)));
     frame.render_widget(
-        Paragraph::new(resources.line(theme, layout.resources.width)),
-        layout.resources,
+        Paragraph::new(activity(app, theme, spin, activity_width)),
+        Rect {
+            width: activity_width,
+            ..layout.activity
+        },
+    );
+    frame.render_widget(
+        Paragraph::new(resource_line),
+        Rect {
+            x: layout.activity.right().saturating_sub(resource_width),
+            width: resource_width,
+            ..layout.activity
+        },
     );
     frame.render_widget(
         Paragraph::new(
@@ -153,7 +166,7 @@ fn grants(app: &App, args: &Args) -> (String, bool) {
     }
 }
 
-fn header_lines(app: &App, args: &Args, theme: &Theme, width: u16) -> [Line<'static>; 2] {
+fn header_line(app: &App, args: &Args, theme: &Theme, width: u16) -> Line<'static> {
     let sep = theme.glyphs.separator;
     let provider = if is_controller(app) {
         "remote session"
@@ -176,7 +189,7 @@ fn header_lines(app: &App, args: &Args, theme: &Theme, width: u16) -> [Line<'sta
         connection: &connection,
         directory: &safe_text(&display_path(&app.session.cwd)),
     }
-    .lines(theme, width)
+    .line(theme, width)
 }
 
 /// Home directory shown as `~`, so the part of the path that matters fits.
@@ -778,7 +791,7 @@ mod tests {
                 assert!(text.contains("grants: read + write"), "{text}");
                 assert!(text.contains("What shall we build?"));
                 assert!(
-                    text.contains("12 agents · models 2+3q · tools 0+0q"),
+                    text.contains("12 agents · 2 model calls, 3 waiting · 0 tools"),
                     "{text}"
                 );
                 assert!(text.contains("› Describe a task…"));
@@ -793,6 +806,15 @@ mod tests {
             }
         }
         assert!(text(&render_app(&args, &unicode(), 19, 8, app())).contains("Enlarge the"));
+        let mut running = app();
+        running.run_state = RunState::Running;
+        running.status = "Thinking".into();
+        let text = text(&render_app(&args, &unicode(), 100, 30, running));
+        assert!(text.contains("Thinking"), "{text}");
+        assert!(
+            text.contains("12 agents · 2 model calls, 3 waiting · 0 tools"),
+            "{text}"
+        );
     }
 
     #[test]
