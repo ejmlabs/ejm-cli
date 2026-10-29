@@ -42,9 +42,23 @@ runs:
       shell: bash
       run: rustup target add --toolchain 1.99.1 wasm32-unknown-unknown
 
+    # The release archive replaces a source build of about two minutes; each digest matches the release's published .sha256sum.
     - name: Install pinned wasm-bindgen CLI
       shell: bash
-      run: cargo +1.99.1 install wasm-bindgen-cli --version 0.2.129 --locked --bin wasm-bindgen --jobs 2
+      run: |
+        set -euo pipefail
+        case "$RUNNER_OS/$RUNNER_ARCH" in
+          Linux/X64) target=x86_64-unknown-linux-musl digest=82d12bb940e2d4e72e0d5605387fc1b8ca179044e012b620f0ce4e7440e8320e ;;
+          macOS/ARM64) target=aarch64-apple-darwin digest=81d4a23d56b3c3eb8187658329116d50e0b228a93b343825fb71f70179051cd1 ;;
+          *) printf 'No pinned wasm-bindgen build for %s/%s\n' "$RUNNER_OS" "$RUNNER_ARCH" >&2; exit 1 ;;
+        esac
+        name="wasm-bindgen-0.2.129-$target"
+        archive="$RUNNER_TEMP/$name.tar.gz"
+        curl --fail --silent --show-error --location --proto '=https' --output "$archive" \
+          "https://github.com/wasm-bindgen/wasm-bindgen/releases/download/0.2.129/$name.tar.gz"
+        printf '%s  %s\n' "$digest" "$archive" | shasum -a 256 --check
+        tar -xzf "$archive" -C "$RUNNER_TEMP" "$name/wasm-bindgen"
+        install -m 755 "$RUNNER_TEMP/$name/wasm-bindgen" "${CARGO_HOME:-$HOME/.cargo}/bin/wasm-bindgen"
 
     - name: Install locked browser tools and Chrome
       if: ${{ hashFiles('product/relay/package.json') != '' }}
