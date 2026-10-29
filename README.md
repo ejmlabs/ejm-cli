@@ -65,13 +65,16 @@ Native execution runs as the current user and is not a security sandbox.
 
 - Unicode composer, multiline input, bracketed paste, and sent-message history.
   Up and Down recall sent messages outside the command picker.
-- Streaming transcript with gutter glyphs, light Markdown, diff styling, and
+- Streaming transcript with gutter glyphs, GitHub flavored Markdown (tables,
+  task lists, links, nested lists and quotes), diff styling, and
   collapsible tool calls that show their main argument.
-- A working line with a spinner, step and elapsed time, and a footer with the
-  effective grants and the keys that apply right now.
+- A working line with a spinner, step and elapsed time, a one-line summary after
+  each run, and a footer with the effective grants and the keys that apply right now.
+- Opens without a provider and shows how to connect, so a first run is not a dead end.
 - Built from the shared ejmlabs terminal blocks in `ejm-ui/crates/ejm-tui`, so
   the clone of `ejm-ui` must sit beside this repository to build.
-- Visible run state and separate agent, model, and local tool counts.
+- Visible run state and separate agent, model, and local tool counts while work is active.
+- Saved sessions titled by their first prompt.
 - Saved sessions, steering, queued turns, and cancellation.
 - Bounded rendering and scrollback, with durable history in the harness.
 - Plain and JSON modes for pipes and automation.

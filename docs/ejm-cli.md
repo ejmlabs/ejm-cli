@@ -26,7 +26,7 @@ The provider key comes from `EJM_CLI_API_KEY`, falling back to `OPENAI_API_KEY`.
 
 `--base-url` and `EJM_CLI_BASE_URL` must use `https`. The exception is `http` on a loopback host: `localhost`, the `127.0.0.0/8` range, or `::1`. That exception is refused when `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, or the lowercase form is set and `NO_PROXY` does not contain that host exactly. `*` and a bracketed IPv6 entry such as `[::1]` do not count. The error names the proxy variable and does not print its value. A URL with a username, password, query, or fragment is rejected. On `run`, a rejected URL exits 1. The error names `--base-url` and `EJM_CLI_BASE_URL` and does not print the URL. `ejm-cli doctor` prints one endpoint line, without userinfo or raw line breaks, and marks a disallowed one rejected.
 
-Read tools are enabled by default. `--allow-write` registers file write tools. `--allow-shell` registers shell execution as the current user. Grants stay visible in the TUI header and remain fixed for the process. Native execution is not a security sandbox. `ejm-cli doctor` prints the executor's actual capability report.
+Read tools are enabled by default. `--allow-write` registers file write tools. `--allow-shell` registers shell execution as the current user. Grants stay visible in the TUI footer and remain fixed for the process. Native execution is not a security sandbox. `ejm-cli doctor` prints the executor's actual capability report.
 
 ## Provider accounts and models
 
@@ -79,21 +79,34 @@ ejm-cli login anthropic
 
 The screen is built from the shared ejmlabs terminal blocks in the sibling `ejm-ui`
 repository (`crates/ejm-tui`), the same blocks the Ink target offers JavaScript CLIs. It
-draws no boxes. A two-line header shows the version, model, session title and working
-directory. Each transcript line starts with a gutter glyph so it reads without color: `›` your
+draws no boxes. A one-line header shows the version, model and working directory, followed by
+a blank row. Each transcript line starts with a gutter glyph so it reads without color: `›` your
 message, `●` the assistant, a state glyph for a tool call (`○` queued, a spinner while
 running, `✓` done, `✗` failed), `!` a notice and `✗` an error. Assistant text gets light
-Markdown: headings, lists, quotes, rules, fenced code and inline bold, italic and code.
+GitHub flavored Markdown: headings, nested and task lists, quotes, rules, fenced code, tables,
+links, and inline bold, italic, strikethrough and code. Tables keep aligned columns and wrap
+long cells; on a narrow terminal each row prints as `Header: value` lines.
 Tool calls show their main argument, such as a path, pattern or command, and a short
-output preview. Ctrl+O shows complete tool output.
+output preview. Ctrl+O shows complete tool output. Each finished run ends with one line
+naming its result, steps, elapsed time and, when reported, token use, such as
+`✓ completed · 3 steps · 4s`.
 
-While a run is active, the line above the counts shows a spinner, the current step, the
-elapsed time and how to stop. When idle it shows the last result and token use. Agent,
-model and tool counts stay visible on their own line. The composer sits under a hairline
-rule. The footer starts with the effective grants, which stay on screen at every width and
-turn the warning color when write or shell access is granted, then lists the keys that
-apply right now. The command menu opens above the composer, and the help and session
-panels replace the transcript until Escape.
+While a run is active, the working line shows a spinner, the current step, the elapsed time
+and how to stop. When idle it is empty, or says how far you have scrolled. Agent, model and
+tool counts share its right edge while any of them is active or queued; `/status` shows them
+at any time. Every region shares a two-column margin on each side, dropped below 24 columns so the content keeps 20. The composer sits under a
+hairline rule, with a blank row before the footer. The footer starts with the effective
+grants, which stay on screen at every width and turn the warning color when write or shell
+access is granted, and ends at the right edge with the few keys that apply right now, such
+as the picker's keys while it is open. `?` lists every key. The command menu opens above the composer, and the help, session and
+status panels replace the transcript until Escape; the arrow and page keys scroll a status panel that does not fit. The session panel titles each session
+by its first prompt, unless it was named with `/new TITLE`, and leaves out sessions with no
+turns other than the current one.
+
+When the TUI starts without a usable provider, such as with no API key, it opens anyway. It
+shows the reason and the ways to connect: sign in with `ejm-cli login chatgpt`, set the
+provider variables, or use `--replay`. Prompts keep the draft and start no run until you
+restart with a provider. `ejm-cli run` and the other subcommands still exit with the error.
 
 | Key | Action |
 | --- | --- |
@@ -130,7 +143,7 @@ Terminals vary in how they encode modifier keys. Ctrl+J is the newline fallback 
 | Command | Action |
 | --- | --- |
 | `/help` | Show keys and choose a command to complete |
-| `/status` | Show local connection, account, session, grants and work metadata |
+| `/status` | Open a panel with the connection, account, session, grants and work counts |
 | `/remote share [view\|control]`, `/remote status`, `/remote stop` | Share the selected session, inspect it or revoke sharing |
 | `/new [title]` | Create a session in the configured workspace |
 | `/sessions` | Choose a saved session |
