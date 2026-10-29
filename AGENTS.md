@@ -34,14 +34,14 @@ ejm-cli is the Rust terminal app for ejm-harness, made by ejmlabs. The harness l
 | `crates/ejm-cli/src` | `args`, `auth`, `browser`, `app`, `ui`, `render`, `extensions`, `packages`, `main`. Terminal blocks, theme and glyphs come from the `ejm-tui` crate in `../ejm-ui/crates/ejm-tui` |
 | `crates/ejm-cli/tests/cli.rs` | Integration tests that run the real binary against `--replay` |
 | `docs/` | `ejm-cli.md` reference, `benchmarks.md` evidence, `contributing.md` gates and ownership |
-| `scripts/` | `check` (the one gate), `check_architecture.py`, `check_terminal.py`, `install-hooks`, `sync-design-kit.sh` |
+| `scripts/` | `check` (the full gate), `check_architecture.py`, `check_terminal.py`, `install-hooks`, `sync-design-kit.sh` |
 | `site/` | The static cli.ejmlabs.com page and its Cloudflare Worker config |
 | `.agents/skills/` | Project skills, listed below |
 
 ## Commands
 
 ```sh
-./scripts/check                      # the full gate used by local work, the pre-commit hook and CI
+./scripts/check                      # the full gate for local work and CI
 cargo test -p ejm-cli NAME           # a focused test
 cargo run -p ejm-cli -- --replay     # the TUI with the offline demo provider
 ```
@@ -72,7 +72,7 @@ Read the matching project skill under `.agents/skills` before starting. Read onl
 | Sync completed requirements to the main specs | `openspec-sync-specs` |
 | Archive a verified, completed change | `openspec-archive-change` |
 
-- Run `./scripts/check` before reporting a change complete. Local, pre-commit and CI use this command.
+- Run `./scripts/check` before reporting a change complete and before release. CI uses this full gate; the pre-commit hook runs faster checks.
 - Rust warnings and Clippy all/pedantic are denied. Unsafe code is forbidden. Production unwrap/expect, explicit panic, unfinished markers, debug macros, manual process exit and forgotten allocations are denied.
 - Fix lint causes. Exceptions require a narrowly scoped expectation with a concrete reason. Do not weaken a workspace rule to pass a check.
 - Use ownership, enums, small modules and explicit `Result` paths. Traits belong at real variable seams. Do not add a dependency injection container or factories for a single implementation.
@@ -83,7 +83,7 @@ Read the matching project skill under `.agents/skills` before starting. Read onl
 
 - Other agents may be editing this repo or its siblings at the same time. Run `git status` and `git log` before you start, change only the paths your task needs, and never revert changes you did not make.
 - Never edit `../ejm-harness` or `../ejm-ide` without the owner's agreement. If a sibling breaks the build, tell its session and wait.
-- Commit, push, publish and deploy only when the user asks. The pre-commit hook runs the full gate against the working tree.
+- Commit, push, publish and deploy only when the user asks. The pre-commit hook checks staged whitespace and working-tree architecture and Rust formatting; it does not replace the full gate.
 - Builds are large. When a disk fills up, run `cargo clean` in this repo and rebuild. Never delete files that belong to other projects.
 
 ## Done means

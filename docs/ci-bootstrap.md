@@ -97,8 +97,9 @@ arguments matched its protected parent. See the
 
 The composite action at `.github/actions/setup-ci/action.yml` uses the pinned
 `actions/setup-node` revision and installs Node 26.12.0, npm 11.20.0, the Rust
-1.99.1 WebAssembly target and wasm-bindgen CLI 0.2.129. Cargo installation uses
-two jobs. Linux setup installs `pkg-config`, `libdbus-1-dev` and Ubuntu
+1.99.1 WebAssembly target and wasm-bindgen CLI 0.2.129. wasm-bindgen comes
+from its Linux x64 or macOS arm64 release archive, checked against a pinned
+SHA-256 before it is installed. Linux setup installs `pkg-config`, `libdbus-1-dev` and Ubuntu
 noble-updates `gnome-keyring=46.1-2ubuntu0.2`, with recommendations disabled.
 It starts an isolated session D-Bus and unlocks GNOME Keyring's Secret Service
 with a random test password passed only through stdin. Data and runtime state
