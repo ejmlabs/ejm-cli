@@ -79,7 +79,7 @@ ejm-cli login anthropic
 
 The screen is built from the shared ejmlabs terminal blocks in the sibling `ejm-ui`
 repository (`crates/ejm-tui`), the same blocks the Ink target offers JavaScript CLIs. It
-draws no boxes. A two-line header shows the version, model, session title and working
+draws no boxes. A header shows the version, model, session title and working
 directory. Each transcript line starts with a gutter glyph so it reads without color: `›` your
 message, `●` the assistant, a state glyph for a tool call (`○` queued, a spinner while
 running, `✓` done, `✗` failed), `!` a notice and `✗` an error. Assistant text gets light
@@ -87,9 +87,9 @@ Markdown: headings, lists, quotes, rules, fenced code and inline bold, italic an
 Tool calls show their main argument, such as a path, pattern or command, and a short
 output preview. Ctrl+O shows complete tool output.
 
-While a run is active, the line above the counts shows a spinner, the current step, the
-elapsed time and how to stop. When idle it shows the last result and token use. Agent,
-model and tool counts stay visible on their own line. The composer sits under a hairline
+While a run is active, the activity line shows a spinner, the current step, the elapsed
+time and how to stop. When idle it shows the last result and token use. Agent, model and
+tool counts share that line. The composer sits under a hairline
 rule. The footer starts with the effective grants, which stay on screen at every width and
 turn the warning color when write or shell access is granted, then lists the keys that
 apply right now. The command menu opens above the composer, and the help and session

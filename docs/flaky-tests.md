@@ -2,10 +2,11 @@
 
 The reliability workflow runs on main and daily. It checks out the reviewed
 harness and UI revisions, runs Rust workspace tests twice through Cargo and twice
-through the pinned cargo-nextest release, and reports each test with both a failure and a
-pass. Every run must complete, and any failure leaves the job failed. The CLI
-workspace has no library doctest target. The existing human-admitted gate is unchanged; this workflow does
-not run unadmitted pull requests.
+through the pinned cargo-nextest release. It reports each test with both a failure
+and a pass in the nextest attempts, and separately reports differing Cargo suite
+outcomes. Every run must complete, and any failure leaves the job failed. The CLI
+workspace has no library doctest target. The existing human-admitted gate is
+unchanged; this workflow does not run unadmitted pull requests.
 
 To reproduce locally, install it with
 `cargo install --locked --version "$(python3 -c 'import tomllib; print(tomllib.load(open("tools.toml", "rb"))["cargo-nextest"]["version"])')" cargo-nextest`, then run

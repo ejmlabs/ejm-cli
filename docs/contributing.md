@@ -60,6 +60,8 @@ The dependency checker denies unknown registries, unknown Git sources, wildcard 
 
 ## Tests and review
 
+For the separate main and daily Rust reliability workflow, see [Rust test reliability](flaky-tests.md).
+
 Use replay or local HTTP fixtures. No paid provider calls belong in tests. Prove a changed user action or failure condition with a focused test before running the complete gate. Preserve failed drafts, durable event order, explicit grants, Unicode boundaries, bounded scrollback and prompt cancellation. Run the PTY check after terminal changes; a render snapshot alone cannot prove raw-mode restoration.
 
 Record measured latency and memory with hardware, compiler profile and workload. The target is 100 managed agents with hosted models on four cores and 8 GB RAM. Do not claim that target from a single current-machine fixture.
