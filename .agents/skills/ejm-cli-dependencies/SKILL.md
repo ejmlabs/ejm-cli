@@ -13,4 +13,4 @@ Use trusted, maintained packages for standard infrastructure. Review the smalles
 
 Use the pinned compiler and committed lockfile. Update a pin deliberately with its evidence. Never bypass a failing lint with a workspace-wide allowance. An item-level expectation requires a precise reason and must describe a real exception; remove it when no longer needed.
 
-CI action references and the harness checkout revision must be immutable commits. Keep local, pre-commit and CI entry points on `./scripts/check`. New tools need an exact version and a documented installation command. Run new scripts, validate skill routing, and execute the full check before reporting completion.
+CI action references and the harness checkout revision must be immutable commits. Keep the full `./scripts/check` gate for local completion, release and CI; the pre-commit hook runs only quick checks. New tools need an exact version and a documented installation command. Run new scripts, validate skill routing, and execute the full check before reporting completion.
