@@ -404,7 +404,8 @@ async fn handle_overlay_key(key: KeyEvent, app: &mut App, harness: &LocalBackend
             let selection = match &mut app.overlay {
                 Some(Overlay::Sessions { sessions, selected }) => Some((selected, sessions.len())),
                 Some(Overlay::Help { selected }) => Some((selected, app.commands.len())),
-                Some(Overlay::Status { .. }) | None => None,
+                Some(Overlay::Status { rows, offset }) => Some((offset, rows.len())),
+                None => None,
             };
             if let Some((selected, count)) = selection {
                 let step = if matches!(key.code, KeyCode::PageUp | KeyCode::PageDown) {
@@ -561,6 +562,7 @@ async fn show_status(app: &mut App, harness: &LocalBackend, args: &Args) {
                 ),
             ),
         ],
+        offset: 0,
     });
 }
 
@@ -1111,7 +1113,7 @@ mod tests {
         ui.app.composer.replace("/status");
         ui.key(KeyCode::Enter).await.unwrap();
         let connection = match &ui.app.overlay {
-            Some(Overlay::Status { rows }) => rows.first().map(|row| row.1.clone()),
+            Some(Overlay::Status { rows, .. }) => rows.first().map(|row| row.1.clone()),
             _ => None,
         };
         assert_eq!(

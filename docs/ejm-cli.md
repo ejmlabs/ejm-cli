@@ -94,12 +94,12 @@ naming its result, steps, elapsed time and, when reported, token use, such as
 While a run is active, the working line shows a spinner, the current step, the elapsed time
 and how to stop. When idle it is empty, or says how far you have scrolled. Agent, model and
 tool counts share its right edge while any of them is active or queued; `/status` shows them
-at any time. Every region shares a two-column margin on each side. The composer sits under a
+at any time. Every region shares a two-column margin on each side, dropped below 24 columns so the content keeps 20. The composer sits under a
 hairline rule, with a blank row before the footer. The footer starts with the effective
 grants, which stay on screen at every width and turn the warning color when write or shell
 access is granted, and ends at the right edge with the few keys that apply right now, such
 as the picker's keys while it is open. `?` lists every key. The command menu opens above the composer, and the help, session and
-status panels replace the transcript until Escape. The session panel titles each session
+status panels replace the transcript until Escape; the arrow and page keys scroll a status panel that does not fit. The session panel titles each session
 by its first prompt, unless it was named with `/new TITLE`, and leaves out sessions with no
 turns other than the current one.
 

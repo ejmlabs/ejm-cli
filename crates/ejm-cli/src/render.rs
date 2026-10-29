@@ -80,7 +80,13 @@ fn draw_screen(
         );
         return;
     }
-    let area = area.inner(Margin::new(MARGIN, 0));
+    // Inset only while the content keeps the minimum width, so a narrow footer still fits its grants.
+    let margin = if area.width >= MIN_WIDTH + 2 * MARGIN {
+        MARGIN
+    } else {
+        0
+    };
+    let area = area.inner(Margin::new(margin, 0));
     let spin =
         app.run_started
             .filter(|_| app.is_running())
@@ -587,21 +593,27 @@ fn draw_overlay(frame: &mut Frame<'_>, app: &App, overlay: &Overlay, theme: &The
             lines.push(Line::default());
             *selected
         }
-        Overlay::Status { .. } => {
-            lines.push(
-                Rule::new(theme)
-                    .label(&format!("Status {sep} Esc close"))
-                    .line(width),
-            );
+        Overlay::Status { rows, offset } => {
+            // Name the scroll keys only when the rows do not all fit below the title.
+            let label = if rows.len() + 2 > usize::from(area.height) {
+                format!("Status {sep} {arrows} scroll {sep} Esc close")
+            } else {
+                format!("Status {sep} Esc close")
+            };
+            lines.push(Rule::new(theme).label(&label).line(width));
             lines.push(Line::default());
-            0
+            *offset
         }
     };
     let header = lines.len();
     let rows = overlay_rows(app, overlay, theme, selected, width);
-    // Keep the selected row in view.
     let room = usize::from(area.height).saturating_sub(header).max(1);
-    let start = (selected + 1).saturating_sub(room);
+    let start = match overlay {
+        // Status has no selection, so its value is the first visible row.
+        Overlay::Status { .. } => selected.min(rows.len().saturating_sub(room)),
+        // Keep the selected row in view.
+        _ => (selected + 1).saturating_sub(room),
+    };
     lines.extend(rows.into_iter().skip(start).take(room));
     frame.render_widget(Paragraph::new(lines), area);
 }
@@ -631,7 +643,7 @@ fn overlay_rows(
                 .selected(selected)
                 .lines(width)
         }
-        Overlay::Status { rows } => rows
+        Overlay::Status { rows, .. } => rows
             .iter()
             .map(|(label, value)| {
                 Row::new(theme, label)
@@ -835,7 +847,7 @@ mod tests {
     #[test]
     fn renderer_handles_small_screens_and_shows_grants() {
         let args = Args::try_parse_from(["ejm-cli", "--replay", "--allow-write"]).unwrap();
-        for (width, height) in [(10, 5), (40, 10), (100, 30)] {
+        for (width, height) in [(10, 5), (20, 8), (40, 10), (100, 30)] {
             let text = text(&render_app(&args, &unicode(), width, height, app()));
             if width == 100 {
                 assert!(text.contains("ejm-cli 0.1.0"), "{text}");
@@ -851,7 +863,8 @@ mod tests {
                 assert!(text.contains("/ commands · ? shortcuts"), "{text}");
                 assert!(!text.contains('╭'), "no boxes: {text}");
             }
-            if width == 40 {
+            // The minimum width drops the side margins so the elevated grants still fit.
+            if width == 20 || width == 40 {
                 assert!(text.contains("grants: read + write"), "{text}");
             }
         }
@@ -1040,10 +1053,35 @@ mod tests {
         let mut app = super::tests::app();
         app.overlay = Some(Overlay::Status {
             rows: vec![("Connection", "ready".into()), ("Grants", "read".into())],
+            offset: 0,
         });
         let status = text(&render_app(&args, &unicode(), 100, 30, app));
         assert!(status.contains("Status · Esc close"), "{status}");
         assert!(status.contains("  Connection    ready"), "{status}");
         assert!(!status.contains('!'), "{status}");
+    }
+
+    #[test]
+    fn status_panel_scrolls_when_its_rows_do_not_fit() {
+        let args = Args::try_parse_from(["ejm-cli", "--replay"]).unwrap();
+        let rows = (1..=8)
+            .map(|n| ("Row", format!("value {n}")))
+            .collect::<Vec<_>>();
+        let mut app = super::tests::app();
+        app.overlay = Some(Overlay::Status {
+            rows: rows.clone(),
+            offset: 0,
+        });
+        let top = text(&render_app(&args, &unicode(), 60, 10, app));
+        assert!(top.contains("Status · ↑/↓ scroll · Esc close"), "{top}");
+        assert!(top.contains("value 1") && !top.contains("value 8"), "{top}");
+        // An offset past the end stops at the last screen of rows.
+        let mut app = super::tests::app();
+        app.overlay = Some(Overlay::Status { rows, offset: 50 });
+        let bottom = text(&render_app(&args, &unicode(), 60, 10, app));
+        assert!(
+            bottom.contains("value 8") && !bottom.contains("value 1 "),
+            "{bottom}"
+        );
     }
 }

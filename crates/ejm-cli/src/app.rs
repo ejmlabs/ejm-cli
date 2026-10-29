@@ -68,9 +68,10 @@ pub enum Overlay {
         sessions: Vec<Session>,
         selected: usize,
     },
-    /// `/status`: label and value rows.
+    /// `/status`: label and value rows, scrolled to `offset` when they do not fit.
     Status {
         rows: Vec<(&'static str, String)>,
+        offset: usize,
     },
 }
 
