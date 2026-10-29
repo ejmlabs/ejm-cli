@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "ejm-ssg dev",
     "build": "ejm-ssg build",
-    "budget": "ejm-ssg budget",
+    "perf": "node ../../ejm-ui/scripts/perf.mjs dist --baseline perf-baseline.json",
     "typecheck": "tsc -p tsconfig.json --pretty false",
     "test": "vitest run",
     "check": "npm run typecheck && npm run build && ejm-site-headers dist/_headers --check && npm test"

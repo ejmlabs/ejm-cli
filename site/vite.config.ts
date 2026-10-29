@@ -5,7 +5,7 @@ import { ejmSite } from '@ejm/site/vite';
 import { ejmSsg } from '@ejm/ssg/vite';
 import { docsPlugin } from './build/docs-plugin.mjs';
 
-// ejmSite adds the shared head tags and writes theme-boot.js, the icons and _headers. ejmSsg prerenders every route and checks the budget.
+// ejmSite adds the shared head tags and writes theme-boot.js, the icons and _headers. ejmSsg prerenders every route; `npm run perf` checks load time.
 // docsPlugin turns the Markdown guides and the repository's docs/*.md into pages at build time.
 export default defineConfig({
   root: import.meta.dirname,
