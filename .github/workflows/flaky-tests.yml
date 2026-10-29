@@ -58,7 +58,7 @@ jobs:
           printf '%s  %s\n' "$digest" "$archive" | shasum -a 256 --check --status
           mkdir "$bindir"
           tar -xzf "$archive" -C "$bindir" cargo-nextest
-          [[ "$("$bindir/cargo-nextest" --version)" == "cargo-nextest $version" ]]
+          [[ "$("$bindir/cargo-nextest" --version)" == "cargo-nextest $version ("* ]]
           echo "$bindir" >> "$GITHUB_PATH"
       - name: Test the detector
         working-directory: work/ejm-cli
