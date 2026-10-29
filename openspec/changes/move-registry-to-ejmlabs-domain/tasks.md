@@ -1,6 +1,6 @@
 # Tasks
 
-Harness pull requests [#18](https://github.com/ejmlabs/ejm-harness/pull/18) and [#19](https://github.com/ejmlabs/ejm-harness/pull/19) (`6c90a0d297861b78d83b958697c7e7aed9304409`) are open and are not on harness main. Do not move `.github/harness-revision` in this change. The discard command matches `DISCARD_RETIRED_REGISTRY_COMMAND`.
+Harness pull requests [#18](https://github.com/ejmlabs/ejm-harness/pull/18) and [#19](https://github.com/ejmlabs/ejm-harness/pull/19) are merged. `.github/harness-revision` moves to the harness main commit that contains them, in the same change as `discard-retired-session`.
 
 `discard-retired-session` ships in the same ejm-cli release as the harness pin bump to the merged harness #18 and #19 commit. Neither ships alone. No release note tells users to discard until both are in.
 
@@ -30,7 +30,7 @@ Harness pull requests [#18](https://github.com/ejmlabs/ejm-harness/pull/18) and 
 
 ## Workflow follow-up
 
-- [ ] Move `.github/harness-revision` to the harness main commit that contains the merged pull requests #18 and #19. Do that in the same ejm-cli release as `discard-retired-session`. Do not ship the command alone, and do not publish a release note that tells users to discard until both are in.
+- [x] Move `.github/harness-revision` to the harness main commit that contains the merged pull requests #18 and #19. Do that in the same ejm-cli release as `discard-retired-session`. Do not ship the command alone, and do not publish a release note that tells users to discard until both are in.
 - Sync the delta into `openspec/specs/` and archive this change only after Everett asks. This implementation does not archive.
 
 ## 5. Proxy compatibility follow-up
@@ -39,3 +39,11 @@ Harness pull requests [#18](https://github.com/ejmlabs/ejm-harness/pull/18) and 
 - [x] 5.2 Add isolated real-binary fixtures for each proxy variable form, flag and environment origin selection, doctor rejection, unchanged synthetic session, and no connection to passive registry/proxy listeners. Keep bearer and proxy values out of output and add no HTTP parser or server.
 - [x] 5.3 Update help, README, registry reference and changelog with the temporary restriction and recovery. Record harness transport ownership, public API gap, fixture checks, integration order and removal condition. Preserve the full immutable pin and human CI gates.
 - [x] 5.4 Run focused checks and the normal full CLI gate against the exact pinned harness, with Cargo jobs at most two, incremental compilation disabled, and the approved shared audit target. Keep session bytes out of assertion diagnostics. Make the existing pinned-origin fixture portable with `http://127.0.0.2:0`, preserving the precise constructor rejection without requiring a host alias or skipping the test. Record exact sources, commands, results, and every remaining platform or release gate in `proxy-verification.md`. Keep the immutable pin, locks, product behavior, and separate human gates unchanged. The Darwin arm64 gate originally passed against harness `4a751c6a3f24d7d143140f79ff53517fb93e3531`; after merging main the pin is `42e4f9cf33bd3525aec344cfdffabc251271f782`, which still lacks loopback `no_proxy()` so the CLI proxy guard remains required.
+
+## 6. Adopt the harness registry change
+
+- [x] 6.1 Pass `Some(registry)` to `install_source`, which now takes an optional client.
+- [x] 6.2 Take `PUBLIC_REGISTRY_ORIGIN` and `DISCARD_RETIRED_REGISTRY_COMMAND` from the harness. Replace the local discard and session notice with `force_discard_legacy_registry_session`, `discard_retired_registry_sessions` and `retired_registry_session_notice`; keep only the CLI's message for a directory at the session path. The harness unlinks relative to the package root handle (ejmlabs/ejm-cli#19).
+- [x] 6.3 Remove the proxy adapter and its fixtures; `doctor` accepts an HTTP loopback registry with proxies set and connects nowhere.
+- [x] 6.4 Describe `ejm.package.json` as the manifest name, and update the README, CLI reference and changelog.
+- [x] 6.5 Run `cargo test -p ejm-cli`, strict Clippy and `./scripts/check` against the new harness pin.

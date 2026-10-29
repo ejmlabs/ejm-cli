@@ -251,19 +251,17 @@ pub struct Args {
     pub registry: Option<String>,
 }
 
-/// Default package registry. Everett approved this host. Do not read
-/// `DEFAULT_REGISTRY` while that harness constant is still `harness.meetgerry.ai`.
-pub const DEFAULT_PACKAGE_REGISTRY: &str = "https://registry.ejmlabs.com";
+/// Default package registry. The harness has no default; hosts select an origin, and the CLI
+/// selects the public registry unless `--registry` or `EJM_CLI_REGISTRY_URL` names another.
+pub const DEFAULT_PACKAGE_REGISTRY: &str = ejm_harness_packages::PUBLIC_REGISTRY_ORIGIN;
 
-/// Matches `ejm_harness_packages::DISCARD_RETIRED_REGISTRY_COMMAND` at harness
-/// commit `6c90a0d`. That export is not in the pinned harness, so the CLI owns
-/// the same string until the pin moves.
-pub const DISCARD_RETIRED_REGISTRY_COMMAND: &str = "ejm-cli package discard-retired-session";
+pub use ejm_harness_packages::DISCARD_RETIRED_REGISTRY_COMMAND;
 
 /// Shown when `doctor` cannot parse a registry value. Never the raw input.
 pub const INVALID_REGISTRY_URL: &str = "(invalid registry URL)";
 
-/// User-facing retired-registry error. Same wording as the harness message at `6c90a0d`.
+/// User-facing error for a retired registry override. The harness gives its own message for a
+/// stored retired session.
 #[must_use]
 pub fn retired_registry_message() -> String {
     format!(
@@ -475,38 +473,14 @@ impl Args {
 
     /// Resolve `--registry`, then `EJM_CLI_REGISTRY_URL`, then [`DEFAULT_PACKAGE_REGISTRY`].
     ///
-    /// A rejected URL or proxy configuration is [`RegistryChoice::Rejected`]
-    /// so `doctor` can print it.
+    /// A rejected URL is [`RegistryChoice::Rejected`] so `doctor` can print it. The harness
+    /// registry client sends HTTP loopback requests without a proxy.
     #[must_use]
     pub fn registry_choice(&self) -> RegistryChoice {
         let env = std::env::var("EJM_CLI_REGISTRY_URL")
             .ok()
             .filter(|value| !value.is_empty());
-        let choice = registry_choice_from(self.registry.as_deref(), env.as_deref());
-        // The pinned harness predates direct HTTP registry transport. Remove
-        // this adapter after adopting and verifying that public contract.
-        if let RegistryChoice::Selected { origin, source } = &choice
-            && origin.starts_with("http://")
-            && let Some(name) = [
-                "HTTP_PROXY",
-                "http_proxy",
-                "HTTPS_PROXY",
-                "https_proxy",
-                "ALL_PROXY",
-                "all_proxy",
-            ]
-            .into_iter()
-            .find(|name| std::env::var_os(name).is_some_and(|value| !value.is_empty()))
-        {
-            return RegistryChoice::Rejected {
-                raw: origin.clone(),
-                source: *source,
-                message: format!(
-                    "HTTP loopback registry access is blocked while {name} is set. Unset proxy variables for this invocation or use an HTTPS registry. NO_PROXY does not override this restriction on the current harness pin"
-                ),
-            };
-        }
-        choice
+        registry_choice_from(self.registry.as_deref(), env.as_deref())
     }
 
     pub fn provider_label(&self) -> &str {

@@ -195,7 +195,7 @@ or an updated public site.
 
 ### Install and enable
 
-For a local package directory containing a valid `gerry.package.json`:
+For a local package directory containing a valid `ejm.package.json`. The harness no longer reads the older `gerry.package.json`; rename it and repack existing archives:
 
 ```sh
 ejm-cli package install ./my-package
@@ -253,9 +253,9 @@ Package registry commands use `https://registry.ejmlabs.com` unless `--registry`
 
 The value must be a plain origin: no user, password, path, query, or fragment. Use `https`. `http` is accepted only for a loopback host: `localhost`, `127.0.0.0/8`, or `::1`. `0.0.0.0`, LAN addresses, and other cleartext hosts are rejected. `meetgerry.ai` and its subdomains are rejected with no fallback to the default.
 
-On the current harness pin, HTTP loopback access also requires `HTTP_PROXY`, `http_proxy`, `HTTPS_PROXY`, `https_proxy`, `ALL_PROXY`, and `all_proxy` to be unset or empty. The CLI stops before creating a registry client or loading its account token when any of these is nonempty. The error names the variable and never prints its value. `NO_PROXY` and `no_proxy` do not override this temporary restriction, even when they cover the registry host. Unset the six proxy variables for that invocation or use an HTTPS registry. HTTPS keeps proxy support. `doctor` reports this rejection, prints the rest of its report, and exits nonzero. Model commands and local `discard-retired-session` still work with these proxy variables set.
+HTTP loopback registry requests go direct: the harness registry client does not use `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY` or their lowercase forms for them. HTTPS keeps proxy support.
 
-This configuration guard belongs to the CLI until it adopts a reviewed harness commit with direct HTTP loopback transport. The harness owns that transport through `ejm-harness-packages::RegistryClient::new`. Remove the guard only after the committed harness pin passes the direct-route and credential-storage checks. This source change does not bump the pin or announce a release.
+`ejm-cli package discard-retired-session` deletes leftover `meetgerry.ai` sessions and an unsafe or unreadable `registry-session.json` without following or reading it. A session file for another origin stays in place, and a directory at that path is reported and never deleted. The harness opens the package root before its checks and unlinks relative to that handle on Unix, so a parent directory swapped in between cannot redirect the delete. Nothing is sent on the network.
 
 The registry service has its own availability and release requirements. A supported public registry is not provided by this release; until one is, use reviewed local packages or exact npm, PyPI and Git sources. These commands make network requests to the selected registry:
 

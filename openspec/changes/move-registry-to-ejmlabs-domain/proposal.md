@@ -54,6 +54,8 @@ None. `openspec/specs/` has no main specs.
 
 ## Proxy transport compatibility follow-up
 
+**Resolved** by adopting ejmlabs/ejm-harness#19 (direct HTTP loopback transport) and removing the CLI adapter. See the design.
+
 The current harness pin `42e4f9cf33bd3525aec344cfdffabc251271f782` still permits environment proxies for an HTTP loopback registry. That can carry its registry bearer away from the loopback endpoint. `ejm-harness-packages::RegistryClient::new` owns the transport fix. The CLI must reject HTTP loopback registry use when a nonempty `HTTP_PROXY`, `HTTPS_PROXY`, or `ALL_PROXY` variable, in either case, is set until it adopts the reviewed fix. This temporary guard fails closed even when `NO_PROXY` is set. It names the variable without its value, blocks before a session lookup or request, and appears as rejected in doctor.
 
 No provider endpoint helper from PR #11 is present on this branch. Add only a configuration adapter using the existing `url` parser and environment API. Keep the harness pin and CI gates intact. Verify both owners with local synthetic-token fixtures, adopt a compatible reviewed harness commit only after protected merge, then remove the adapter when the pinned direct-route and credential contract checks pass. Public docs must state the temporary restriction and recovery.

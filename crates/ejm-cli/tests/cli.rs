@@ -464,67 +464,7 @@ fn doctor_reports_the_registry_choice_without_connecting() {
 }
 
 #[test]
-fn http_loopback_registry_rejects_each_proxy_before_connecting() {
-    let state = tempfile::tempdir().unwrap();
-    let registry = quiet_listener("127.0.0.1");
-    let proxy = quiet_listener("127.0.0.1");
-    let origin = format!("http://{}", registry.local_addr().unwrap());
-    let token = "proxy-guard-synthetic-account-token";
-    let proxy_secret = "proxy-guard-synthetic-password";
-    let proxy_url = format!(
-        "http://fixture-user:{proxy_secret}@{}",
-        proxy.local_addr().unwrap()
-    );
-    let session = write_session(state.path(), &format!("{origin}/"), token);
-    let original = std::fs::read(&session).unwrap();
-    for name in [
-        "HTTP_PROXY",
-        "http_proxy",
-        "HTTPS_PROXY",
-        "https_proxy",
-        "ALL_PROXY",
-        "all_proxy",
-    ] {
-        for from_environment in [false, true] {
-            let args = if from_environment {
-                vec!["package", "whoami"]
-            } else {
-                vec!["--registry", &origin, "package", "whoami"]
-            };
-            let output = cli_env(
-                state.path(),
-                &args,
-                &[
-                    ("EJM_CLI_REGISTRY_URL", &origin),
-                    (name, &proxy_url),
-                    ("NO_PROXY", "127.0.0.1"),
-                    ("no_proxy", "127.0.0.1"),
-                ],
-            );
-            hidden(&output, token);
-            hidden(&output, proxy_secret);
-            hidden(&output, &proxy_url);
-            let text = combined(&output);
-            assert_eq!(output.status.code(), Some(1), "{text}");
-            assert!(
-                text.to_ascii_lowercase()
-                    .contains(&name.to_ascii_lowercase()),
-                "{text}"
-            );
-            assert!(
-                text.contains("HTTP loopback registry access is blocked"),
-                "{text}"
-            );
-            let saved = std::fs::read(&session).unwrap();
-            assert!(saved.eq(&original), "saved registry session changed");
-            assert_no_connection(&registry);
-            assert_no_connection(&proxy);
-        }
-    }
-}
-
-#[test]
-fn doctor_reports_proxy_rejection_and_keeps_https_and_empty_proxy_support() {
+fn doctor_accepts_a_loopback_registry_with_proxies_set_and_connects_nowhere() {
     let state = tempfile::tempdir().unwrap();
     let registry = quiet_listener("127.0.0.1");
     let proxy = quiet_listener("127.0.0.1");
@@ -539,10 +479,10 @@ fn doctor_reports_proxy_rejection_and_keeps_https_and_empty_proxy_support() {
             ("NO_PROXY", "127.0.0.1"),
         ],
     );
-    assert_eq!(output.status.code(), Some(1));
+    // The harness registry client sends HTTP loopback requests without a proxy.
+    assert!(output.status.success(), "{}", combined(&output));
     let text = output_text(&output.stdout);
-    assert!(text.contains("Registry: rejected"), "{text}");
-    assert!(text.contains("HTTPS_PROXY"), "{text}");
+    assert!(text.contains(&format!("Registry: {origin}")), "{text}");
     assert!(text.contains("EJM_CLI_REGISTRY_URL"), "{text}");
     assert!(text.contains("Grants:"), "{text}");
     assert!(text.contains("not a security sandbox"), "{text}");
@@ -875,7 +815,7 @@ fn discard_retired_session_is_local_and_login_stays_blocked_until_then() {
     std::fs::remove_file(&kept).unwrap();
     let output = cli(state.path(), &["package", "discard-retired-session"]);
     assert!(output.status.success());
-    assert!(output_text(&output.stdout).contains("No leftover registry session file."));
+    assert!(output_text(&output.stdout).contains("No retired or unusable registry session found."));
 }
 
 #[test]

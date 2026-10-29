@@ -482,7 +482,7 @@ fn print_registry(args: &Args) -> bool {
             true
         }
     };
-    match packages::retired_registry_session_notice(&args.state_dir().join("packages")) {
+    match packages::session_notice(&args.state_dir().join("packages")) {
         Ok(Some(message)) => println!("{}", render::safe_text(&message)),
         Ok(None) => {}
         Err(error) => println!(

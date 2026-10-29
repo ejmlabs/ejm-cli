@@ -76,16 +76,20 @@ Same-origin legacy handoff stays harness `migrate_registry_token` via `package m
 - **WHEN** `EJM_CLI_REGISTRY_URL` is `https://harness.meetgerry.ai` and the user runs `doctor`
 - **THEN** the output marks the registry override as rejected because the meetgerry registry is retired
 
-### Requirement: HTTP loopback registry access fails closed on the older pin
+### Requirement: HTTP loopback registry access goes direct
 
-Until the CLI adopts a reviewed harness revision that forces direct HTTP loopback registry transport, it MUST reject an HTTP registry origin if a nonempty `HTTP_PROXY`, `HTTPS_PROXY`, or `ALL_PROXY` variable, uppercase or lowercase, is set. `NO_PROXY` MUST NOT bypass this temporary guard. Rejection MUST occur before session lookup or a request, name the variable without its value, and leave the saved session intact. HTTPS and local retired-session discard MUST remain usable.
+An accepted HTTP loopback registry origin MUST be reached without any proxy from `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY` or their lowercase forms, so a registry bearer never leaves the loopback host. HTTPS origins MUST keep proxy support.
 
-#### Scenario: Proxy configured for an HTTP loopback registry
+#### Scenario: Doctor with a proxy set
 
-- **WHEN** a user runs `package whoami` for an HTTP loopback origin with a matching synthetic saved session and a proxy variable is set
-- **THEN** the command exits non-zero, neither registry nor proxy receives a connection, the saved session remains, and neither bearer nor proxy value appears in output
+- **WHEN** doctor resolves an HTTP loopback registry while a proxy variable is set
+- **THEN** it accepts the choice, prints the origin and its source without the proxy value, and opens no connection
 
-#### Scenario: Doctor identifies the temporary refusal
+### Requirement: Discard stays inside the package root
 
-- **WHEN** doctor resolves an HTTP loopback registry while a proxy variable is set, including with a covering `NO_PROXY`
-- **THEN** it marks that registry choice rejected, names the variable without its value, prints the remaining report, and exits non-zero
+`ejm-cli package discard-retired-session` MUST delete only entries inside the package root it checked. On Unix the delete MUST be relative to a handle on that root opened before the checks, so a parent directory swapped afterwards cannot redirect it.
+
+#### Scenario: Parent swapped after the checks
+
+- **WHEN** the package root is replaced by a symlink to another directory after the safety checks
+- **THEN** the delete stays in the original root and the other directory's session file is untouched

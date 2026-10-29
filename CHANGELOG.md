@@ -13,8 +13,9 @@ Changes follow [Semantic Versioning](https://semver.org/). Each repository is ve
 
 ### Changed
 
-- **Breaking:** Package commands default to `https://registry.ejmlabs.com`. `--registry` and `EJM_CLI_REGISTRY_URL` select another plain origin. `https` is required except on loopback. `doctor` shows a rejected registry value without userinfo, a query, a fragment, or control characters, and uses `(invalid registry URL)` when the value does not parse. The harness pin is unchanged. `discard-retired-session` is not a user instruction until it ships in the same release as the pin bump to the merged harness pull requests 18 and 19.
-- Refuse HTTP loopback registry access on the current harness pin when any uppercase or lowercase `HTTP_PROXY`, `HTTPS_PROXY`, or `ALL_PROXY` variable is nonempty. `NO_PROXY` does not override this temporary guard. Unset those variables for that invocation or use HTTPS. Rejection happens before account-token lookup and prints no proxy value. `doctor` keeps the rest of its report; model commands and local discard remain usable.
+- **Breaking:** Package commands default to `https://registry.ejmlabs.com`. `--registry` and `EJM_CLI_REGISTRY_URL` select another plain origin. `https` is required except on loopback. `doctor` shows a rejected registry value without userinfo, a query, a fragment, or control characters, and uses `(invalid registry URL)` when the value does not parse.
+- **Breaking:** The harness pin moves to harness main with the registry change (ejmlabs/ejm-harness#19), which has no registry default. Local packages need `ejm.package.json`; the older `gerry.package.json` is no longer read. HTTP loopback registry requests go direct, without a proxy.
+- `ejm-cli package discard-retired-session` deletes leftover `meetgerry.ai` sessions and an unsafe or unreadable legacy session file through the harness, which unlinks relative to the package root it opened before its checks (#19). Nothing is sent.
 
 ### Fixed
 
