@@ -10,3 +10,7 @@ version = "0.20.2"
 
 [cargo-machete]
 version = "0.9.2"
+
+[cargo-nextest]
+version = "0.9.124"
+linux_x86_64_sha256 = "cf3694155011e6e19a7306448b7984e5d0d781417a31478996a9018b7ec78e25"
