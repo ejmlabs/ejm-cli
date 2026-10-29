@@ -23,7 +23,7 @@ None.
 
 ## Shared blocks
 
-The conversation blocks are owned by `ejm-ui`: `Message`, `ToolCall`, `Markdown` and `CommandMenu` joined its component contract with Rust (`crates/ejm-tui`) and Ink implementations, and `ActivityLine` gained step, elapsed time and stop key details. ejm-cli now depends on `ejm-tui` by path, deletes its copied `ejm_tui.rs` and `ejm_theme.rs`, and follows the contract's containerless rule: the composer box and welcome card became a hairline rule and the shared two-line header, and the help and session popups became panels in the transcript area.
+The conversation blocks are owned by `ejm-ui`: `Message`, `ToolCall`, `Markdown` and `CommandMenu` joined its component contract with Rust (`crates/ejm-tui`) and Ink implementations, and `ActivityLine` gained step, elapsed time and stop key details. ejm-cli now depends on `ejm-tui` by path and deletes its copied `ejm_tui.rs` and `ejm_theme.rs`. See the [CLI reference](../../../docs/ejm-cli.md#interaction) for the current layout.
 
 ## Impact
 

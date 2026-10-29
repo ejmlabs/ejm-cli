@@ -26,7 +26,7 @@ The provider key comes from `EJM_CLI_API_KEY`, falling back to `OPENAI_API_KEY`.
 
 `--base-url` and `EJM_CLI_BASE_URL` must use `https`. The exception is `http` on a loopback host: `localhost`, the `127.0.0.0/8` range, or `::1`. That exception is refused when `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, or the lowercase form is set and `NO_PROXY` does not contain that host exactly. `*` and a bracketed IPv6 entry such as `[::1]` do not count. The error names the proxy variable and does not print its value. A URL with a username, password, query, or fragment is rejected. On `run`, a rejected URL exits 1. The error names `--base-url` and `EJM_CLI_BASE_URL` and does not print the URL. `ejm-cli doctor` prints one endpoint line, without userinfo or raw line breaks, and marks a disallowed one rejected.
 
-Read tools are enabled by default. `--allow-write` registers file write tools. `--allow-shell` registers shell execution as the current user. Grants stay visible in the TUI header and remain fixed for the process. Native execution is not a security sandbox. `ejm-cli doctor` prints the executor's actual capability report.
+Read tools are enabled by default. `--allow-write` registers file write tools. `--allow-shell` registers shell execution as the current user. Grants remain fixed for the process. Native execution is not a security sandbox. `ejm-cli doctor` prints the executor's actual capability report.
 
 ## Provider accounts and models
 

@@ -31,7 +31,7 @@ ejm-cli --cwd ./my-project --allow-write
 ejm-cli --cwd ./my-project --allow-write --allow-shell
 ```
 
-`--allow-write` registers file write tools. `--allow-shell` registers shell execution as the current user. These separate grants are fixed for the process and shown in the TUI header. Configure a provider before these commands, or add `--replay` for offline interaction.
+`--allow-write` registers file write tools. `--allow-shell` registers shell execution as the current user. These separate grants are fixed for the process. Configure a provider before these commands, or add `--replay` for offline interaction.
 
 > [!WARNING]
 > **Native execution is not a sandbox.** Tools and trusted packages run as you. Registration grants do not confine file, network or process access. Run `ejm-cli doctor` to inspect the executor's actual capabilities.
