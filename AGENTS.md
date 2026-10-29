@@ -3,6 +3,7 @@
 ejm-cli is the Rust terminal app for ejm-harness, made by ejmlabs. The harness lives in the independent sibling project `ejm-harness`; the shared terminal blocks and site packages live in `ejm-ui`.
 
 <!-- ejmlabs:house-rules:start -->
+
 ## House rules
 
 These apply to every ejmlabs repository. They are synced from
@@ -24,6 +25,7 @@ there. A rule below or a repository skill may add to them, never relax them.
 - Never claim a check passed, a test ran or a deploy is live unless you saw it in this session.
 - No paid model calls or live services in tests. No secrets in code, logs, fixtures or assets.
 - Never use em dashes. Write plain, exact sentences.
+
 <!-- ejmlabs:house-rules:end -->
 
 ## Names
@@ -47,7 +49,7 @@ there. A rule below or a repository skill may add to them, never relax them.
 - Report model, agent, and tool concurrency separately.
 - Never claim performance, security or compatibility the repo cannot prove. Native execution runs as the user and is not a sandbox.
 - Never edit `../ejm-harness` or `../ejm-ide` without the owner's agreement. If a sibling breaks the build, tell its session and wait.
-- Releases need the user's explicit request: running Draft release, tags, release files, crate publishing and new install or download text. So does the production deploy of cli.ejmlabs.com, which goes live at once. Everything else finishes through ship.
+- Releases need the user's explicit request: running Draft release, tags, release files, crate publishing and new install or download text. Everything else finishes through ship, including the cli.ejmlabs.com deploy from merged main.
 
 ## Map
 

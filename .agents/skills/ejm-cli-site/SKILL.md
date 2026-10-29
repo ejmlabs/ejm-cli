@@ -23,7 +23,7 @@ Run `npm run check` in `site/`: typecheck, build with the budget gate, `ejm-site
 
 Preview with `python3 -m http.server 4831 --directory dist --bind 127.0.0.1` from `site/`, or `npm run dev`. Check desktop and a 375 px phone in light and dark with `node ../../ejm-ui/scripts/shoot.mjs URL --theme light` (zero overflow, zero small tap targets), keyboard focus, the skip link and an empty console. Static text and links must work without scripts.
 
-Deploy only when the user asks to publish. Production goes live at once on `cli.ejmlabs.com` through the Worker `ejmlabs-cli`: `wrangler deploy --config site/wrangler.jsonc` after `npm run build`. Use only the configured `ejmlabs-cli` Worker. Keep other products, sites, assets and service configuration outside this project. Afterward, fetch the live page, check status and security headers with `curl -sI`, and look at it in a browser.
+Deploy from merged main once the site PR lands (finish through ship); new install or download text still needs the user's explicit request. Production goes live at once on `cli.ejmlabs.com` through the Worker `ejmlabs-cli`: `wrangler deploy --config site/wrangler.jsonc` after `npm run build`. Use only the configured `ejmlabs-cli` Worker. Keep other products, sites, assets and service configuration outside this project. Afterward, fetch the live page, check status and security headers with `curl -sI`, and look at it in a browser.
 
 ## Package boundaries
 
