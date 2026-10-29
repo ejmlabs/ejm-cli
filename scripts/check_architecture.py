@@ -86,8 +86,9 @@ def check_packages() -> None:
     require((ROOT / "Cargo.lock").is_file(), "Commit Cargo.lock and use --locked.")
     for path in (ROOT / "crates/ejm-cli/src").rglob("*.rs"):
         source = path.read_text().split("#[cfg(test)]", 1)[0]
-        require(not re.search(r"\bCommand::new\s*\(", source), f"{path}: arbitrary process execution belongs in ejm-harness.")
-        require(not re.search(r"(?:std|tokio)::process::(?:Command|Child)\b", source) or path.name == "browser.rs", f"{path}: only the browser host may supervise an OS URL launcher.")
+        test_fixture = path == ROOT / "crates/ejm-cli/src/remote/host_ui_tests.rs" and re.search(r"^#!\[cfg\(test\)\]$", source, re.MULTILINE)
+        require(not re.search(r"\bCommand::new\s*\(", source) or test_fixture, f"{path}: arbitrary process execution belongs in ejm-harness.")
+        require(not re.search(r"(?:std|tokio)::process::(?:Command|Child)\b", source) or path.name == "browser.rs" or test_fixture, f"{path}: only the browser host may supervise an OS URL launcher.")
         require("impl Provider for" not in source and "impl Tool for" not in source, f"{path}: providers and tools belong in ejm-harness.")
         require("open::" not in source or path.name == "browser.rs", f"{path}: only the browser host may open the browser.")
         require(not re.search(r"#\s*!\s*\[\s*(?:allow|expect)\b", source), f"{path}: production lint exceptions must be scoped to an item with a reason.")

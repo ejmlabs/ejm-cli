@@ -1,4 +1,6 @@
 //! Lifecycle regressions use held tasks and an offline public harness.
+#![cfg(test)]
+
 use super::*;
 use anyhow::{Context, Result};
 use clap::Parser;

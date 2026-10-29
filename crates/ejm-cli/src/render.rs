@@ -811,7 +811,10 @@ mod tests {
         running.status = "Thinking".into();
         let text = text(&render_app(&args, &unicode(), 100, 30, running));
         assert!(text.contains("Thinking"), "{text}");
-        assert!(text.contains("12 agents · 2 model calls, 3 waiting · 0 tools"), "{text}");
+        assert!(
+            text.contains("12 agents · 2 model calls, 3 waiting · 0 tools"),
+            "{text}"
+        );
     }
 
     #[test]
