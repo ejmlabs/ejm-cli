@@ -131,10 +131,11 @@ The `ejmlabs-cli` Worker serves `site/dist` at `https://cli.ejmlabs.com` through
 
 A push to main runs `.github/workflows/deploy.yml`, the canonical caller of the shared `ejmlabs/.github` workflow `deploy-site.yml`. A build job with `contents: read` and no secrets builds the site from that main commit, with `ejm-ui` checked out at the `.github/ui-source.json` pin. A staging job then runs `wrangler deploy --env staging` automatically. A production job deploys the same built files with the top-level config only after the required reviewer (@everettmorgan) approves the run in the GitHub `production` environment. Deploy jobs run Wrangler 4.151.3 pinned in the shared repository, not this repository's dependencies, with the `CLOUDFLARE_API_TOKEN` secret of the `staging` and `production` GitHub environments.
 
-Approving the production job is the owner's deploy authorization. A manual `wrangler deploy` from a workstation is no longer the procedure. A newer merge cancels an older production deploy that is still waiting. Local dry runs are still fine; run the site gate and an installed Wrangler dry run before merging:
+Approving the production job is the owner's deploy authorization. A manual `wrangler deploy` from a workstation is no longer the procedure. A newer merge cancels an older production deploy that is still waiting. Local dry runs are still fine. `site/package.json` pins Wrangler. Before merging, run the site gate and a dry run with that Wrangler from `site/`. `--env ""` names production, and `--env staging` checks staging:
 
 ```sh
-wrangler deploy --config site/wrangler.jsonc --dry-run
+npx wrangler deploy --config wrangler.jsonc --env "" --dry-run
+npx wrangler deploy --config wrangler.jsonc --env staging --dry-run
 ```
 
 Keep `workers_dev` and `preview_urls` explicitly false and preserve custom-domain zone protections. Run these checks on staging after each merge, and on production after approval: verify the provider mapping and both flags, canonical home/docs/reference routes, a missing route, security/cache headers and activated playback assets. Bind the deployed bytes and Worker version to the product commit, UI commit and lockfiles. Check that the former alternate hostname does not serve the site. A request from one network does not prove worldwide reachability.
