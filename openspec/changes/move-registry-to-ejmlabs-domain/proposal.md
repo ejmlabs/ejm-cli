@@ -14,7 +14,7 @@ ejm-cli's registry commands always use the harness constant `DEFAULT_REGISTRY` (
 - **BREAKING:** registry commands use the new harness default, recommended `https://registry.ejmlabs.com`. Sessions saved for `harness.meetgerry.ai` stop working.
 - New minimal override: `--registry URL` on `ejm-cli package ...`, plus the `EJM_CLI_REGISTRY_URL` env var. Precedence is flag, then env, then default. Values must pass the harness origin rules: HTTPS plain origin, loopback HTTP only, and the retired `meetgerry.ai` origin rejected. Validation runs before any network request or token load.
 - Registry sessions are scoped to the origin in effect: `login`, `whoami`, `publisher`, `publish` and `logout` use only that origin's session. `logout` removes that origin's vault record.
-- A way to discard a session saved for the retired origin, locally and without contacting any host. A blocked `login` explains how.
+- A session for the retired origin is never sent or imported. Nothing shipped against it, so there is no discard command.
 - `doctor` shows the registry origin in effect and where it came from (default, env or flag).
 - Docs and help text name the new default and the override, and drop the meetgerry host.
 
@@ -37,9 +37,9 @@ None. `openspec/specs/` has no main specs.
 
 ## Impact
 
-- **Code:** `crates/ejm-cli/src/packages.rs` (registry client construction, login, logout, a retired-session discard command) and `crates/ejm-cli/src/main.rs` (`doctor`, `main.rs:411`). The `package` subcommands are defined in `PackageCommand` (`packages.rs:15`). Integration tests go in `crates/ejm-cli/tests/cli.rs`.
+- **Code:** `crates/ejm-cli/src/packages.rs` (registry client construction, login, logout) and `crates/ejm-cli/src/main.rs` (`doctor`, `main.rs:411`). The `package` subcommands are defined in `PackageCommand` (`packages.rs:15`). Integration tests go in `crates/ejm-cli/tests/cli.rs`.
 - **Docs:** `docs/ejm-cli.md:188-198` and the `package` help text.
-- **Dependency:** this needs the harness change of the same name, which provides the new default, the retired-origin rejection and the discard API. The CLI builds against the sibling `../ejm-harness` path (`Cargo.toml:18-23`), so the two must land together.
+- **Dependency:** this needs the harness change of the same name, which provides the new default and the retired-origin rejection. The CLI builds against the sibling `../ejm-harness` path (`Cargo.toml:18-23`), so the two must land together.
 - **Coordination:** the Engineer is sweeping every `meetgerry` reference across the five repos. This change covers only the registry default and the CLI behavior that directly depends on it. Other meetgerry/Gerry references in ejm-cli, left to the sweep:
   - `docs/ejm-cli.md:136`: the `gerry.package.json` manifest name
   - `docs/contributing.md:3`: "Gerry platform" wording
@@ -49,7 +49,7 @@ None. `openspec/specs/` has no main specs.
 
 1. **Override names.** Proposed: `--registry` and `EJM_CLI_REGISTRY_URL`, matching `--base-url` / `EJM_CLI_BASE_URL`. Should the flag be global, or only on `package`? Recommendation: `package` only.
 2. **Is an override wanted at all?** It mainly serves local development (`http://127.0.0.1:8787` with `wrangler dev`) and staging. An env override is also something a hostile environment can set. The risk is limited, because registry digests come from the same origin and installs stay disabled until trusted, but a user could still be pointed at a hostile registry. Recommendation: keep it, show it in `doctor`, and print the non-default origin on every registry command.
-3. **Retired-session handling.** Recommendation: an explicit discard command (for example `package logout --retired`) rather than deleting automatically.
+3. **Retired-session handling.** Resolved: refuse the retired origin and add no discard command, because nothing shipped against it.
 4. **New default origin and the loopback set:** see the ejm-harness change and `require-https-provider-endpoints`.
 
 ## Proxy transport compatibility follow-up

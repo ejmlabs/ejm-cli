@@ -4,10 +4,8 @@ use anyhow::{Context, Result, bail, ensure};
 use clap::Subcommand;
 use ejm_harness_exec::Governor;
 use ejm_harness_packages::{
-    PackageGrants, PackageManager, RegistryClient, delete_registry_token,
-    discard_retired_registry_sessions, force_discard_legacy_registry_session, install_source,
-    load_registry_token, migrate_registry_token, pack_directory, retired_registry_session_notice,
-    save_registry_token,
+    PackageGrants, PackageManager, RegistryClient, delete_registry_token, install_source,
+    load_registry_token, migrate_registry_token, pack_directory, save_registry_token,
 };
 use tokio_util::sync::CancellationToken;
 
@@ -87,8 +85,6 @@ pub enum PackageCommand {
         #[arg(default_value = ".")]
         directory: PathBuf,
     },
-    /// Unlink a legacy registry-session.json. Sends nothing. Does not delete a directory.
-    DiscardRetiredSession,
 }
 
 pub fn manager(args: &Args) -> Result<PackageManager> {
@@ -97,10 +93,6 @@ pub fn manager(args: &Args) -> Result<PackageManager> {
 
 pub async fn run(args: &Args, command: &PackageCommand) -> Result<bool> {
     let manager = manager(args)?;
-    if matches!(command, PackageCommand::DiscardRetiredSession) {
-        discard_retired_session(manager.root())?;
-        return Ok(true);
-    }
     let registry = open_registry(args)?;
     dispatch(args, &manager, &registry, command).await?;
     Ok(true)
@@ -221,7 +213,6 @@ async fn dispatch(
             let token = require_session(manager, registry.origin())?;
             show(&registry.publish(bytes, &token).await?)?;
         }
-        PackageCommand::DiscardRetiredSession => {}
     }
     Ok(())
 }
@@ -285,9 +276,6 @@ async fn login(
     registry: &RegistryClient,
     no_browser: bool,
 ) -> Result<()> {
-    if let Some(message) = session_notice(manager.root())? {
-        bail!("{message}");
-    }
     let code = registry.device_code().await?;
     println!(
         "Open {} and enter {}",
@@ -321,69 +309,8 @@ fn require_session(
     manager: &PackageManager,
     origin: &str,
 ) -> Result<ejm_harness_auth::SecretString> {
-    // Vault records are origin-scoped. A leftover retired or unusable legacy
-    // path must not block revoke/use of a different origin's vault session.
-    // Only when the vault has no record for this origin do we surface the
-    // legacy notice (so meetgerry leftovers are not mislabeled as migrate).
-    match load_registry_token(manager.root(), origin) {
-        Ok(token) => Ok(token),
-        Err(error) => {
-            if let Some(message) = session_notice(manager.root())? {
-                bail!("{message}");
-            }
-            Err(error).with_context(|| {
-                format!("no registry session for {}", display_registry_url(origin))
-            })
-        }
-    }
-}
-
-const LEGACY_SESSION: &str = "registry-session.json";
-
-/// Delete an unusable legacy session file and leftover `meetgerry.ai` sessions. The harness
-/// unlinks relative to the package root it opened before its checks. Nothing is sent.
-fn discard_retired_session(root: &std::path::Path) -> Result<()> {
-    if let Some(message) = directory_notice(root) {
-        bail!("{message}");
-    }
-    let unusable = force_discard_legacy_registry_session(root)?;
-    let retired = discard_retired_registry_sessions(root)?;
-    if unusable || !retired.is_empty() {
-        println!("Discarded the retired registry session. No request was sent.");
-    } else if std::fs::symlink_metadata(root.join(LEGACY_SESSION)).is_ok() {
-        println!(
-            "Saved registry session is not for a meetgerry.ai host. Left it in place. No request was sent."
-        );
-    } else {
-        println!("No retired or unusable registry session found. No request was sent.");
-    }
-    Ok(())
-}
-
-/// The harness notice for a leftover session, or for a directory at the session path, which
-/// neither the harness nor this CLI deletes.
-///
-/// # Errors
-///
-/// Returns the harness error for an unsafe or unreadable session file, naming the discard
-/// command.
-pub fn session_notice(root: &std::path::Path) -> Result<Option<String>> {
-    match directory_notice(root) {
-        Some(message) => Ok(Some(message)),
-        None => retired_registry_session_notice(root),
-    }
-}
-
-fn directory_notice(root: &std::path::Path) -> Option<String> {
-    let path = root.join(LEGACY_SESSION);
-    std::fs::symlink_metadata(&path)
-        .is_ok_and(|metadata| metadata.is_dir())
-        .then(|| {
-            format!(
-                "{} is a directory. Remove that directory yourself. ejm-cli does not delete directories.",
-                path.display()
-            )
-        })
+    load_registry_token(manager.root(), origin)
+        .with_context(|| format!("no registry session for {}", display_registry_url(origin)))
 }
 
 #[cfg(test)]

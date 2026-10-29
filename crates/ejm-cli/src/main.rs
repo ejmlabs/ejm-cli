@@ -459,7 +459,7 @@ fn doctor(args: &Args) -> Result<bool> {
 }
 
 fn print_registry(args: &Args) -> bool {
-    let rejected = match args.registry_choice() {
+    match args.registry_choice() {
         RegistryChoice::Selected { origin, source } => {
             println!(
                 "Registry: {} ({})",
@@ -481,14 +481,5 @@ fn print_registry(args: &Args) -> bool {
             );
             true
         }
-    };
-    match packages::session_notice(&args.state_dir().join("packages")) {
-        Ok(Some(message)) => println!("{}", render::safe_text(&message)),
-        Ok(None) => {}
-        Err(error) => println!(
-            "Registry session file: {}",
-            render::safe_text(&format!("{error:#}"))
-        ),
     }
-    rejected
 }

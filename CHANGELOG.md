@@ -19,7 +19,7 @@ Changes follow [Semantic Versioning](https://semver.org/). Each repository is ve
 
 - **Breaking:** Package commands default to `https://registry.ejmlabs.com`. `--registry` and `EJM_CLI_REGISTRY_URL` select another plain origin. `https` is required except on loopback. `doctor` shows a rejected registry value without userinfo, a query, a fragment, or control characters, and uses `(invalid registry URL)` when the value does not parse.
 - **Breaking:** The harness pin moves to harness main with the registry change (ejmlabs/ejm-harness#19), which has no registry default. Local packages need `ejm.package.json`; the older `gerry.package.json` is no longer read. HTTP loopback registry requests go direct, without a proxy.
-- `ejm-cli package discard-retired-session` deletes leftover `meetgerry.ai` sessions and an unsafe or unreadable legacy session file through the harness, which unlinks relative to the package root it opened before its checks (#19). Nothing is sent.
+- A session for `meetgerry.ai` is never saved, loaded or sent. Sign in again on the new registry.
 
 ### Fixed
 

@@ -255,8 +255,6 @@ pub struct Args {
 /// selects the public registry unless `--registry` or `EJM_CLI_REGISTRY_URL` names another.
 pub const DEFAULT_PACKAGE_REGISTRY: &str = ejm_harness_packages::PUBLIC_REGISTRY_ORIGIN;
 
-pub use ejm_harness_packages::DISCARD_RETIRED_REGISTRY_COMMAND;
-
 /// Shown when `doctor` cannot parse a registry value. Never the raw input.
 pub const INVALID_REGISTRY_URL: &str = "(invalid registry URL)";
 
@@ -265,7 +263,7 @@ pub const INVALID_REGISTRY_URL: &str = "(invalid registry URL)";
 #[must_use]
 pub fn retired_registry_message() -> String {
     format!(
-        "the meetgerry.ai registry is retired; the default registry is {DEFAULT_PACKAGE_REGISTRY}. The old session is not sent or reused. Discard it with `{DISCARD_RETIRED_REGISTRY_COMMAND}` and sign in again"
+        "the meetgerry.ai registry is retired; the default registry is {DEFAULT_PACKAGE_REGISTRY}. Sign in again there. A meetgerry.ai session is never sent or reused"
     )
 }
 
@@ -801,7 +799,6 @@ mod tests {
             RegistryChoice::Rejected { message, .. }
                 if message.contains("meetgerry.ai registry is retired")
                     && message.contains(DEFAULT_PACKAGE_REGISTRY)
-                    && message.contains(DISCARD_RETIRED_REGISTRY_COMMAND)
         ));
         for raw in [
             "https://harness.meetgerry.ai",

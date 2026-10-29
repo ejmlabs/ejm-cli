@@ -247,15 +247,13 @@ Update installs a new exact registry version and clears trust and grants. Inspec
 
 ### Registry and publishing
 
-Package registry commands use `https://registry.ejmlabs.com` unless `--registry` or `EJM_CLI_REGISTRY_URL` is set. The flag wins over the environment variable. An empty environment variable is not an override. `run` and the other model commands ignore both settings, including when the value is invalid. `discard-retired-session` ignores them too, so a retired value cannot block local cleanup.
+Package registry commands use `https://registry.ejmlabs.com` unless `--registry` or `EJM_CLI_REGISTRY_URL` is set. The flag wins over the environment variable. An empty environment variable is not an override. `run` and the other model commands ignore both settings, including when the value is invalid.
 
 `ejm-cli doctor` prints the origin and whether it came from the default, `EJM_CLI_REGISTRY_URL`, or `--registry`. A package command prints the same line before it contacts a non-default registry. `doctor` does not open a registry connection. An invalid override is marked rejected, the rest of the doctor report still prints, and the command exits non-zero. Both registry lines use one helper. It prints a parsed URL without userinfo, query, or fragment, and it strips control characters. A value that does not parse is shown as `(invalid registry URL)`, never the raw input.
 
 The value must be a plain origin: no user, password, path, query, or fragment. Use `https`. `http` is accepted only for a loopback host: `localhost`, `127.0.0.0/8`, or `::1`. `0.0.0.0`, LAN addresses, and other cleartext hosts are rejected. `meetgerry.ai` and its subdomains are rejected with no fallback to the default.
 
 HTTP loopback registry requests go direct: the harness registry client does not use `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY` or their lowercase forms for them. HTTPS keeps proxy support.
-
-`ejm-cli package discard-retired-session` deletes leftover `meetgerry.ai` sessions and an unsafe or unreadable `registry-session.json` without following or reading it. A session file for another origin stays in place, and a directory at that path is reported and never deleted. The harness opens the package root before its checks and unlinks relative to that handle on Unix, so a parent directory swapped in between cannot redirect the delete. Nothing is sent on the network.
 
 The registry service has its own availability and release requirements. A supported public registry is not provided by this release; until one is, use reviewed local packages or exact npm, PyPI and Git sources. These commands make network requests to the selected registry:
 
@@ -295,29 +293,10 @@ credentials remain an error. This correction is included in the accepted native
 source; [dependency integration](native-remote-publication.md#dependency-integration)
 binds its tested graph. Following source changes need fresh locked and hosted checks.
 
-A session saved for `meetgerry.ai` or a subdomain is not sent and is not copied to
-`https://registry.ejmlabs.com`. When that legacy session is present, `package
-login` stops before the device flow and names `ejm-cli package
-discard-retired-session`. That command unlinks only the legacy path and opens no
-connection. It does not follow a symlink or read a symlink target. A file with
-loose permissions, malformed JSON, a missing origin, or more than 8192 bytes is
-removed the same way. When that path is a directory, the command prints the path
-and does not delete it. `package login`, `package logout`, and `package whoami`
-print the path and name the discard command when the legacy file cannot be used.
-
-```sh
-ejm-cli package discard-retired-session
-ejm-cli package login --no-browser
-```
-
-Discarding the legacy path does not require other clients to be stopped and does
-not delete encrypted vault records. A private, readable legacy session for any
-other origin is left in place; import it with the controlled migration command
-above. The pinned harness does not export `retired_registry_session_notice`, so
-registry session commands and `doctor` use the local check of that name. They do
-not load tokens from the legacy file. `whoami`, `publisher`, `publish`, and
-`logout` use only the encrypted session for the selected origin; a session for
-another origin is not sent.
+A session for `meetgerry.ai` or a subdomain is never saved, loaded, imported or
+sent. Sign in again on `https://registry.ejmlabs.com`. `whoami`, `publisher`,
+`publish`, and `logout` use only the encrypted session for the selected origin;
+a session for another origin is not sent.
 
 `ejm-cli package pack DIRECTORY --output package.tgz` creates a new local archive and refuses to overwrite an existing file. `package publisher HANDLE --display-name NAME` claims a registry namespace, and `package publish DIRECTORY` uploads a package using the saved registry session. Those last two commands change the remote registry. They are deliberate author actions, separate from installing or running the CLI.
 
