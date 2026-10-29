@@ -58,7 +58,7 @@ there. A rule below or a repository skill may add to them, never relax them.
 | `crates/ejm-cli/src` | `main`, `args`, `auth`, `browser`, `commands`, `endpoint`, `app`, `ui`, `terminal`, `terminal_input`, `render`, `extensions`, `packages` and `remote/`. Terminal blocks, theme and glyphs come from the `ejm-tui` crate in `../ejm-ui/crates/ejm-tui` |
 | `crates/ejm-cli/tests` | Integration tests that run the real binary against `--replay` |
 | `docs/` | `ejm-cli.md` reference, `benchmarks.md` evidence, `contributing.md` gates and module ownership, `release-notes/` |
-| `scripts/` | `check` (the one gate), `check_architecture.py` (dependency boundary and skill inventory), `check_terminal.py`, `package_release.py`, `install-hooks`, `sync-design-kit.sh` |
+| `scripts/` | `check` (the full gate; the pre-commit hook runs quick checks only), `check_architecture.py` (dependency boundary and skill inventory), `check_terminal.py`, `package_release.py`, `install-hooks`, `sync-design-kit.sh` |
 | `site/` | The cli.ejmlabs.com site (Vite and React on ejm-ui) and its Cloudflare Worker config |
 | `.github/` | The PR gate, `build.yml` release builds, `release.yml` draft releases, the `harness-revision` and `ui-source.json` pins |
 | `openspec/` | OpenSpec changes and specs |
