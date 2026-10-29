@@ -65,12 +65,6 @@ def check_counts(element: ET.Element, statuses: Iterable[str]) -> None:
             raise ValueError(f"{key} count does not match reported tests")
 
 
-def mixed_tests(first: Path, second: Path) -> list[tuple[str, str]]:
-    """Compare results present and comparable in both reports."""
-    a, b = outcomes(first), outcomes(second)
-    return sorted(key for key in a.keys() & b.keys() if {a[key], b[key]} == {"passed", "failure"})
-
-
 def inventory(path: Path) -> set[tuple[str, str]]:
     """Read the platform's full nextest test list."""
     data = json.loads(path.read_text(encoding="utf-8"))

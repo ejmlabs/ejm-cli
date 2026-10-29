@@ -5,10 +5,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
-import xml.etree.ElementTree as ET
 from pathlib import Path
-
-from flake_check import mixed_tests, outcomes
 
 
 def report(cases: list[tuple[str, str]]) -> str:
@@ -87,8 +84,18 @@ else:
     def test_inventory_and_comparison_through_command(self) -> None:
         cases = {
             "complete": ([('x', ''), ('y', '')], [('x', ''), ('y', '')], False, []),
+            "reverse": ([('x', ''), ('y', '')], [('x', '<failure/>'), ('y', '')], False, [['pkg::suite', 'x']]),
+            "both_fail": ([('x', '<failure/>'), ('y', '')], [('x', ''), ('y', '<failure/>')], False, [['pkg::suite', 'x'], ['pkg::suite', 'y']]),
+            "captured_output": ([('x', '<failure><system-out>test evil ... ok</system-out></failure>'), ('y', '')], [('x', ''), ('y', '')], False, [['pkg::suite', 'x']]),
             "skipped": ([('x', '<failure/>'), ('y', '<skipped/>')], [('x', ''), ('y', '<skipped/>')], True, [['pkg::suite', 'x']]),
+            "error": ([('x', '<error/>'), ('y', '')], [('x', ''), ('y', '')], True, []),
             "omitted": ([('x', '<failure/>')], [('x', '')], True, [['pkg::suite', 'x']]),
+            "missing_second": ([('x', '<failure/>'), ('y', '')], [('y', '')], True, []),
+            "duplicate": ([('x', ''), ('y', '')], [('x', ''), ('x', '<failure/>')], True, []),
+            "bad_counts": ([('x', ''), ('y', '')], [('x', ''), ('y', '')], True, []),
+            "malformed": ([('x', ''), ('y', '')], [('x', ''), ('y', '')], True, []),
+            "old_counts": ([('x', ''), ('y', '')], [('x', ''), ('y', '')], False, []),
+            "old_skipped": ([('x', ''), ('y', '')], [('x', '<skipped/>'), ('y', '')], True, []),
             "invalid": ([('x', '<failure/>'), ('y', '')], [('x', ''), ('y', '')], True, [['pkg::suite', 'x']]),
             "cargo_omitted": ([('x', '<failure/>'), ('y', '')], [('x', ''), ('y', '')], True, [['pkg::suite', 'x']]),
             "cargo_wrong_name": ([('x', ''), ('y', '')], [('x', ''), ('y', '')], True, []),
@@ -109,8 +116,9 @@ elif sys.argv[1:3] == ["nextest", "run"]:
     marker.touch()
     config = Path(sys.argv[sys.argv.index("--config-file") + 1])
     output = Path(tomllib.loads(config.read_text())["profile"]["ci"]["junit"]["path"])
-    output.write_text(os.environ["FIRST" if first else "SECOND"])
-    raise SystemExit(100 if first and "<failure" in os.environ["FIRST"] else 0)
+    result = os.environ["FIRST" if first else "SECOND"]
+    output.write_text(result)
+    raise SystemExit(100 if "<failure" in result else 0)
 else:
     print("     Running unittests src/lib.rs (fake)")
     print("running 2 tests\\ntest x ... ok")
@@ -126,9 +134,17 @@ else:
                         "testcases": {item: {"filter-match": {"status": "matches"}} for item in ("x", "y")},
                     }},
                 }
+                first_report, second_report = report(first), report(second)
+                if name == "bad_counts":
+                    second_report = second_report.replace('tests="2"', 'tests="3"', 1)
+                elif name == "malformed":
+                    second_report = "<testsuites>"
+                elif name in ("old_counts", "old_skipped"):
+                    first_report = first_report.replace(' skipped="0"', '')
+                    second_report = second_report.replace(' skipped="0"', '').replace(' skipped="1"', '')
                 env = {
                     **os.environ, "PATH": str(root) + os.pathsep + os.environ.get("PATH", ""),
-                    "LISTING": json.dumps(listing), "FIRST": report(first), "SECOND": report(second),
+                    "LISTING": json.dumps(listing), "FIRST": first_report, "SECOND": second_report,
                     "OMIT_CARGO": "1" if name == "cargo_omitted" else "",
                     "WRONG_CARGO": "1" if name == "cargo_wrong_name" else "",
                 }
@@ -139,62 +155,7 @@ else:
                 summary = json.loads((root / "evidence/summary.json").read_text())
                 self.assertEqual(summary["incomplete"], incomplete)
                 self.assertEqual(summary["mixed"], mixed)
-                self.assertEqual(result.returncode, 0 if name == "complete" else 1)
-
-    def write_reports(self, root: Path, first: str, second: str) -> tuple[Path, Path]:
-        a, b = root / "first.xml", root / "second.xml"
-        a.write_text(first, encoding="utf-8")
-        b.write_text(second, encoding="utf-8")
-        return a, b
-
-    def test_compares_tests_even_when_both_runs_fail(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            paths = self.write_reports(
-                Path(directory),
-                report([("first", "<failure/>"), ("second", "")]),
-                report([("first", ""), ("second", "<failure/>")]),
-            )
-            self.assertEqual(
-                mixed_tests(*paths), [("pkg::suite", "first"), ("pkg::suite", "second")]
-            )
-
-    def test_skips_errors_missing_and_duplicate_tests_are_not_flakes(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            good = report([("x", ""), ("ignored", "<skipped/>")])
-            for other in [
-                report([("x", "<skipped/>"), ("ignored", "<skipped/>")]),
-                report([("x", "<error/>"), ("ignored", "<skipped/>")]),
-                report([("x", "<failure/>")]),
-            ]:
-                paths = self.write_reports(root, good, other)
-                self.assertEqual(mixed_tests(*paths), [("pkg::suite", "x")] if "<failure" in other else [])
-            for other in [
-                report([("x", ""), ("x", "<failure/>")]),
-                good.replace('tests="2"', 'tests="3"', 1),
-                "<testsuites />",
-                "<testsuites>",
-            ]:
-                paths = self.write_reports(root, good, other)
-                with self.assertRaises((ValueError, ET.ParseError)):
-                    mixed_tests(*paths)
-
-    def test_captured_output_cannot_spoof_a_test_result(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            a, b = self.write_reports(
-                Path(directory),
-                report(
-                    [
-                        (
-                            "x",
-                            "<failure><system-out>test evil ... ok</system-out></failure>",
-                        )
-                    ]
-                ),
-                report([("x", "")]),
-            )
-            self.assertEqual(outcomes(a), {("pkg::suite", "x"): "failure"})
-            self.assertEqual(mixed_tests(a, b), [("pkg::suite", "x")])
+                self.assertEqual(result.returncode, 0 if name in ("complete", "old_counts") else 1)
 
     def test_second_run_does_not_hide_the_initial_failure(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -332,19 +293,6 @@ print("running 1 test\\ntest write ... ok\\ntest result: ok.")
             self.assertNotEqual(result.returncode, 0)
             self.assertTrue(summary["incomplete"])
             self.assertEqual(summary["mixed"], [])
-
-
-    def test_old_nextest_missing_skipped_counts_requires_no_skipped_cases(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            good = report([("x", "")]).replace(' skipped="0"', "")
-            a, b = self.write_reports(root, good, good)
-            self.assertEqual(mixed_tests(a, b), [])
-            b.write_text(report([("x", "<skipped/>")]).replace(' skipped="1"', ""))
-            with self.assertRaises(ValueError):
-                mixed_tests(a, b)
-            b.write_text(report([("y", "")]).replace(' skipped="0"', ""))
-            self.assertEqual(mixed_tests(a, b), [])
 
 
 if __name__ == "__main__":
