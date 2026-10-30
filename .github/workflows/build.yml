@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: work/ejm-cli
           persist-credentials: false
@@ -26,7 +26,7 @@ jobs:
           revision="$(tr -d '\n' < work/ejm-cli/.github/harness-revision)"
           [[ "$revision" =~ ^[0-9a-f]{40}$ ]] || { echo "harness revision is not a full SHA" >&2; exit 1; }
           echo "revision=$revision" >> "$GITHUB_OUTPUT"
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ejmlabs/ejm-harness
           ref: ${{ steps.harness.outputs.revision }}
@@ -41,7 +41,7 @@ jobs:
           [[ "$revision" =~ ^[0-9a-f]{40}$ ]] || { echo "UI revision is not a full SHA" >&2; exit 1; }
           echo "revision=$revision" >> "$GITHUB_OUTPUT"
       # The TUI builds from the shared ejm-tui crate at ../ejm-ui.
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ejmlabs/ejm-ui
           ref: ${{ steps.ui.outputs.revision }}
