@@ -778,7 +778,7 @@ mod tests {
                 assert!(text.contains("grants: read + write"), "{text}");
                 assert!(text.contains("What shall we build?"));
                 assert!(
-                    text.contains("12 agents · models 2+3q · tools 0+0q"),
+                    text.contains("12 agents · 2 model calls, 3 waiting · 0 tools"),
                     "{text}"
                 );
                 assert!(text.contains("› Describe a task…"));
