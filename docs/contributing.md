@@ -4,7 +4,7 @@ ejm-cli is a separate Rust project that consumes the public ejm-harness crates. 
 
 ## Tools and the required gate
 
-The versions in `tools.toml` are required. Use Rust 1.99.1 with Clippy and rustfmt, Python 3.11 or later, cargo-deny 0.20.2 and cargo-machete 0.9.2.
+The versions in `tools.toml` are required. Use Rust 1.99.1 with Clippy and rustfmt, Python 3.11 or later, uv 0.9.26 or later, cargo-deny 0.20.2 and cargo-machete 0.9.2.
 
 ```sh
 rustup toolchain install 1.99.1 --profile minimal --component clippy,rustfmt

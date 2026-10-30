@@ -1,0 +1,4 @@
+extend = "ruff.strict.toml"
+target-version = "py311"
+# Vendored snapshots of the shared gate scripts; the shared repository owns and lints them.
+extend-exclude = [".github/review-context"]
