@@ -13,6 +13,15 @@ ejm-cli is the Rust terminal app for ejm-harness, made by ejmlabs. The harness l
 | Engine | `ejm-harness`, at `../ejm-harness`, public interface only |
 | Sibling desktop app | `ejm-ide`, at `../ejm-ide`, not part of this repo |
 
+## Code principles
+
+- **KISS.** Write the simplest code that solves the whole problem.
+- **YAGNI.** Build only what a task needs now. No speculative options, layers or abstractions.
+- **DRY.** Give each rule, constant, type and behavior one authoritative home. Extend the shared
+  helper; never copy it.
+- **Clean Code.** Use clear names and small functions at one level of abstraction. Delete dead
+  code. Comment only the why. No hidden side effects.
+
 ## Rules
 
 - Never use em dashes. Write plainly, in sentence case.

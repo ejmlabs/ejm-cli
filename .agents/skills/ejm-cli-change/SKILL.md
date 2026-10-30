@@ -15,3 +15,7 @@ Read `AGENTS.md` and [the contributor guide](../../../docs/contributing.md). Map
 - Use trusted, maintained packages for general infrastructure and protocol handling. Keep custom code focused on ejm-cli's distinct behavior and document a verified reason when a package cannot meet the need.
 
 Add an observable check for changed behavior. Use `$ejm-cli-terminal` for terminal lifecycle work and `$ejm-cli-performance` for latency or memory work. Finish with `./scripts/check` and report actual results and limits.
+
+## Principles
+
+KISS, YAGNI, DRY and Clean Code: the simplest code that solves the whole problem, only what a task needs now, one authoritative home for each rule, and clear names, small functions and structure.
