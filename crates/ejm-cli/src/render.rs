@@ -7,7 +7,7 @@
 
 use ratatui::{
     Frame,
-    layout::Rect,
+    layout::{Alignment, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Clear, Paragraph},
@@ -91,7 +91,7 @@ fn draw_screen(
     let layout = WorkspaceLayout::new(area, draft.0.len(), false, true, app.widget_lines.len());
 
     frame.render_widget(
-        Paragraph::new(header_lines(app, args, theme, layout.header.width).to_vec()),
+        Paragraph::new(header_line(app, args, theme, layout.header.width)),
         layout.header,
     );
     let transcript = layout.transcript;
@@ -117,8 +117,8 @@ fn draw_screen(
         },
     };
     frame.render_widget(
-        Paragraph::new(resources.line(theme, layout.resources.width)),
-        layout.resources,
+        Paragraph::new(resources.line(theme, layout.activity.width)).alignment(Alignment::Right),
+        layout.activity,
     );
     frame.render_widget(
         Paragraph::new(
@@ -153,7 +153,7 @@ fn grants(app: &App, args: &Args) -> (String, bool) {
     }
 }
 
-fn header_lines(app: &App, args: &Args, theme: &Theme, width: u16) -> [Line<'static>; 2] {
+fn header_line(app: &App, args: &Args, theme: &Theme, width: u16) -> Line<'static> {
     let sep = theme.glyphs.separator;
     let provider = if is_controller(app) {
         "remote session"
@@ -176,7 +176,7 @@ fn header_lines(app: &App, args: &Args, theme: &Theme, width: u16) -> [Line<'sta
         connection: &connection,
         directory: &safe_text(&display_path(&app.session.cwd)),
     }
-    .lines(theme, width)
+    .line(theme, width)
 }
 
 /// Home directory shown as `~`, so the part of the path that matters fits.
