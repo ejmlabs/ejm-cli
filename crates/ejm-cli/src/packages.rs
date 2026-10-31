@@ -1,16 +1,18 @@
 use std::{path::PathBuf, sync::Arc};
 
-use anyhow::{Context, Result, ensure};
+use anyhow::{Context, Result, bail, ensure};
 use clap::Subcommand;
 use ejm_harness_exec::Governor;
 use ejm_harness_packages::{
-    DEFAULT_REGISTRY, PackageGrants, PackageManager, RegistryClient, delete_registry_token,
-    install_source, load_registry_token, migrate_registry_token, pack_directory,
-    save_registry_token,
+    PackageGrants, PackageManager, RegistryClient, delete_registry_token, install_source,
+    load_registry_token, migrate_registry_token, pack_directory, save_registry_token,
 };
 use tokio_util::sync::CancellationToken;
 
-use crate::{args::Args, render::safe_text};
+use crate::{
+    args::{Args, RegistryChoice, RegistrySource, display_registry_url, registry_override_error},
+    render::safe_text,
+};
 
 #[derive(Debug, Subcommand)]
 pub enum PackageCommand {
@@ -91,17 +93,43 @@ pub fn manager(args: &Args) -> Result<PackageManager> {
 
 pub async fn run(args: &Args, command: &PackageCommand) -> Result<bool> {
     let manager = manager(args)?;
-    let registry = RegistryClient::new(DEFAULT_REGISTRY)?;
+    let registry = open_registry(args)?;
+    dispatch(args, &manager, &registry, command).await?;
+    Ok(true)
+}
+
+fn open_registry(args: &Args) -> Result<RegistryClient> {
+    let choice = args.registry_choice();
+    registry_override_error(&choice)?;
+    let RegistryChoice::Selected { origin, source } = choice else {
+        bail!("registry origin was rejected");
+    };
+    if source != RegistrySource::Default {
+        println!(
+            "Registry: {} ({})",
+            safe_text(&display_registry_url(&origin)),
+            source.label()
+        );
+    }
+    RegistryClient::new(&origin)
+}
+
+async fn dispatch(
+    args: &Args,
+    manager: &PackageManager,
+    registry: &RegistryClient,
+    command: &PackageCommand,
+) -> Result<()> {
     match command {
         PackageCommand::Search { query } => show(&registry.search(query, None).await?)?,
         PackageCommand::Info { name, version } => show(&registry.version(name, version).await?)?,
-        PackageCommand::Install { source } => install(args, &manager, &registry, source).await?,
+        PackageCommand::Install { source } => install(args, manager, registry, source).await?,
         PackageCommand::Update { name, version } => {
             ensure!(
                 manager.list()?.iter().any(|record| &record.name == name),
                 "package is not installed"
             );
-            install(args, &manager, &registry, &format!("{name}@{version}")).await?;
+            install(args, manager, registry, &format!("{name}@{version}")).await?;
         }
         PackageCommand::List => show(&manager.list()?)?,
         PackageCommand::Enable {
@@ -156,16 +184,18 @@ pub async fn run(args: &Args, command: &PackageCommand) -> Result<bool> {
                 safe_text(&output.display().to_string())
             );
         }
-        PackageCommand::Login { no_browser } => login(&manager, &registry, *no_browser).await?,
+        PackageCommand::Login { no_browser } => login(manager, registry, *no_browser).await?,
         PackageCommand::MigrateCredentials {
             old_clients_stopped,
-        } => migrate_credentials(&manager, &registry, *old_clients_stopped)?,
-        PackageCommand::Logout => logout(&manager, &registry).await?,
-        PackageCommand::Whoami => show(
-            &registry
-                .me(&load_registry_token(manager.root(), registry.origin())?)
-                .await?,
-        )?,
+        } => migrate_credentials(manager, registry, *old_clients_stopped)?,
+        PackageCommand::Logout => logout(manager, registry).await?,
+        PackageCommand::Whoami => {
+            show(
+                &registry
+                    .me(&require_session(manager, registry.origin())?)
+                    .await?,
+            )?;
+        }
         PackageCommand::Publisher {
             handle,
             display_name,
@@ -174,17 +204,17 @@ pub async fn run(args: &Args, command: &PackageCommand) -> Result<bool> {
                 .claim_publisher(
                     handle,
                     display_name,
-                    &load_registry_token(manager.root(), registry.origin())?,
+                    &require_session(manager, registry.origin())?,
                 )
                 .await?,
         )?,
         PackageCommand::Publish { directory } => {
             let bytes = pack_directory(directory)?;
-            let token = load_registry_token(manager.root(), registry.origin())?;
+            let token = require_session(manager, registry.origin())?;
             show(&registry.publish(bytes, &token).await?)?;
         }
     }
-    Ok(true)
+    Ok(())
 }
 
 fn finish_logout(revoked: Result<()>, clear: impl FnOnce() -> Result<()>) -> Result<()> {
@@ -193,7 +223,7 @@ fn finish_logout(revoked: Result<()>, clear: impl FnOnce() -> Result<()>) -> Res
 }
 
 async fn logout(manager: &PackageManager, registry: &RegistryClient) -> Result<()> {
-    let token = load_registry_token(manager.root(), registry.origin())?;
+    let token = require_session(manager, registry.origin())?;
     let revoked = registry.logout(&token).await;
     finish_logout(revoked, || {
         delete_registry_token(manager.root(), registry.origin())
@@ -229,7 +259,7 @@ async fn install(
     let record = install_source(
         manager,
         source,
-        registry,
+        Some(registry),
         &governor,
         CancellationToken::new(),
     )
@@ -273,6 +303,14 @@ async fn login(
 fn show(value: &impl serde::Serialize) -> Result<()> {
     println!("{}", safe_text(&serde_json::to_string_pretty(value)?));
     Ok(())
+}
+
+fn require_session(
+    manager: &PackageManager,
+    origin: &str,
+) -> Result<ejm_harness_auth::SecretString> {
+    load_registry_token(manager.root(), origin)
+        .with_context(|| format!("no registry session for {}", display_registry_url(origin)))
 }
 
 #[cfg(test)]

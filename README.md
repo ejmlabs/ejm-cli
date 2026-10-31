@@ -90,6 +90,13 @@ ejm-cli --session SESSION_ID
 ejm-cli doctor
 ```
 
+`ejm-cli doctor` prints the package registry origin. The default is
+`https://registry.ejmlabs.com`. `--registry` or `EJM_CLI_REGISTRY_URL` selects
+another plain https origin, or http on a loopback host. Loopback http requests
+go direct and never through a proxy variable. Model commands ignore the
+registry setting.
+See the registry section of [the CLI reference](docs/ejm-cli.md).
+
 See [the full CLI guide](docs/ejm-cli.md) for controls, configuration, and limits.
 
 ### Native remote access

@@ -195,7 +195,7 @@ or an updated public site.
 
 ### Install and enable
 
-For a local package directory containing a valid `gerry.package.json`:
+For a local package directory containing a valid `ejm.package.json`. The harness no longer reads the older `gerry.package.json`; rename it and repack existing archives:
 
 ```sh
 ejm-cli package install ./my-package
@@ -247,7 +247,15 @@ Update installs a new exact registry version and clears trust and grants. Inspec
 
 ### Registry and publishing
 
-This source still contains a legacy registry endpoint outside the public ejmlabs project. A supported public registry is not provided by this release. Use reviewed local packages or exact npm, PyPI and Git sources. The following commands make network requests to that legacy service; they are retained here for existing credential recovery and are not public setup instructions:
+Package registry commands use `https://registry.ejmlabs.com` unless `--registry` or `EJM_CLI_REGISTRY_URL` is set. The flag wins over the environment variable. An empty environment variable is not an override. `run` and the other model commands ignore both settings, including when the value is invalid.
+
+`ejm-cli doctor` prints the origin and whether it came from the default, `EJM_CLI_REGISTRY_URL`, or `--registry`. A package command prints the same line before it contacts a non-default registry. `doctor` does not open a registry connection. An invalid override is marked rejected, the rest of the doctor report still prints, and the command exits non-zero. Both registry lines use one helper. It prints a parsed URL without userinfo, query, or fragment, and it strips control characters. A value that does not parse is shown as `(invalid registry URL)`, never the raw input.
+
+The value must be a plain origin: no user, password, path, query, or fragment. Use `https`. `http` is accepted only for a loopback host: `localhost`, `127.0.0.0/8`, or `::1`. `0.0.0.0`, LAN addresses, and other cleartext hosts are rejected. `meetgerry.ai` and its subdomains are rejected with no fallback to the default.
+
+HTTP loopback registry requests go direct: the harness registry client does not use `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY` or their lowercase forms for them. HTTPS keeps proxy support.
+
+The registry service has its own availability and release requirements. A supported public registry is not provided by this release; until one is, use reviewed local packages or exact npm, PyPI and Git sources. These commands make network requests to the selected registry:
 
 ```sh
 ejm-cli package search QUERY
@@ -284,6 +292,11 @@ retirement marker prevents an old file from restoring a deleted session. Missing
 credentials remain an error. This correction is included in the accepted native
 source; [dependency integration](native-remote-publication.md#dependency-integration)
 binds its tested graph. Following source changes need fresh locked and hosted checks.
+
+A session for `meetgerry.ai` or a subdomain is never saved, loaded, imported or
+sent. Sign in again on `https://registry.ejmlabs.com`. `whoami`, `publisher`,
+`publish`, and `logout` use only the encrypted session for the selected origin;
+a session for another origin is not sent.
 
 `ejm-cli package pack DIRECTORY --output package.tgz` creates a new local archive and refuses to overwrite an existing file. `package publisher HANDLE --display-name NAME` claims a registry namespace, and `package publish DIRECTORY` uploads a package using the saved registry session. Those last two commands change the remote registry. They are deliberate author actions, separate from installing or running the CLI.
 
