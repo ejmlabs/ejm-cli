@@ -120,7 +120,7 @@ npm --prefix site ci --ignore-scripts
 npm --prefix site run check
 ```
 
-The site gate runs types, build, generated headers and built-HTML tests. Gzip route limits are 95 KiB JavaScript, 14 KiB CSS, 70 KiB fonts and 30 KiB HTML. Keep them unchanged. Measure the activated home and guides with the shared transfer/performance gate; record cold-load FCP/LCP, CLS, TBT and no-script output at the actual viewport.
+The site gate runs types, build, generated headers and built-HTML tests. There are no size budgets. Run the shared load-time check, `node ../../ejm-ui/scripts/perf.mjs dist` from `site/`, and compare first contentful paint per route with a build at the current pin. Check no-script output at the actual viewport.
 
 ```sh Preview built routes
 python3 -m http.server 4831 --directory site/dist --bind 127.0.0.1
