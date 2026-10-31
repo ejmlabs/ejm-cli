@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Exercise real terminal input and restoration without credentials or model calls."""
 
-from pathlib import Path
 import json
 import os
 import re
@@ -11,11 +10,21 @@ import subprocess
 import sys
 import tempfile
 import time
+from pathlib import Path
+
+
+def expect(condition: bool, message: str) -> None:  # noqa: FBT001 -- the predicate under test, not a flag
+    """Fail with a message; unlike assert, this survives python -O."""
+    if not condition:
+        raise AssertionError(message)
 
 
 def supervise(binary: Path, state: str, report: Path, mode: str) -> None:
+    import fcntl
     import termios
 
+    # The parent starts this process as a session leader; take the pty as its controlling terminal.
+    fcntl.ioctl(0, termios.TIOCSCTTY, 0)
     # Keep the session leader alive until flags are checked. macOS revokes the
     # terminal when its session leader exits, even with the parent slave open.
     original = termios.tcgetattr(0)
@@ -45,7 +54,7 @@ def supervise(binary: Path, state: str, report: Path, mode: str) -> None:
     }))
 
 
-def check(binary: Path, terminate: bool, remote_case: str | None = None, remote_entry: bool = False) -> None:
+def check(binary: Path, *, terminate: bool, remote_case: str | None = None, remote_entry: bool = False) -> None:
     import fcntl
     import pty
     import select
@@ -59,10 +68,6 @@ def check(binary: Path, terminate: bool, remote_case: str | None = None, remote_
     environment.pop("EJM_CLI_API_KEY", None)
     environment.pop("OPENAI_API_KEY", None)
     environment["TERM"] = "xterm-256color"
-
-    def controlling_terminal() -> None:
-        os.setsid()
-        fcntl.ioctl(0, termios.TIOCSCTTY, 0)
 
     with tempfile.TemporaryDirectory(prefix="ejm-cli-terminal-") as state:
         private_input = secrets.token_urlsafe(32).encode()
@@ -80,7 +85,7 @@ def check(binary: Path, terminate: bool, remote_case: str | None = None, remote_
             [sys.executable, str(Path(__file__).resolve()), "--child", str(binary), state,
              str(report), mode],
             stdin=slave, stdout=slave, stderr=slave,
-            env=environment, preexec_fn=controlling_terminal,
+            env=environment, start_new_session=True,
         )
 
         def read_pty() -> bool:
@@ -117,7 +122,7 @@ def check(binary: Path, terminate: bool, remote_case: str | None = None, remote_
                     break
                 if process.poll() is not None:
                     break
-            assert contains_text(), f"terminal exited before showing {needle!r}"
+            expect(contains_text(), f"terminal exited before showing {needle!r}")
 
         def wait_for_exit(timeout: float) -> None:
             deadline = time.monotonic() + timeout
@@ -165,7 +170,7 @@ def check(binary: Path, terminate: bool, remote_case: str | None = None, remote_
             if remote_case == "host-signal":
                 read_until(b"Relay sign-in")
                 flags = termios.tcgetattr(slave)[3]
-                assert not flags & (termios.ICANON | termios.ECHO), "host login did not protect terminal input"
+                expect(not flags & (termios.ICANON | termios.ECHO), "host login did not protect terminal input")
                 os.write(master, b"\x1b[200~" + private_input + b"\x1b[201~")
                 process.send_signal(signal.SIGTERM)
                 return
@@ -182,7 +187,7 @@ def check(binary: Path, terminate: bool, remote_case: str | None = None, remote_
                         os.write(master, b"/quit\r")
                 return
             read_until(b"Connect to a shared session")
-            assert not termios.tcgetattr(slave)[3] & termios.ICANON, "private input did not enter raw mode"
+            expect(not termios.tcgetattr(slave)[3] & termios.ICANON, "private input did not enter raw mode")
             entered = private_input.ljust(8193, b"x") if remote_case == "error" else private_input
             if remote_case in {"queued-complete", "queued-partial"}:
                 # One write lets a buffered reader parse beyond the submitting
@@ -228,8 +233,8 @@ def check(binary: Path, terminate: bool, remote_case: str | None = None, remote_
             if remote_entry:
                 read_until(b"Local confirmation")
                 flags = termios.tcgetattr(slave)[3]
-                assert not flags & termios.ICANON, "protected command did not enter raw mode"
-                assert not flags & termios.ECHO, "protected command left terminal echo enabled"
+                expect(not flags & termios.ICANON, "protected command did not enter raw mode")
+                expect(not flags & termios.ECHO, "protected command left terminal echo enabled")
                 # A paste event cannot confirm this prompt. Terminate before any
                 # credential-store access or network operation can begin.
                 os.write(master, b"\x1b[200~" + private_input + b"\x1b[201~")
@@ -238,11 +243,11 @@ def check(binary: Path, terminate: bool, remote_case: str | None = None, remote_
                 check_remote_flow()
             elif terminate:
                 read_until(b"What shall we build?")
-                assert not termios.tcgetattr(slave)[3] & termios.ICANON, "TUI must enter raw mode"
+                expect(not termios.tcgetattr(slave)[3] & termios.ICANON, "TUI must enter raw mode")
                 process.send_signal(signal.SIGTERM)
             else:
                 read_until(b"What shall we build?")
-                assert not termios.tcgetattr(slave)[3] & termios.ICANON, "TUI must enter raw mode"
+                expect(not termios.tcgetattr(slave)[3] & termios.ICANON, "TUI must enter raw mode")
                 os.write(master, b"ejm-cli-pty-check\r")
                 repaint_until(b"Demo: ejm-cli-pty-check")
                 os.write(master, b"/help\r")
@@ -258,22 +263,22 @@ def check(binary: Path, terminate: bool, remote_case: str | None = None, remote_
             while select.select([master], [], [], 0.05)[0]:
                 if not read_pty():
                     break
-            assert process.returncode == 0, f"terminal supervisor exit status {process.returncode}"
+            expect(process.returncode == 0, f"terminal supervisor exit status {process.returncode}")
             result = json.loads(report.read_text())
             expected_returncode = 1 if remote_entry else 101 if remote_case == "panic" else 0
-            assert result["returncode"] == expected_returncode, f"TUI exit status {result['returncode']}"
-            assert result["restored"], "terminal flags were not restored"
-            assert b"\x1b[?1049h" in output and b"\x1b[?1049l" in output, "alternate screen was not restored"
-            assert b"\x1b[?2004l" in output, "bracketed paste was not disabled"
-            assert b"\x1b[?25h" in output, "cursor was not restored"
+            expect(result["returncode"] == expected_returncode, f"TUI exit status {result['returncode']}")
+            expect(result["restored"], "terminal flags were not restored")
+            expect(b"\x1b[?1049h" in output and b"\x1b[?1049l" in output, "alternate screen was not restored")
+            expect(b"\x1b[?2004l" in output, "bracketed paste was not disabled")
+            expect(b"\x1b[?25h" in output, "cursor was not restored")
             if remote_case is not None or remote_entry:
-                assert private_input not in output, "private invitation input reached the terminal"
+                expect(private_input not in output, "private invitation input reached the terminal")
                 for match in re.finditer(b"ejm-remote:v1:", output):
                     entered = output.rfind(b"\x1b[?1049h", 0, match.start())
                     left = output.rfind(b"\x1b[?1049l", 0, match.start())
-                    assert entered > left, "private invitation reveal escaped the alternate screen"
+                    expect(entered > left, "private invitation reveal escaped the alternate screen")
                 if remote_case == "flow":
-                    assert b"ejm-remote:v1:" in output, "private invitation reveal was not exercised"
+                    expect(b"ejm-remote:v1:" in output, "private invitation reveal was not exercised")
                 if remote_case is not None:
                     config.unlink()
         finally:

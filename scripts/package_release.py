@@ -13,32 +13,33 @@ import sys
 import tarfile
 import tempfile
 from pathlib import Path
+from typing import NoReturn
 
 ROOT = Path(__file__).resolve().parent.parent
 TARGETS = {"linux-x86_64", "macos-arm64"}
 
 
-def fail(message):
+def fail(message: str) -> NoReturn:
     print(f"package_release: {message}", file=sys.stderr)
     sys.exit(1)
 
 
-def sha256(path):
+def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def workspace_version():
+def workspace_version() -> str:
     match = re.search(r'(?m)^version = "([^"]+)"', (ROOT / "Cargo.toml").read_text())
     return match.group(1) if match else fail("no workspace version in Cargo.toml")
 
 
-def add(archive, name, data, mode):
+def add(archive: tarfile.TarFile, name: str, data: bytes, mode: int) -> None:
     info = tarfile.TarInfo(name)
     info.size, info.mode, info.mtime = len(data), mode, 0
     archive.addfile(info, io.BytesIO(data))
 
 
-def package(target, binary, out_dir):
+def package(target: str, binary: Path, out_dir: Path) -> tuple[str, str, Path]:
     version = (ROOT / "VERSION").read_text().strip()
     if version != workspace_version():
         fail("VERSION and the workspace version differ")
@@ -62,7 +63,7 @@ def package(target, binary, out_dir):
     return version, stem, archive_path
 
 
-def smoke(version, stem, archive_path):
+def smoke(version: str, stem: str, archive_path: Path) -> None:
     with tempfile.TemporaryDirectory() as scratch:
         with tarfile.open(archive_path) as archive:
             archive.extractall(scratch, filter="data")
@@ -82,7 +83,7 @@ def smoke(version, stem, archive_path):
         print(replay.stdout.strip())
 
 
-def main():
+def main() -> None:
     if len(sys.argv) != 4 or sys.argv[1] not in TARGETS:
         fail(f"usage: package_release.py {{{'|'.join(sorted(TARGETS))}}} BINARY OUT_DIR")
     out_dir = Path(sys.argv[3])

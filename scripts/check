@@ -3,13 +3,16 @@ set -euo pipefail
 project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$project_root"
 
-for required in cargo rustc python3; do
+for required in cargo rustc python3 uv; do
     if ! command -v "$required" >/dev/null 2>&1; then
         printf 'Missing %s. See docs/contributing.md.\n' "$required" >&2
         exit 1
     fi
 done
 
+uv run --locked --group dev ruff check .
+uv run --locked --group dev mypy
+uv run --locked --group dev shellcheck scripts/check scripts/install-hooks .githooks/pre-commit scripts/sync-design-kit.sh
 python3 scripts/check_architecture.py
 python3 -B -m unittest discover -s scripts -p 'test_*.py'
 cargo fmt --package ejm-cli -- --check
