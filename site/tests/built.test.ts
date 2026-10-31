@@ -58,15 +58,6 @@ describe.each(site)('$route', (page) => {
   const { doc } = page;
   const body = first(doc, tag('body'))!;
 
-  it('has one h1, a skip link first and main#main', () => {
-    expect(all(doc, tag('h1'))).toHaveLength(1);
-    const firstLink = first(body, tag('a'))!;
-    expect(attr(firstLink, 'href')).toBe('#main');
-    const main = all(doc, tag('main'));
-    expect(main).toHaveLength(1);
-    expect(attr(main[0]!, 'id')).toBe('main');
-  });
-
   it('ends the header with the theme toggle', () => {
     const header = first(doc, tag('header'))!;
     const controls = all(
@@ -103,7 +94,7 @@ describe.each(site)('$route', (page) => {
     expect(all(doc, tag('style'))).toHaveLength(0);
   });
 
-  it('marks links to other origins as external and keeps local links and anchors working', () => {
+  it('keeps the privacy link in the footer and every local link and anchor working', () => {
     const footer = first(doc, tag('footer'))!;
     expect(
       first(
@@ -116,10 +107,7 @@ describe.each(site)('$route', (page) => {
     for (const a of all(doc, tag('a'))) {
       const href = attr(a, 'href');
       if (!href || href.startsWith('mailto:')) continue;
-      if (/^https?:/.test(href) && !href.startsWith(ORIGIN)) {
-        expect(attr(a, 'rel'), href).toMatch(/\bexternal\b/);
-        continue;
-      }
+      if (/^https?:/.test(href) && !href.startsWith(ORIGIN)) continue;
       const hash = href.includes('#')
         ? decodeURIComponent(href.slice(href.indexOf('#') + 1))
         : '';
