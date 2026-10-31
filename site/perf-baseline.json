@@ -1,0 +1,15 @@
+{
+  "/": 401,
+  "/404.html": 325,
+  "/docs/": 401,
+  "/docs/developer-guide/": 400,
+  "/docs/reference/benchmarks/": 401,
+  "/docs/reference/cli/": 441,
+  "/docs/reference/contributing/": 401,
+  "/docs/reference/platforms/": 401,
+  "/docs/reference/relay-ci/": 441,
+  "/docs/reference/remote-control/": 401,
+  "/docs/relay-notice/": 401,
+  "/docs/relay-service-terms/": 401,
+  "/docs/user-guide/": 401
+}

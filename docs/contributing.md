@@ -117,9 +117,10 @@ Check out the exact public UI revision in `.github/ui-source.json` beside the CL
 npm --prefix ../ejm-ui ci --ignore-scripts
 npm --prefix site ci --ignore-scripts
 npm --prefix site run check
+npm --prefix site run perf
 ```
 
-Use Node 24 for site work. The gate checks types, build, generated headers and built HTML. Keep gzip route budgets at 95 KiB JavaScript, 14 KiB CSS, 70 KiB fonts and 30 KiB HTML. Also run the shared activated transfer/performance gate and check actual phone/desktop dimensions, both themes, keyboard focus, contents, deep fragments with history, copy controls, overflow and no-script content.
+Use Node 24 for site work. The gate checks types, build, generated headers and built HTML. There is no byte cap; load time is the bar. `perf` needs Chrome. It runs the pinned ejm-ui `scripts/perf.mjs` on the built site, which measures first contentful paint for every route on Lighthouse's desktop profile (simulated 10 Mbps, 40 ms round trip, no CPU slowdown) and fails when a route is 1000 ms or more above `site/perf-baseline.json`. A baseline change is its own reviewed change: run `npm --prefix site run perf -- --update` and put the measurement and the reason in the PR. Also check actual phone/desktop dimensions, both themes, keyboard focus, contents, deep fragments with history, copy controls, overflow and no-script content.
 
 Sites consume public shared exports. Shared packages own tokens, layouts, controls, theme behavior, assets, analytics, headers, demos and prerendering. Do not copy shared implementations, add local CSS or pass visual overrides. Keep fixed prose in `Static` and required interaction outside it. The home recording is a labelled local example; no model runs in the browser and it does not prove native setup or hosted inference.
 

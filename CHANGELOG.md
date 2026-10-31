@@ -10,6 +10,8 @@ Changes follow [Semantic Versioning](https://semver.org/). Each repository is ve
 
 ### Website
 
+- Replace the dead `npm run budget` (the pinned ejm-ui no longer has `ejm-ssg budget`) with `npm run perf`, which measures first contentful paint for every route and fails when one is a second or more above `site/perf-baseline.json`.
+
 - Include the unchanged approved Relay privacy notice and service terms with
   explicit pending publication status and effective date.
 
