@@ -119,7 +119,7 @@ npm --prefix site ci --ignore-scripts
 npm --prefix site run check
 ```
 
-Use Node 24 for site work. The gate checks types, build, generated headers and built HTML. Keep gzip route budgets at 95 KiB JavaScript, 14 KiB CSS, 70 KiB fonts and 30 KiB HTML. Also run the shared activated transfer/performance gate and check actual phone/desktop dimensions, both themes, keyboard focus, contents, deep fragments with history, copy controls, overflow and no-script content.
+Use Node 24 for site work. The gate checks types, build, generated headers and built HTML. There are no size budgets. Also run the shared load-time check, `node ../../ejm-ui/scripts/perf.mjs dist` from `site/`, and compare first contentful paint per route with a build at the current pin. Check actual phone/desktop dimensions, both themes, keyboard focus, contents, deep fragments with history, copy controls, overflow and no-script content.
 
 Sites consume public shared exports. Shared packages own tokens, layouts, controls, theme behavior, assets, analytics, headers, demos and prerendering. Do not copy shared implementations, add local CSS or pass visual overrides. Keep fixed prose in `Static` and required interaction outside it. The home recording is a labelled local example; no model runs in the browser and it does not prove native setup or hosted inference.
 

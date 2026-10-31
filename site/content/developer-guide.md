@@ -108,7 +108,7 @@ Update affected public guides, canonical references, README, examples and releas
 
 The Vite/React site prerenders routes to `site/dist`. That directory is ignored build output. Guides live in `site/content/`; `site/build/docs-pages.mjs` maps route metadata and canonical `docs/*.md` references. Keep detailed contracts in their existing canonical source. Shared `@ejm/site/docs` compiles Markdown and public `@ejm/ui/docs` renders it.
 
-The public shared UI source is selected by `.github/ui-source.json`. Check out that exact commit beside the CLI. Package links use public `@ejm/*` exports. UI owns components, themes, headers, demos and prerendering; this site owns content and routes. Add shared patterns in their owner, never local CSS or visual overrides. `Static className="contents"` is the allowed structural boundary. Keep navigation, search, copy controls and playback interactive outside fixed prose. The first CSS import uses `source(none)`; public style profiles declare their own source sets.
+The public shared UI source is selected by `.github/ui-source.json`. Check out that exact commit beside the CLI. Package links use public `@ejm/*` exports. UI owns components, themes, headers, demos and prerendering; this site owns content and routes. Add shared patterns in their owner, never local CSS or visual overrides. `Static className="contents"` is the allowed structural boundary. Keep navigation, search, copy controls and playback interactive outside fixed prose. The build is the shared `ejmlabs()` Vite preset beside the docs plugin, and the stylesheet imports `@ejm/ui/styles.css` and the CLI demo styles.
 
 ### Check and preview affected pages {#docs-checks}
 
