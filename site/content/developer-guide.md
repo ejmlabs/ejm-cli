@@ -108,7 +108,7 @@ Update affected public guides, canonical references, README, examples and releas
 
 The Vite/React site prerenders routes to `site/dist`. That directory is ignored build output. Guides live in `site/content/`; `site/build/docs-pages.mjs` maps route metadata and canonical `docs/*.md` references. Keep detailed contracts in their existing canonical source. Shared `@ejm/site/docs` compiles Markdown and public `@ejm/ui/docs` renders it.
 
-The public shared UI source is selected by `.github/ui-source.json`. Check out that exact commit beside the CLI. Package links use public `@ejm/*` exports. UI owns components, themes, headers, demos and prerendering; this site owns content and routes. Add shared patterns in their owner, never local CSS or visual overrides. `Static className="contents"` is the allowed structural boundary. Keep navigation, search, copy controls and playback interactive outside fixed prose. The first CSS import uses `source(none)`; public style profiles declare their own source sets.
+The public shared UI source is selected by `.github/ui-source.json`. Check out that exact commit beside the CLI. Package links use public `@ejm/*` exports. UI owns components, themes, headers, demos and prerendering; this site owns content and routes. Add shared patterns in their owner, never local CSS or visual overrides. `Static className="contents"` is the allowed structural boundary. Keep navigation, search, copy controls and playback interactive outside fixed prose. The build is the shared `ejmlabs()` Vite preset beside the docs plugin, and the stylesheet imports `@ejm/ui/styles.css` and the CLI demo styles.
 
 ### Check and preview affected pages {#docs-checks}
 
@@ -120,7 +120,7 @@ npm --prefix site ci --ignore-scripts
 npm --prefix site run check
 ```
 
-The site gate runs types, build, generated headers and built-HTML tests. Gzip route limits are 95 KiB JavaScript, 14 KiB CSS, 70 KiB fonts and 30 KiB HTML. Keep them unchanged. Measure the activated home and guides with the shared transfer/performance gate; record cold-load FCP/LCP, CLS, TBT and no-script output at the actual viewport.
+The site gate runs types, build, generated headers and built-HTML tests. There are no size budgets. Run the shared load-time check, `node ../../ejm-ui/scripts/perf.mjs dist` from `site/`, and compare first contentful paint per route with a build at the current pin. Check no-script output at the actual viewport.
 
 ```sh Preview built routes
 python3 -m http.server 4831 --directory site/dist --bind 127.0.0.1

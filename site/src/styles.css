@@ -1,3 +1,2 @@
-@import '@ejm/ui/styles-site.css' source(none);
-@import '@ejm/ui/styles-docs.css';
+@import '@ejm/ui/styles.css';
 @import '@ejm/demos/cli.css';

@@ -10,6 +10,8 @@ Changes follow [Semantic Versioning](https://semver.org/). Each repository is ve
 
 ### Website
 
+- Move the site to ejm-ui `56301e3` and build it with the shared `ejmlabs()` Vite preset, the shared base TypeScript config and one stylesheet import. The site no longer lists the Tailwind and React build plugins, `resolve.dedupe`, TypeScript `paths`, the unused `@ejm/shots` link or the dead `budget` script. The build now also fails a page without exactly one h1, with a skipped heading level, without the skip link first or `main#main`, or with a link to another host that lacks `rel="external"`.
+
 - Include the unchanged approved Relay privacy notice and service terms with
   explicit pending publication status and effective date.
 
