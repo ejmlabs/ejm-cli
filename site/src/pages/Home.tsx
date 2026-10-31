@@ -1,16 +1,12 @@
 import { Static } from '@ejm/ssg';
 import { ShowcaseFrame } from '@ejm/demos/ShowcaseFrame';
 import { CodeBlockFrame } from '@ejm/ui/docs/CodeBlockFrame';
-import { Band } from '@ejm/ui/layout/Band';
 import { Hero } from '@ejm/ui/layout/Hero';
-import {
-  ContentFlow,
-  ReadingColumn,
-  SectionBody,
-} from '@ejm/ui/layout/SiteContent';
+import { Section } from '@ejm/ui/layout/Section';
+import { ContentFlow } from '@ejm/ui/layout/SiteContent';
 import { LazyCliPreview } from '@ejm/demos/islands/cli-preview';
 
-const sections =
+const copy =
   import.meta.env.SSR || import.meta.env.DEV
     ? await import('./home.server')
     : undefined;
@@ -30,6 +26,31 @@ ejm-cli --allow-write --allow-shell`;
 const build = `cargo build --release --locked
 ./target/release/ejm-cli --replay`;
 
+/** Fixed copy from home.server.tsx: in the built page, not in the browser bundle. */
+function Copy({ part }: { part: keyof typeof import('./home.server') }) {
+  const Part = copy?.[part];
+  return (
+    <Static
+      className="contents"
+      render={Part ? () => <Part /> : undefined}
+    />
+  );
+}
+
+function Snippet({ label, code }: { label: string; code: string }) {
+  return (
+    <CodeBlockFrame lang="sh" label={label} code={code}>
+      <Static
+        render={
+          CodeHighlight
+            ? () => <CodeHighlight lang="sh" label={label} code={code} />
+            : undefined
+        }
+      />
+    </CodeBlockFrame>
+  );
+}
+
 export default function Home() {
   return (
     <>
@@ -37,12 +58,7 @@ export default function Home() {
         eyebrow="ejm-cli / open source / MIT"
         title="A Rust terminal coding agent."
         titleId="hero-title"
-        actions={
-          <Static
-            className="contents"
-            render={sections ? () => <sections.HeroActions /> : undefined}
-          />
-        }
+        actions={<Copy part="HeroActions" />}
         aside={
           <ShowcaseFrame
             id="try"
@@ -53,95 +69,64 @@ export default function Home() {
           </ShowcaseFrame>
         }
       >
-        <Static
-          className="contents"
-          render={sections ? () => <sections.HeroIntro /> : undefined}
-        />
+        <Copy part="HeroIntro" />
       </Hero>
-      <Static
-        className="contents"
-        render={sections ? () => <sections.Terminal /> : undefined}
-      />
-      <Band tone="mist" aria-labelledby="permissions-title">
-        <Static
-          className="contents"
-          render={sections ? () => <sections.PermissionsHead /> : undefined}
-        />
-        <SectionBody>
-          <ReadingColumn>
-            <ContentFlow>
-              <CodeBlockFrame
-                lang="sh"
-                label="Add access one flag at a time"
-                code={permissions}
-              >
-                <Static
-                  render={
-                    CodeHighlight
-                      ? () => (
-                          <CodeHighlight
-                            lang="sh"
-                            label="Add access one flag at a time"
-                            code={permissions}
-                          />
-                        )
-                      : undefined
-                  }
-                />
-              </CodeBlockFrame>
-              <Static
-                className="contents"
-                render={
-                  sections ? () => <sections.PermissionsNote /> : undefined
-                }
-              />
-            </ContentFlow>
-          </ReadingColumn>
-        </SectionBody>
-      </Band>
-      <Static
-        className="contents"
-        render={sections ? () => <sections.RuntimeAndProviders /> : undefined}
-      />
-      <Band tone="sage" aria-labelledby="get-title">
-        <Static
-          className="contents"
-          render={sections ? () => <sections.SourceHead /> : undefined}
-        />
-        <SectionBody>
-          <ReadingColumn>
-            <ContentFlow>
-              <CodeBlockFrame
-                lang="sh"
-                label="Build from a compatible source checkout"
-                code={build}
-              >
-                <Static
-                  render={
-                    CodeHighlight
-                      ? () => (
-                          <CodeHighlight
-                            lang="sh"
-                            label="Build from a compatible source checkout"
-                            code={build}
-                          />
-                        )
-                      : undefined
-                  }
-                />
-              </CodeBlockFrame>
-              <Static
-                className="contents"
-                render={sections ? () => <sections.SourceAction /> : undefined}
-              />
-            </ContentFlow>
-          </ReadingColumn>
-        </SectionBody>
-      </Band>
-      <Static
-        className="contents"
-        render={sections ? () => <sections.More /> : undefined}
-      />
+      <Section
+        kicker="01 / Terminal"
+        title="Terminal input and output."
+        intro={<Copy part="TerminalIntro" />}
+      >
+        <Copy part="Terminal" />
+      </Section>
+      <Section
+        kicker="02 / Permissions"
+        title="File and shell access."
+        intro={<Copy part="PermissionsIntro" />}
+      >
+        <ContentFlow>
+          <Snippet label="Add access one flag at a time" code={permissions} />
+          <Copy part="PermissionsNote" />
+        </ContentFlow>
+      </Section>
+      <Section
+        kicker="03 / Runtime"
+        title="Runtime and default limits."
+        intro={<Copy part="RuntimeIntro" />}
+      >
+        <Copy part="Runtime" />
+      </Section>
+      <Section
+        kicker="04 / Providers"
+        title="Model providers."
+        intro={<Copy part="ProvidersIntro" />}
+      >
+        <Copy part="Providers" />
+      </Section>
+      <Section
+        emphasis
+        kicker="05 / Source"
+        title="Build and run locally."
+        intro={<Copy part="SourceIntro" />}
+        actions={<Copy part="SourceAction" />}
+      >
+        <ContentFlow>
+          <Snippet
+            label="Build from a compatible source checkout"
+            code={build}
+          />
+        </ContentFlow>
+      </Section>
+      <Section kicker="06 / Documentation" title="Documentation.">
+        <Copy part="Documentation" />
+      </Section>
+      <Section
+        id="contribute"
+        kicker="07 / Contributions"
+        title="Source and contributions."
+        intro={<Copy part="ContributionsIntro" />}
+      >
+        <Copy part="Contributions" />
+      </Section>
     </>
   );
 }

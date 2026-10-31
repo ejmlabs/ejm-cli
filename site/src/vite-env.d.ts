@@ -1,4 +1,3 @@
-/// <reference types="vite/client" />
 declare module '*.md?doc' {
   const Page: import('react').ComponentType;
   export default Page;
