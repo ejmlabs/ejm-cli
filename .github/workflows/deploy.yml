@@ -8,4 +8,4 @@ jobs:
     permissions:
       contents: read
       actions: read
-    uses: ejmlabs/.github/.github/workflows/deploy-site.yml@8230ef8234b296ed42024744e8e42bc3d3bb4545
+    uses: ejmlabs/.github/.github/workflows/deploy-site.yml@6bcb6821aff2fa4988d36818cb0fa6191219480d
