@@ -33,6 +33,9 @@ REQUIRED_SKILLS = {
     "ejm-cli-packages", "ejm-cli-performance", "ejm-cli-testing", "ejm-cli-dependencies",
     "ejm-cli-harness", "ejm-cli-docs", "ejm-cli-site", "ejm-cli-release",
 }
+SHARED_SKILLS = {
+    "ejmlabs-engineering", "ejmlabs-security", "ejmlabs-testing", "ejmlabs-workflow", "ejmlabs-writing",
+}
 OPENSPEC_SKILLS = {
     "openspec-explore", "openspec-propose", "openspec-update-change",
     "openspec-apply-change", "openspec-sync-specs", "openspec-archive-change",
@@ -96,10 +99,10 @@ def check_packages() -> None:
 def check_skills() -> None:
     skill_root = ROOT / ".agents/skills"
     skills = {path.parent.name for path in skill_root.glob("*/SKILL.md")}
-    require(skills == REQUIRED_SKILLS | OPENSPEC_SKILLS, "Keep the skill routing inventory in sync with .agents/skills.")
+    require(skills == REQUIRED_SKILLS | OPENSPEC_SKILLS | SHARED_SKILLS, "Keep the skill routing inventory in sync with .agents/skills.")
     routing = (ROOT / "AGENTS.md").read_text()
     for name in sorted(skills):
-        require(f"`{name}`" in routing, f"AGENTS.md must route to the {name} skill.")
+        require(f".agents/skills/{name}/SKILL.md" in routing, f"AGENTS.md must route to the {name} skill.")
         path = skill_root / name / "SKILL.md"
         text = path.read_text()
         require(text.startswith("---\n"), f"{path}: missing frontmatter")
