@@ -92,7 +92,7 @@ Read the matching project skill under `.agents/skills` before starting. Read onl
 
 - Other agents may be editing this repo or its siblings at the same time. Run `git status` and `git log` before you start, change only the paths your task needs, and never revert changes you did not make.
 - Never edit `../ejm-harness` or `../ejm-ide` without the owner's agreement. If a sibling breaks the build, tell its session and wait.
-- Commit, push, publish and deploy only when the user asks. The pre-commit hook checks staged whitespace and working-tree architecture and Rust formatting; it does not replace the full gate.
+- Commit, push, publish and deploy only when the user asks. This repository rule narrows the shared finish-through-ship rule below. The pre-commit hook checks staged whitespace and working-tree architecture and Rust formatting; it does not replace the full gate.
 - Builds are large. When a disk fills up, run `cargo clean` in this repo and rebuild. Never delete files that belong to other projects.
 
 ## Done means
